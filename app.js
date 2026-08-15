@@ -335,7 +335,9 @@ function renderGuides() {
   const { W, H } = S.dim, g = S.g;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const frag = document.createDocumentFragment();
-  const hBadges = [], vBadges = [];   // 라벨은 겹치지 않게 나중에 한꺼번에 배치
+  const vBadges = [];   // 세로선 라벨은 겹치지 않게 나중에 한꺼번에 배치
+  /* 가로선 라벨 배지는 표시하지 않는다 — 선 색상과 왼쪽 레일 버튼 색이 1:1 로 대응하므로
+     화면을 가리지 않는 쪽이 시술 중에 훨씬 낫다. (2026-08-15 제거) */
   /* 상단 오버레이 칩(all line / V Center Pivot) 아래로 세로선 라벨 배치 */
   const V_LABEL_Y = Math.round(clamp(H * 0.14, 44, 98));
 
@@ -363,16 +365,6 @@ function renderGuides() {
     for (const [a, b] of sp.segs) {
       drawLine(frag, a * W, y, b * W, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
     }
-    hBadges.push({ label: sp.label, color: sp.color, y: y - 17 });
-  }
-  /* 라벨 세로 겹침 제거 */
-  hBadges.sort((a, b) => a.y - b.y);
-  for (let i = 0; i < hBadges.length; i++) {
-    hBadges[i].y = Math.max(hBadges[i].y, i ? hBadges[i - 1].y + 16 : 1);
-  }
-  for (let i = hBadges.length - 1; i >= 0; i--) {
-    hBadges[i].y = Math.min(hBadges[i].y, i === hBadges.length - 1 ? H - 16 : hBadges[i + 1].y - 16);
-    drawBadge(frag, hBadges[i].label, W - 3, Math.max(1, hBadges[i].y), hBadges[i].color, "end");
   }
 
   /* 세로 라인 (+ 대칭선) */
