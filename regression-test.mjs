@@ -266,18 +266,20 @@ console.log("[세로 모드 · 기능]");
 
   // 21. 선 선택 후 빈 곳 드래그 → 선택된 가로 바가 손을 따라 위아래로
   await p.evaluate(() => { const s = window.PB.S; s.locked = false; s.sel = "h1"; window.PB.render(); });
+  await p.waitForTimeout(150);
+  const box2 = await p.locator("#stage").boundingBox();   // 패널 높이 변화 반영해 다시 측정
   const b21 = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1, p: { ...window.PB.S.p } }));
   // 선에서 멀리 떨어진 빈 곳에서 시작
-  const far = { x: box.x + box.width * 0.15, y: box.y + box.height * 0.88 };
+  const far = { x: box2.x + box2.width * 0.15, y: box2.y + box2.height * 0.88 };
   await p.mouse.move(far.x, far.y);
   await p.mouse.down();
   await p.mouse.move(far.x + 55, far.y - 50, { steps: 12 });   // 대각선
   await p.mouse.up();
   const a21 = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1, p: { ...window.PB.S.p } }));
   check("21. 빈 곳 드래그 → 선택된 가로바가 위아래로만 따라옴",
-    near((a21.h1 - b21.h1) * box.height, -50, 3) && a21.v1 === b21.v1
+    near((a21.h1 - b21.h1) * box2.height, -50, 3) && a21.v1 === b21.v1
       && a21.p.ox === b21.p.ox && a21.p.oy === b21.p.oy,
-    `Δy=${((a21.h1 - b21.h1) * box.height).toFixed(1)}px, 사진 안움직임=${a21.p.ox === b21.p.ox && a21.p.oy === b21.p.oy}`);
+    `Δy=${((a21.h1 - b21.h1) * box2.height).toFixed(1)}px, 사진 안움직임=${a21.p.ox === b21.p.ox && a21.p.oy === b21.p.oy}`);
 
   // 22. 대칭 세로 바 선택 후 빈 곳 좌우 드래그 → 대칭으로 따라옴
   await p.evaluate(() => { const s = window.PB.S; s.sel = "v2"; window.PB.render(); });
@@ -288,17 +290,17 @@ console.log("[세로 모드 · 기능]");
   await p.mouse.up();
   const a22 = await p.evaluate(() => ({ ...window.PB.S.g }));
   check("22. 빈 곳 드래그 → 대칭 세로바가 좌우로만 따라옴 · 대칭 유지",
-    near((a22.v2 - b22.v2) * box.width, 45, 3) && a22.h1 === b22.h1
+    near((a22.v2 - b22.v2) * box2.width, 45, 3) && a22.h1 === b22.h1
       && near((a22.v2 + a22.v3) / 2, a22.v1, 0.001)
-      && near((a22.v3 - b22.v3) * box.width, -45, 3),
-    `Δv2=${((a22.v2 - b22.v2) * box.width).toFixed(1)}px, Δv3=${((a22.v3 - b22.v3) * box.width).toFixed(1)}px, 대칭오차=${Math.abs((a22.v2 + a22.v3) / 2 - a22.v1).toExponential(1)}`);
+      && near((a22.v3 - b22.v3) * box2.width, -45, 3),
+    `Δv2=${((a22.v2 - b22.v2) * box2.width).toFixed(1)}px, Δv3=${((a22.v3 - b22.v3) * box2.width).toFixed(1)}px, 대칭오차=${Math.abs((a22.v2 + a22.v3) / 2 - a22.v1).toExponential(1)}`);
 
   // 23. 두 손가락 드래그 = 사진 이동 (선은 그대로)
   await p.evaluate(() => { window.PB.S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; window.PB.render(); });
   const b23 = await p.evaluate(() => ({ g: { ...window.PB.S.g }, p: { ...window.PB.S.p } }));
   {
     const t1 = await p.context().newCDPSession(p);
-    const cx = box.x + box.width * 0.5, cy = box.y + box.height * 0.5;
+    const cx = box2.x + box2.width * 0.5, cy = box2.y + box2.height * 0.5;
     const pts0 = [{ x: cx - 60, y: cy }, { x: cx + 60, y: cy }];
     await t1.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts0.map((q, i) => ({ x: q.x, y: q.y, id: i })) });
     await t1.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts0.map((q, i) => ({ x: q.x + 50, y: q.y + 30, id: i })) });
@@ -307,8 +309,8 @@ console.log("[세로 모드 · 기능]");
   }
   const a23 = await p.evaluate(() => ({ g: { ...window.PB.S.g }, p: { ...window.PB.S.p } }));
   check("23. 두 손가락 드래그 = 사진 이동 (선은 불변)",
-    near((a23.p.ox - b23.p.ox) * box.width, 50, 6) && a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2,
-    `Δox=${((a23.p.ox - b23.p.ox) * box.width).toFixed(1)}px, 선 불변=${a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2}`);
+    near((a23.p.ox - b23.p.ox) * box2.width, 50, 6) && a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2,
+    `Δox=${((a23.p.ox - b23.p.ox) * box2.width).toFixed(1)}px, 선 불변=${a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2}`);
 
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {

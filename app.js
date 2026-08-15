@@ -41,6 +41,7 @@ const I18N = {
     editor_export: "이미지저장",
     editor_change_photo: "사진변경",
     editor_rotate: "화면가로",
+    editor_eyeguide: "눈가이드",
     editor_rotate_off: "가로해제",
     rot_on: "화면을 가로로 고정했습니다",
     rot_off: "기기 방향을 따릅니다",
@@ -63,6 +64,7 @@ const I18N = {
     editor_close: "닫기",
     panel_position: "위치 조절",
     panel_lines: "가이드 라인",
+    panel_values: "가이드 값",
     hint_linebtn: "1번 탭 = 선택 · 다시 탭 = 숨김/표시",
     preset_rename: "프리셋 이름 변경",
     preset_none: "저장된 프리셋이 없습니다",
@@ -120,6 +122,7 @@ const I18N = {
     editor_export: "Save Image",
     editor_change_photo: "Change Photo",
     editor_rotate: "Landscape",
+    editor_eyeguide: "Eye guide",
     editor_rotate_off: "Auto rotate",
     rot_on: "Locked to landscape",
     rot_off: "Following device orientation",
@@ -142,6 +145,7 @@ const I18N = {
     editor_close: "Close",
     panel_position: "Position",
     panel_lines: "Guide Lines",
+    panel_values: "Guide Values",
     hint_linebtn: "Tap = select · tap again = show/hide",
     preset_rename: "Rename Preset",
     preset_none: "No saved presets",
@@ -222,7 +226,7 @@ const DEFAULT_GUIDE = Object.freeze({
   v3: 0.65,
   v4: 0.15,  v4Visible: false,
   v5: 0.85,
-  eyeGuideVisible: true,
+  eyeGuideVisible: false,   // 아몬드 눈 가이드 — 자동 줌이 충분하므로 기본 꺼짐
   innerAngle: 0.40,      // Pivot Point Y (0=위, 1=아래)
   outerAngle: 0.50,      // V 벌어짐 (0.5 = 수평)
   baseStructureVisible: false,
@@ -235,7 +239,7 @@ const ZOOM_MIN = 0.5, ZOOM_MAX = 8;
 const OFFSET_MAX = 1.0;   // 사진 좌우/위아래 이동 한계 (캔버스 비율)
 const SLIDER_OFFSET = 0.5;// 좌우/위아래 슬라이더 범위 (드래그는 OFFSET_MAX 까지)
 const HIT_PX = 24;        // 라인 드래그 인식 반경
-const EYE_FRAC = 0.30;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭
+const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭 (클수록 얼굴이 크게 잡힘)
 /* 인체 계측 평균비 — 동공 간 거리 기준 (동공 오프셋 = 1.0) */
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
 const R_OUTER = 1.50;     // 눈꼬리(외안각)
@@ -681,7 +685,7 @@ function updateButtons() {
   $("btnPivot").classList.toggle("on", S.sel === "innerAngle" && S.g.baseStructureVisible);
   $("btnVAngle").classList.toggle("on", S.sel === "outerAngle" && S.g.baseStructureVisible);
   $("btnAllLine").classList.toggle("on", !!S.hiddenSnapshot);
-  $("btnEyeGuide").classList.toggle("on", S.g.eyeGuideVisible);
+  $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
   $("btnLock").classList.toggle("on", S.locked);
   $("btnAlign").classList.toggle("picking", S.pickMode);
   const rotOn = document.body.classList.contains("rot90");
@@ -752,6 +756,39 @@ function applyPhoto(v) {
   render();
 }
 
+const vRows = new Map();
+function renderValueList() {
+  const g = S.g, box = $("valueList");
+  const items = [];
+  for (const sp of H_SPECS) if (g[sp.vis]) items.push({ key: sp.key, label: sp.label, color: sp.color, ax: "▲▼", v: Math.round((1 - g[sp.key]) * 100) });
+  for (const sp of V_SPECS) if (g[sp.vis]) items.push({ key: sp.key, label: sp.label, color: sp.color, ax: "◀▶", v: Math.round(g[sp.key] * 100) });
+  if (g.baseStructureVisible) {
+    items.push({ key: "innerAngle", label: t("editor_inner_angle"), color: "#FF3B30", ax: "▲▼", v: Math.round((1 - g.innerAngle) * 100) });
+    items.push({ key: "outerAngle", label: t("editor_outer_angle"), color: "#111111", ax: "▲▼", v: ((g.outerAngle - 0.5) * 2 * V_ANGLE_MAX).toFixed(1) + "°" });
+  }
+  $("valuePanel").classList.toggle("show", items.length > 0);
+  const keys = items.map((i) => i.key).join("|");
+  if (box.dataset.sig !== keys) {          // 구성이 바뀔 때만 DOM 재생성
+    box.dataset.sig = keys;
+    vRows.clear();
+    box.replaceChildren(...items.map((it) => {
+      const b = document.createElement("button");
+      b.className = "vrow";
+      b.innerHTML = `<span class="dot" style="background:${it.color}"></span><span class="nm"></span><span class="ax">${it.ax}</span><span class="vl"></span>`;
+      b.onclick = () => { S.sel = it.key; render(); };
+      vRows.set(it.key, b);
+      return b;
+    }));
+  }
+  for (const it of items) {
+    const b = vRows.get(it.key);
+    if (!b) continue;
+    b.querySelector(".nm").textContent = it.label;
+    b.querySelector(".vl").textContent = it.v;
+    b.classList.toggle("sel", S.sel === it.key);
+  }
+}
+
 function updatePanels() {
   const c = posConfig();
   $("selName").textContent = c.name;
@@ -776,6 +813,8 @@ function updatePanels() {
   $("phMinus").disabled = S.locked;
   $("phPlus").disabled = S.locked;
   document.querySelectorAll("#photoModes button[data-mode]").forEach((b) => { b.disabled = S.locked; });
+
+  renderValueList();
 }
 
 /* ═══════════ 7. presets ═══════════ */
