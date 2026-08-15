@@ -75,8 +75,8 @@ const I18N = {
     ai_ok: "AI 자동 정렬 완료",
     ai_fail: "AI 사용 불가 · [동공정렬]을 눌러 정렬하세요",
     ai_noface: "얼굴 인식 실패 · [동공정렬]을 눌러 정렬하세요",
-    hint_updown: "◀ 아래　　위 ▶",
-    hint_leftright: "◀ 왼쪽　　오른쪽 ▶",
+    hint_updown: "▼ 아래　　위 ▲ · 화면을 드래그해도 조절됩니다",
+    hint_leftright: "◀ 왼쪽　　오른쪽 ▶ · 화면을 드래그해도 조절됩니다",
     hint_narrowwide: "◀ 좁게　　넓게 ▶",
     hint_zoom: "◀ 축소　　확대 ▶",
     hint_photo_ud: "◀ 위로　　아래로 ▶",
@@ -87,6 +87,7 @@ const I18N = {
     lock_short: "사진잠금",
     unlock_short: "잠금해제",
     sel_line: "선택",
+    pan_hint: "사진 이동은 두 손가락 드래그",
     unlocked_msg: "사진 잠금 해제",
     saved_img: "이미지를 저장했습니다",
     export_fail: "이미지 저장에 실패했습니다",
@@ -153,8 +154,8 @@ const I18N = {
     ai_ok: "Auto-aligned",
     ai_fail: "AI unavailable · use [Pupil Align]",
     ai_noface: "No face found · use [Pupil Align]",
-    hint_updown: "◀ down　　up ▶",
-    hint_leftright: "◀ left　　right ▶",
+    hint_updown: "▼ down　　up ▲ · drag anywhere to adjust",
+    hint_leftright: "◀ left　　right ▶ · drag anywhere to adjust",
     hint_narrowwide: "◀ narrow　　wide ▶",
     hint_zoom: "◀ out　　in ▶",
     hint_photo_ud: "◀ up　　down ▶",
@@ -165,6 +166,7 @@ const I18N = {
     lock_short: "Lock photo",
     unlock_short: "Unlock",
     sel_line: "selected",
+    pan_hint: "Pan the photo with two fingers",
     unlocked_msg: "Photo unlocked",
     saved_img: "Image saved",
     export_fail: "Could not save image",
@@ -450,6 +452,21 @@ function setLine(key, val) {
   }
 }
 
+/* 선택된 바를 손가락 이동량(정규화 델타)만큼 움직인다.
+   각 바는 자기 축으로만 움직이고(BASELINE 1-7), 대칭은 setLine() 이 처리한다(1-2). */
+function dragLineBy(key, base, dxN, dyN, mirrored) {
+  const g = S.g;
+  if (key === "innerAngle") {
+    g.innerAngle = clamp(base + dyN, 0.02, 0.98);          // 위아래
+  } else if (key === "outerAngle") {
+    g.outerAngle = clamp(base - dyN * 1.2, 0, 1);          // 위로 = 넓게
+  } else if (H_KEYS.has(key)) {
+    setLine(key, base + dyN);                              // 가로 바 → 위아래로만
+  } else {
+    setLine(key, mirrored ? base - dxN : base + dxN);      // 세로 바 → 좌우로만 (대칭 유지)
+  }
+}
+
 /* ═══════════ 5. gesture ═══════════ */
 
 function linePixels() {
@@ -547,23 +564,29 @@ touch.addEventListener("pointerdown", (e) => {
   pts.set(e.pointerId, sp);
 
   if (pts.size === 1) {
-    const p = sp;
-    const hit = hitTest(p.x, p.y);
-    if (hit) {
-      gMode = "line";
-      gDrag = { hit };
-      if (hit.type === "pivot") setSel("innerAngle");
-      else if (hit.type === "arm") setSel("outerAngle");
-      else setSel(hit.key);
-      render();
-      const c0 = posConfig();
-      showHud(`${c0.name} ${t("sel_line")}<br>${c0.axis === "v" ? "▲▼" : "◀▶"} ${c0.disp}`);
-    } else if (!S.locked) {
+    /* 데스크톱 보조: Shift + 드래그 = 사진 이동 */
+    if (e.shiftKey && !S.locked) {
       gMode = "pan";
       gDrag = { ox: S.p.ox, oy: S.p.oy, x0: sp.x, y0: sp.y };
-    } else {
-      gMode = null;
+      return;
     }
+    /* 선 위를 직접 잡으면 그 선을 선택하고, 빈 곳을 잡으면 이미 선택된 선을 끈다.
+       어느 쪽이든 손가락 이동량을 그대로 따라간다. (사진 이동은 두 손가락) */
+    const hit = hitTest(sp.x, sp.y);
+    let key, mirrored = false;
+    if (hit) {
+      if (hit.type === "pivot") key = "innerAngle";
+      else if (hit.type === "arm") key = "outerAngle";
+      else { key = hit.key; mirrored = !!hit.mirrored; }
+      setSel(key);
+    } else {
+      key = S.sel;
+    }
+    gMode = "line";
+    gDrag = { key, mirrored, base: S.g[key], x0: sp.x, y0: sp.y };
+    render();
+    const c0 = posConfig();
+    showHud(`${c0.name} ${t("sel_line")}<br>${c0.axis === "v" ? "▲▼" : "◀▶"} ${c0.disp}`);
   } else if (pts.size === 2 && !S.locked) {
     const [a, b] = [...pts.values()];
     gMode = "xform";
@@ -584,17 +607,7 @@ touch.addEventListener("pointermove", (e) => {
   const { W, H } = S.dim, g = S.g;
 
   if (gMode === "line" && gDrag) {
-    const p = sp;
-    const h = gDrag.hit;
-    if (h.type === "h") setLine(h.key, p.y / H);
-    else if (h.type === "v") setLine(h.key, h.mirrored ? 2 * g.v1 - p.x / W : p.x / W);
-    else if (h.type === "pivot") g.innerAngle = clamp(p.y / H, 0.02, 0.98);
-    else if (h.type === "arm") {
-      const px = g.v1 * W, py = g.innerAngle * H;
-      const dx = Math.abs(p.x - px), dy = py - p.y;
-      const deg = clamp((Math.atan2(dy, Math.max(dx, 6)) * 180) / Math.PI, -V_ANGLE_MAX, V_ANGLE_MAX);
-      g.outerAngle = 0.5 + deg / (2 * V_ANGLE_MAX);
-    }
+    dragLineBy(gDrag.key, gDrag.base, (sp.x - gDrag.x0) / W, (sp.y - gDrag.y0) / H, gDrag.mirrored);
     render();
     const cd = posConfig();
     showHud(`${cd.name}<br>${cd.axis === "v" ? "▲▼" : "◀▶"} ${cd.disp}`);
