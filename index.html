@@ -164,7 +164,42 @@ body.rot90 #home.active{overflow-y:auto}
   opacity:0;transition:opacity .18s;pointer-events:none}
 .hud.show{opacity:1}
 
-.aistatus{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);z-index:22}
+.aistatus{position:absolute;bottom:76px;left:50%;transform:translateX(-50%);z-index:22}
+
+/* ── 위치 조절자 (캔버스 오버레이) ─────────────────────────
+   선의 이동 축과 조절자의 축을 일치시킨다: 위로 밀면 선이 위로, 오른쪽으로 밀면 선이 오른쪽으로. */
+.posctl{position:absolute;z-index:30;display:flex;align-items:center;gap:8px;
+  background:rgba(22,24,28,.60);border:1px solid rgba(255,255,255,.26);border-radius:16px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);touch-action:auto;padding:8px}
+.posctl .pbtn{flex:0 0 auto;width:44px;height:44px;border-radius:11px;background:rgba(255,255,255,.16);
+  color:#fff;font-size:17px;font-weight:800;display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(255,255,255,.22)}
+.posctl .pbtn:active{background:var(--primary);border-color:var(--primary)}
+.posctl .plabel{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  background:rgba(22,24,28,.78);border:1px solid rgba(255,255,255,.24);border-radius:9px;
+  padding:4px 9px;font-size:11px;font-weight:800;color:#fff;letter-spacing:.3px}
+.posctl .plabel b{color:#9ec2ff;font-variant-numeric:tabular-nums}
+.posctl .pslot{position:relative;display:flex;align-items:center;justify-content:center}
+.posctl #posSlider{margin:0}
+.posctl #posSlider::-webkit-slider-runnable-track{background:rgba(255,255,255,.28)}
+.posctl #posSlider::-moz-range-track{background:rgba(255,255,255,.28)}
+
+/* 가로선 선택 → 오른쪽 끝 세로 조절자 */
+.posctl.axis-v{flex-direction:column;right:10px;top:11%;bottom:11%;width:62px}
+.posctl.axis-v .pslot{flex:1;width:44px}
+.posctl.axis-v #posSlider{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
+.posctl.axis-v .plabel{bottom:-30px;left:50%;transform:translateX(-50%)}  /* 상단 칩과 겹치지 않게 아래로 */
+
+/* 세로선 선택 → 아래쪽 가로 조절자 */
+.posctl.axis-h{flex-direction:row-reverse;left:12%;right:12%;bottom:10px;height:62px}
+.posctl.axis-h .pslot{flex:1;height:44px}
+.posctl.axis-h #posSlider{width:100%}
+.posctl.axis-h .plabel{top:-28px;left:50%;transform:translateX(-50%)}
+
+@media (orientation:portrait){
+  .posctl.axis-h{bottom:52px}
+  .posctl.axis-v{bottom:96px}
+}
 
 /* Panels */
 .panels{background:var(--chrome);padding:0 11px calc(var(--safe-b) + 8px);overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -261,6 +296,11 @@ button:disabled{opacity:.38;pointer-events:none}
   body.land.compact #editor #lineRail .linebar{gap:3px;padding:4px}
   body.land.compact #editor #lineRail .lbtn{width:56px;height:26px;font-size:9px}
   body.land.compact #editor .chip{padding:5px 8px;font-size:10px}
+  body.land.compact #editor .posctl{padding:6px;gap:6px}
+  body.land.compact #editor .posctl .pbtn{width:38px;height:38px;font-size:15px}
+  body.land.compact #editor .posctl.axis-v{width:52px;top:8%;bottom:8%;right:8px}
+  body.land.compact #editor .posctl.axis-v .pslot{width:38px}
+  body.land.compact #editor .posctl.axis-h{height:52px;left:10%;right:10%}
 }
 </style>
 </head>
@@ -313,6 +353,16 @@ button:disabled{opacity:.38;pointer-events:none}
     <div class="linebar linebar-left" id="hButtons"></div>
     <div class="linebar linebar-right" id="vButtons"></div>
 
+    <!-- 위치 조절자 — 선택된 선의 이동 축과 같은 방향으로 놓인다.
+         가로선(위아래 이동) → 사진 오른쪽 끝의 세로 조절자
+         세로선(좌우 이동)   → 사진 아래쪽의 가로 조절자 -->
+    <div class="posctl" id="posCtl">
+      <div class="plabel"><span id="selName">Eye</span><b id="posVal">50</b></div>
+      <button class="pbtn" id="posPlus">▲</button>
+      <div class="pslot" id="pSlot"><input type="range" id="posSlider" min="0" max="1" step="0.0005" value="0.5" /></div>
+      <button class="pbtn" id="posMinus">▼</button>
+    </div>
+
     <div class="hud" id="hud"></div>
     <div class="ov aistatus"><span class="chip" id="aiStatus" hidden></span></div>
   </div>
@@ -320,19 +370,6 @@ button:disabled{opacity:.38;pointer-events:none}
   <aside id="lineRail"></aside>
 
   <div class="panels">
-    <div class="panel">
-      <div class="panel-h">
-        <span class="panel-t"><span data-i18n="panel_position">위치 조절</span> · <span id="selName">Eye</span></span>
-        <span class="panel-v" id="posVal">50</span>
-      </div>
-      <div class="sliderrow">
-        <button class="stepbtn" id="posMinus">−</button>
-        <input type="range" id="posSlider" min="0" max="1" step="0.0005" value="0.5" />
-        <button class="stepbtn" id="posPlus">+</button>
-      </div>
-      <div class="hint" id="posHint"></div>
-    </div>
-
     <div class="panel" id="valuePanel">
       <div class="panel-h"><span class="panel-t" data-i18n="panel_values">가이드 값</span></div>
       <div class="vlist" id="valueList"></div>

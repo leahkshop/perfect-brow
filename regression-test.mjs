@@ -270,7 +270,24 @@ console.log("[세로 모드 · 기능]");
   const box2 = await p.locator("#stage").boundingBox();   // 패널 높이 변화 반영해 다시 측정
   const b21 = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1, p: { ...window.PB.S.p } }));
   // 선에서 멀리 떨어진 빈 곳에서 시작
-  const far = { x: box2.x + box2.width * 0.15, y: box2.y + box2.height * 0.88 };
+  /* 선·조절자 오버레이가 없는 빈 지점을 앱 상태에서 직접 찾는다 */
+  const freeSpot = async () => p.evaluate(() => {
+    const S = window.PB.S, W = S.dim.W, H = S.dim.H, g = S.g;
+    const vx = ["v1", "v2", "v3", "v4", "v5"].map((k) => g[k] * W);
+    const hy = ["h1", "h2", "h3", "front", "frontThickness", "archThickness"].map((k) => g[k] * H);
+    const ctl = document.getElementById("posCtl").getBoundingClientRect();
+    const st = document.getElementById("stage").getBoundingClientRect();
+    for (let fy = 0.16; fy < 0.60; fy += 0.02)
+      for (let fx = 0.10; fx < 0.80; fx += 0.02) {
+        const x = fx * W, y = fy * H;
+        const sx = st.left + x, sy = st.top + y;
+        if (sx > ctl.left - 12 && sx < ctl.right + 12 && sy > ctl.top - 12 && sy < ctl.bottom + 12) continue;
+        if (vx.every((v) => Math.abs(v - x) > 45) && hy.every((v) => Math.abs(v - y) > 45)) return { x, y };
+      }
+    return { x: W * 0.2, y: H * 0.25 };
+  });
+  let fp = await freeSpot();
+  const far = { x: box2.x + fp.x, y: box2.y + fp.y };
   await p.mouse.move(far.x, far.y);
   await p.mouse.down();
   await p.mouse.move(far.x + 55, far.y - 50, { steps: 12 });   // 대각선
@@ -284,9 +301,12 @@ console.log("[세로 모드 · 기능]");
   // 22. 대칭 세로 바 선택 후 빈 곳 좌우 드래그 → 대칭으로 따라옴
   await p.evaluate(() => { const s = window.PB.S; s.sel = "v2"; window.PB.render(); });
   const b22 = await p.evaluate(() => ({ ...window.PB.S.g }));
-  await p.mouse.move(far.x, far.y);
+  await p.waitForTimeout(120);
+  fp = await freeSpot();                       // 조절자가 아래로 옮겨졌으므로 다시 탐색
+  const far2 = { x: box2.x + fp.x, y: box2.y + fp.y };
+  await p.mouse.move(far2.x, far2.y);
   await p.mouse.down();
-  await p.mouse.move(far.x + 45, far.y - 70, { steps: 12 });   // 대각선
+  await p.mouse.move(far2.x + 45, far2.y - 70, { steps: 12 });   // 대각선
   await p.mouse.up();
   const a22 = await p.evaluate(() => ({ ...window.PB.S.g }));
   check("22. 빈 곳 드래그 → 대칭 세로바가 좌우로만 따라옴 · 대칭 유지",
@@ -311,6 +331,51 @@ console.log("[세로 모드 · 기능]");
   check("23. 두 손가락 드래그 = 사진 이동 (선은 불변)",
     near((a23.p.ox - b23.p.ox) * box2.width, 50, 6) && a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2,
     `Δox=${((a23.p.ox - b23.p.ox) * box2.width).toFixed(1)}px, 선 불변=${a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2}`);
+
+  // 24. 가로선 선택 → 조절자가 사진 오른쪽 끝에 세로로, ▲ 위 / ▼ 아래
+  const ctlV = await p.evaluate(() => {
+    window.PB.S.sel = "h1"; window.PB.render();
+    const c = document.getElementById("posCtl").getBoundingClientRect();
+    const st = document.getElementById("stage").getBoundingClientRect();
+    const up = document.getElementById("posPlus").getBoundingClientRect();
+    const dn = document.getElementById("posMinus").getBoundingClientRect();
+    return { vert: c.height > c.width, rightEdge: st.right - c.right, upAbove: up.top < dn.top,
+             glyph: document.getElementById("posPlus").textContent + document.getElementById("posMinus").textContent };
+  });
+  check("24. 가로선 → 오른쪽 끝 세로 조절자 (▲위/▼아래)",
+    ctlV.vert && ctlV.rightEdge >= 0 && ctlV.rightEdge < 30 && ctlV.upAbove && ctlV.glyph === "▲▼",
+    `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
+
+  // 25. 세로선 선택 → 조절자가 사진 아래쪽에 가로로, ◀ 왼쪽 / ▶ 오른쪽
+  const ctlH = await p.evaluate(() => {
+    window.PB.S.sel = "v2"; window.PB.render();
+    const c = document.getElementById("posCtl").getBoundingClientRect();
+    const st = document.getElementById("stage").getBoundingClientRect();
+    const rt = document.getElementById("posPlus").getBoundingClientRect();
+    const lf = document.getElementById("posMinus").getBoundingClientRect();
+    return { horiz: c.width > c.height, bottomEdge: st.bottom - c.bottom, rightOfLeft: rt.left > lf.left,
+             glyph: document.getElementById("posMinus").textContent + document.getElementById("posPlus").textContent };
+  });
+  check("25. 세로선 → 아래쪽 가로 조절자 (◀왼쪽/▶오른쪽)",
+    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 70 && ctlH.rightOfLeft && ctlH.glyph === "◀▶",
+    `가로=${ctlH.horiz} 하단여백=${ctlH.bottomEdge.toFixed(0)}px 오른쪽화살표오른쪽=${ctlH.rightOfLeft} ${ctlH.glyph}`);
+
+  // 26. 조절자 방향 = 선의 이동 방향 (위로 밀면 위로 / 오른쪽으로 밀면 오른쪽으로)
+  const dirMatch = await p.evaluate(() => {
+    const S = window.PB.S, sl = document.getElementById("posSlider");
+    const bump = (key, d) => {
+      S.sel = key; window.PB.render();
+      const v0 = parseFloat(sl.value), before = S.g[key];
+      sl.value = String(Math.min(1, Math.max(0, v0 + d)));
+      sl.dispatchEvent(new Event("input", { bubbles: true }));
+      return { before, after: S.g[key] };
+    };
+    const h = bump("h1", +0.1);   // 세로 조절자 값↑(위쪽) → h1 감소(선이 위로)
+    const v = bump("v2", +0.1);   // 가로 조절자 값↑(오른쪽) → v2 증가(선이 오른쪽으로)
+    return { hUp: h.after < h.before, vRight: v.after > v.before };
+  });
+  check("26. 조절자 방향 = 선의 이동 방향", dirMatch.hUp && dirMatch.vRight,
+    `위로밀면 위로=${dirMatch.hUp}, 오른쪽으로밀면 오른쪽=${dirMatch.vRight}`);
 
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {

@@ -238,7 +238,7 @@ const ROT_MAX = 30;       // 밸런스(회전) 최대 각도(도)
 const ZOOM_MIN = 0.5, ZOOM_MAX = 8;
 const OFFSET_MAX = 1.0;   // 사진 좌우/위아래 이동 한계 (캔버스 비율)
 const SLIDER_OFFSET = 0.5;// 좌우/위아래 슬라이더 범위 (드래그는 OFFSET_MAX 까지)
-const HIT_PX = 24;        // 라인 드래그 인식 반경
+const HIT_PX = 28;        // 화면에서 선을 탭/드래그로 잡는 인식 반경
 const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭 (클수록 얼굴이 크게 잡힘)
 /* 인체 계측 평균비 — 동공 간 거리 기준 (동공 오프셋 = 1.0) */
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
@@ -789,19 +789,38 @@ function renderValueList() {
   }
 }
 
+/* 세로 조절자는 가로 range 를 -90° 회전해 쓰므로 트랙 길이를 슬롯 높이에 맞춘다.
+   (writing-mode 세로 range 는 구형 사파리에서 동작하지 않음) */
+function sizePosSlider(vertical) {
+  const slot = $("pSlot");
+  if (!slot) return;
+  if (vertical) {
+    const len = Math.max(80, slot.clientHeight);
+    if (posSlider.dataset.len !== String(len)) {
+      posSlider.style.width = len + "px";
+      posSlider.dataset.len = String(len);
+    }
+  } else if (posSlider.dataset.len) {
+    posSlider.style.width = "";
+    delete posSlider.dataset.len;
+  }
+}
+
 function updatePanels() {
   const c = posConfig();
   $("selName").textContent = c.name;
   $("posVal").textContent = c.disp;
-  $("posHint").textContent = c.hint;
   if (document.activeElement !== posSlider) posSlider.value = c.v;
 
-  /* 선택된 바의 이동 축에 맞는 방향 버튼 */
+  /* 조절자를 선택된 선의 이동 축과 같은 방향으로 놓는다 (BASELINE 1-7)
+     가로선(위아래) → 사진 오른쪽 끝 세로 조절자 / 세로선(좌우) → 사진 아래 가로 조절자 */
   const vAxis = c.axis === "v";
+  const ctl = $("posCtl");
+  ctl.classList.toggle("axis-v", vAxis);
+  ctl.classList.toggle("axis-h", !vAxis);
   $("posMinus").textContent = vAxis ? "▼" : "◀";
   $("posPlus").textContent = vAxis ? "▲" : "▶";
-  $("posMinus").classList.add("dir");
-  $("posPlus").classList.add("dir");
+  sizePosSlider(vAxis);
 
   const pc = photoConfig();
   $("photoVal").textContent = pc.disp;
@@ -1330,6 +1349,7 @@ function tryOrientationLock() {
 /* 리사이즈 / 회전 대응 */
 const ro = new ResizeObserver(() => { measure(); render(); });
 ro.observe(stage);
+new ResizeObserver(() => sizePosSlider($("posCtl").classList.contains("axis-v"))).observe($("pSlot"));
 window.addEventListener("resize", () => applyLayout());
 window.addEventListener("orientationchange", () => setTimeout(applyLayout, 250));
 
