@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<title>Perfect Brow — 눈썹 밸런스 가이드</title>
+<meta name="description" content="PMU 아티스트를 위한 눈썹 대칭·밸런스 정밀 가이드 도구" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<meta name="theme-color" content="#5B7FD8" />
+<link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Perfect Brow" />
+<style>
+/* ─────────────────────────────────────────────
+   Perfect Brow — styles
+   ───────────────────────────────────────────── */
+:root{
+  --bg:#ffffff;
+  --surface:#f6f7f9;
+  --surface-2:#eceef2;
+  --fg:#16181d;
+  --muted:#6b7280;
+  --border:#dfe3e9;
+  --primary:#5B7FD8;
+  --primary-d:#4A6BC4;
+  --accent:#7A6FD8;
+  --danger:#e0433f;
+  --btn-off:#4A4A4A;
+  --panel-h:0px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--fg)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
+  overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;
+}
+button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
+input,textarea{font:inherit}
+
+.screen{display:none;flex-direction:column;height:100dvh;height:100vh}
+.screen.active{display:flex}
+
+/* ── Home ───────────────────────────────── */
+#home{padding:calc(var(--safe-t) + 8px) 20px calc(var(--safe-b) + 20px);overflow-y:auto;align-items:center}
+.lang-switch{display:flex;gap:6px;justify-content:center;padding:8px 0 4px;width:100%}
+.lang-switch button{padding:7px 18px;border-radius:8px;font-size:13px;font-weight:600;background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+.lang-switch button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.home-inner{display:flex;flex-direction:column;align-items:center;text-align:center;max-width:420px;margin:auto;width:100%;padding:12px 0 8px}
+.hero{width:132px;height:132px;border-radius:32px;object-fit:cover;box-shadow:0 12px 34px rgba(91,127,216,.22);margin-bottom:22px}
+.home-title{font-size:34px;font-weight:800;letter-spacing:-.6px;margin:0 0 6px}
+.home-sub{font-size:11.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin:0}
+.home-div{width:48px;height:2px;background:var(--border);margin:20px 0}
+.home-desc{font-size:14.5px;line-height:1.65;color:var(--muted);margin:0 0 26px;white-space:pre-line}
+.cta{width:100%;max-width:300px;height:54px;border-radius:14px;font-size:16.5px;font-weight:700;color:#fff;
+  background:linear-gradient(135deg,#5B8DEE 0%,#6B5FD8 55%,#8B5FD8 100%);
+  box-shadow:0 8px 22px rgba(107,95,216,.32);display:flex;align-items:center;justify-content:center;gap:8px}
+.cta:active{transform:translateY(1px);filter:brightness(.96)}
+.cta.secondary{background:var(--surface);color:var(--fg);box-shadow:none;border:1px solid var(--border);height:46px;font-size:15px;margin-top:10px}
+.home-foot{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:26px}
+.install-tip{margin-top:22px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--muted);text-align:left;width:100%}
+.install-tip b{color:var(--fg)}
+/* 가로 화면 홈 압축 */
+@media (orientation:landscape) and (max-height:600px){
+  #home{padding-top:calc(var(--safe-t) + 2px)}
+  .lang-switch{padding:2px 0}
+  .lang-switch button{padding:5px 14px;font-size:12px}
+  .home-inner{padding:6px 0 4px;max-width:560px}
+  .hero{width:76px;height:76px;border-radius:20px;margin-bottom:10px}
+  .home-title{font-size:25px;margin-bottom:3px}
+  .home-sub{font-size:10px}
+  .home-div{margin:9px 0}
+  .home-desc{font-size:12.5px;line-height:1.5;margin-bottom:14px}
+  .cta{height:46px;font-size:15px;max-width:280px}
+  .install-tip{margin-top:12px;padding:9px 12px;font-size:11.5px;line-height:1.5}
+  .home-foot{margin-top:12px}
+}
+
+/* ── Editor ─────────────────────────────── */
+/* 가로(landscape) 우선: 캔버스 왼쪽 전체 + 오른쪽 조절 열
+   세로(portrait)에서도 그대로 동작하도록 grid-area 로 전환 */
+#editor{background:var(--bg);display:none}
+#editor.active{display:grid}
+.topbar{grid-area:topbar}
+.stage{grid-area:stage}
+.panels{grid-area:panels}
+.topbar{display:flex;gap:5px;padding:calc(var(--safe-t) + 7px) 8px 7px;background:var(--bg);border-bottom:1px solid var(--border)}
+@media (orientation:portrait){
+  #editor.active{grid-template-columns:100%;grid-template-rows:auto minmax(0,1fr) auto;
+    grid-template-areas:"topbar" "stage" "panels"}
+  #editor .panels{max-height:44dvh;border-top:1px solid var(--border)}
+  #lineRail{display:none}
+}
+/* 가로: [왼쪽 라인 레일] [사진] [오른쪽 조절 패널] — 왼손 선택 / 오른손 조절 */
+@media (orientation:landscape){
+  #editor.active{grid-template-columns:76px minmax(0,1fr) clamp(262px,32vw,344px);
+    grid-template-rows:auto minmax(0,1fr);
+    grid-template-areas:"lines stage topbar" "lines stage panels"}
+  #editor .panels{max-height:none;border-left:1px solid var(--border);height:100%}
+  #editor .topbar{border-left:1px solid var(--border);
+    display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:calc(var(--safe-t) + 7px) 9px 7px}
+  #lineRail{display:flex}
+}
+.topbar button{flex:1;height:46px;border-radius:9px;background:var(--surface);border:1px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:0;padding:0 1px}
+.topbar button i{font-style:normal;font-size:15px;line-height:1}
+.topbar button em{font-style:normal;font-size:9px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.topbar button:active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.topbar button.on{background:var(--danger);color:#fff;border-color:var(--danger)}
+.topbar button.picking{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Stage */
+.stage{position:relative;min-height:0;min-width:0;background:#fff;overflow:hidden;touch-action:none}
+#photo{position:absolute;inset:0;margin:auto;transform-origin:50% 50%;will-change:transform;pointer-events:none;
+  image-rendering:auto;display:block}
+#guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#touch{position:absolute;inset:0;touch-action:none}
+
+.ov{position:absolute;z-index:20}
+.ov-tl{top:8px;left:8px}
+.ov-tr{top:8px;right:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.chip{background:rgba(40,40,44,.78);color:#fff;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);white-space:nowrap}
+.chip.on{background:var(--primary)}
+.chip.warn{background:rgba(224,67,63,.85)}
+
+.linebar{position:absolute;bottom:8px;z-index:20;display:flex;gap:4px;background:rgba(30,30,34,.62);
+  padding:4px;border-radius:11px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);flex-wrap:wrap}
+.linebar-left{left:6px;max-width:58%}
+.linebar-right{right:6px;max-width:39%}
+.lbtn{width:32px;height:32px;border-radius:8px;background:var(--btn-off);color:#fff;font-size:9px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;border:2px solid transparent;line-height:1.05;text-align:center;padding:0}
+.lbtn.hidden-line{opacity:.42}
+.lbtn.sel{border-color:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+
+.hud{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:25;background:rgba(20,20,24,.8);
+  color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:700;text-align:center;line-height:1.6;
+  opacity:0;transition:opacity .18s;pointer-events:none}
+.hud.show{opacity:1}
+
+.aistatus{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);z-index:22}
+
+/* Panels */
+.panels{background:var(--bg);padding:0 10px calc(var(--safe-b) + 8px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.panel{padding:9px 0 6px;border-bottom:1px solid var(--border)}
+.panel:last-child{border-bottom:none}
+.panel-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.panel-t{font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--muted);text-transform:uppercase}
+.panel-v{font-size:12px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
+
+.modebtns{display:flex;gap:5px;margin-bottom:8px}
+.modebtns button{flex:1;height:32px;border-radius:8px;background:var(--surface);border:1px solid var(--border);
+  font-size:11.5px;font-weight:700;color:var(--muted);min-width:0;padding:0 2px}
+.modebtns button.on{background:var(--accent);border-color:#5A4FD8;color:#fff}
+.modebtns button.eyeg{flex:0 0 46px;font-size:15px}
+.modebtns button.eyeg.on{background:#fff;color:#111;border-color:#111}
+
+.sliderrow{display:flex;align-items:center;gap:8px}
+.stepbtn{flex:0 0 42px;height:40px;border-radius:10px;background:var(--surface-2);font-size:21px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;color:#333;border:1px solid var(--border)}
+.stepbtn:active{background:var(--primary);color:#fff}
+input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:40px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:3px;background:var(--surface-2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--primary);
+  border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.28);margin-top:-11px}
+input[type=range]::-moz-range-track{height:5px;border-radius:3px;background:var(--surface-2)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--primary);border:3px solid #fff}
+input[type=range]:disabled{opacity:.4}
+
+.hint{font-size:10.5px;color:var(--muted);text-align:center;margin-top:4px}
+
+/* 가로 모드: 라인 선택 버튼 = 왼쪽 세로 레일 (왼손 전용) */
+#lineRail{grid-area:lines;background:var(--bg);border-right:1px solid var(--border);
+  flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:calc(var(--safe-t) + 8px) 4px calc(var(--safe-b) + 8px);overflow-y:auto;min-height:0}
+#lineRail .linebar{position:static;flex-direction:column;flex-wrap:nowrap;gap:4px;
+  background:var(--surface);border:1px solid var(--border);padding:5px;max-width:none;
+  backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:12px}
+#lineRail .lbtn{width:58px;height:30px;font-size:9.5px}
+
+/* Modal */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.mask.on{display:flex}
+.modal{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:380px;max-height:80dvh;display:flex;flex-direction:column}
+.modal h3{margin:0 0 12px;font-size:16px;font-weight:800}
+.modal input[type=text]{width:100%;height:44px;border:1px solid var(--border);border-radius:10px;padding:0 12px;font-size:15px;margin-bottom:12px;background:var(--surface);-webkit-user-select:text;user-select:text}
+.modal-row{display:flex;gap:8px}
+.modal-row button{flex:1;height:44px;border-radius:10px;font-size:14px;font-weight:700;background:var(--surface);border:1px solid var(--border)}
+.modal-row button.pri{background:var(--primary);color:#fff;border-color:var(--primary)}
+.plist{overflow-y:auto;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+.pitem{display:flex;align-items:center;gap:6px;padding:9px 0;border-bottom:1px solid var(--border)}
+.pitem .nm{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pitem button{padding:7px 10px;border-radius:8px;font-size:11.5px;font-weight:700;background:var(--surface);border:1px solid var(--border)}
+.pitem button.pri{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pitem button.del{color:var(--danger)}
+.pitem .badge{font-size:9.5px;font-weight:700;color:var(--muted);background:var(--surface-2);padding:3px 6px;border-radius:5px}
+.empty{color:var(--muted);font-size:13.5px;text-align:center;padding:24px 0}
+
+#toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 28px);transform:translateX(-50%) translateY(14px);
+  background:rgba(20,20,24,.92);color:#fff;padding:11px 18px;border-radius:11px;font-size:13px;font-weight:600;
+  z-index:200;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:88vw;text-align:center}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* 가로 화면이 낮을 때(아이폰 가로 등) 컨트롤 압축 */
+@media (orientation:landscape) and (max-height:500px){
+  #editor .topbar button{height:38px}
+  #editor .topbar button i{font-size:13px}
+  #editor .panel{padding:6px 0 3px}
+  #editor .panel-h{margin-bottom:5px}
+  #editor .hint{display:none}
+  #editor .stepbtn{height:34px;flex-basis:38px}
+  #editor input[type=range]{height:34px}
+  #editor .modebtns{margin-bottom:6px}
+  #editor .modebtns button{height:28px;font-size:11px}
+  #editor #lineRail{gap:9px;padding-top:6px;padding-bottom:6px}
+  #editor #lineRail .linebar{gap:3px;padding:4px}
+  #editor #lineRail .lbtn{width:56px;height:26px;font-size:9px}
+  #editor .chip{padding:5px 8px;font-size:10px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HOME ═══════════ -->
+<section id="home" class="screen active">
+  <div class="lang-switch">
+    <button id="langKo" class="on">한국어</button>
+    <button id="langEn">English</button>
+  </div>
+  <div class="home-inner">
+    <img class="hero" src="./icon-512.png" alt="" />
+    <h1 class="home-title" data-i18n="home_title">Perfect Brow</h1>
+    <p class="home-sub" data-i18n="home_subtitle">전문가용 눈썹 디자인 도구</p>
+    <div class="home-div"></div>
+    <p class="home-desc" data-i18n="home_description"></p>
+    <button class="cta" id="pickBtn"><span data-i18n="select_photo">사진 선택</span></button>
+    <div class="install-tip" id="installTip"></div>
+    <p class="home-foot" data-i18n="home_footer">Professional Eyebrow Measurement Tool</p>
+  </div>
+</section>
+
+<!-- ═══════════ EDITOR ═══════════ -->
+<section id="editor" class="screen">
+  <div class="topbar">
+    <button id="btnReset"><i>↺</i><em data-i18n="editor_reset">초기화</em></button>
+    <button id="btnAlign"><i>◎</i><em data-i18n="editor_align">동공정렬</em></button>
+    <button id="btnLock"><i>🔒</i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
+    <button id="btnPresetLoad"><i>☆</i><em data-i18n="editor_preset">프리셋</em></button>
+    <button id="btnExport"><i>⬇</i><em data-i18n="editor_export">이미지저장</em></button>
+    <button id="btnChange"><i>🖼</i><em data-i18n="editor_change_photo">사진변경</em></button>
+  </div>
+
+  <div class="stage" id="stage">
+    <img id="photo" alt="" />
+    <svg id="guides" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="touch"></div>
+
+    <div class="ov ov-tl">
+      <button class="chip" id="btnAllLine">all line</button>
+    </div>
+    <div class="ov ov-tr">
+      <button class="chip" id="btnPivot" data-i18n="editor_inner_angle">V Center Pivot</button>
+      <button class="chip" id="btnVAngle" data-i18n="editor_outer_angle">V Angle</button>
+    </div>
+
+    <div class="linebar linebar-left" id="hButtons"></div>
+    <div class="linebar linebar-right" id="vButtons"></div>
+
+    <div class="hud" id="hud"></div>
+    <div class="ov aistatus"><span class="chip" id="aiStatus" hidden></span></div>
+  </div>
+
+  <aside id="lineRail"></aside>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-h">
+        <span class="panel-t"><span data-i18n="panel_position">위치 조절</span> · <span id="selName">Eye</span></span>
+        <span class="panel-v" id="posVal">50</span>
+      </div>
+      <div class="sliderrow">
+        <button class="stepbtn" id="posMinus">−</button>
+        <input type="range" id="posSlider" min="0" max="1" step="0.0005" value="0.5" />
+        <button class="stepbtn" id="posPlus">+</button>
+      </div>
+      <div class="hint" id="posHint"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <span class="panel-t" data-i18n="editor_photo_adjustment">사진 보정</span>
+        <span class="panel-v" id="photoVal">1.00×</span>
+      </div>
+      <div class="modebtns" id="photoModes">
+        <button data-mode="zoom" class="on" data-i18n="editor_zoom">줌</button>
+        <button data-mode="vertical" data-i18n="editor_vertical">위아래</button>
+        <button class="eyeg" id="btnEyeGuide" title="Eye guide">👁</button>
+        <button data-mode="horizontal" data-i18n="editor_horizontal">좌우</button>
+        <button data-mode="balance" data-i18n="editor_balance">밸런스</button>
+      </div>
+      <div class="sliderrow">
+        <button class="stepbtn" id="phMinus">−</button>
+        <input type="range" id="phSlider" min="0" max="1" step="0.001" value="0.25" />
+        <button class="stepbtn" id="phPlus">+</button>
+      </div>
+      <div class="hint" id="phHint"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ MODALS ═══════════ -->
+<div class="mask" id="mSave">
+  <div class="modal">
+    <h3 data-i18n="editor_preset_save">프리셋 저장</h3>
+    <input type="text" id="saveName" maxlength="30" />
+    <div class="modal-row">
+      <button data-close="mSave" data-i18n="editor_cancel">취소</button>
+      <button class="pri" id="doSave" data-i18n="editor_save">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mLoad">
+  <div class="modal">
+    <h3 data-i18n="editor_preset">프리셋</h3>
+    <div class="plist" id="presetList"></div>
+    <div class="modal-row">
+      <button data-close="mLoad" data-i18n="editor_close">닫기</button>
+      <button class="pri" id="btnPresetSave">＋ <span data-i18n="editor_preset_save">현재 설정 저장</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mRename">
+  <div class="modal">
+    <h3 data-i18n="preset_rename">프리셋 이름 변경</h3>
+    <input type="text" id="renameName" maxlength="30" />
+    <div class="modal-row">
+      <button data-close="mRename" data-i18n="editor_cancel">취소</button>
+      <button class="pri" id="doRename" data-i18n="editor_save">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="fileInput" accept="image/*" hidden />
+
+<script src="./app.js"></script>
+</body>
+</html>
