@@ -199,6 +199,71 @@ console.log("[세로 모드 · 기능]");
   const d = await dl;
   check("9. 이미지 PNG 저장", !!d, d ? d.suggestedFilename() : "다운로드 실패");
 
+  // 16. 사진 잠금 — 사진이 움직이지 않고, 선은 계속 움직임
+  await p.evaluate(() => { window.PB.S.locked = false; document.getElementById("btnLock").click(); });
+  await p.waitForTimeout(200);
+  const lockState = await p.evaluate(() => ({
+    locked: window.PB.S.locked,
+    sliderDisabled: document.getElementById("phSlider").disabled,
+    modeDisabled: [...document.querySelectorAll('#photoModes button[data-mode]')].every(b => b.disabled),
+    lock2on: document.getElementById("btnLock2").classList.contains("on"),
+  }));
+  const pBefore = await p.evaluate(() => ({ ...window.PB.S.p }));
+  // 잠금 상태에서 사진 팬 시도 (빈 영역 드래그)
+  await p.mouse.move(box.x + box.width * 0.12, box.y + box.height * 0.85);
+  await p.mouse.down();
+  await p.mouse.move(box.x + box.width * 0.12 + 70, box.y + box.height * 0.85 + 70, { steps: 10 });
+  await p.mouse.up();
+  const pAfter = await p.evaluate(() => ({ ...window.PB.S.p }));
+  const photoFrozen = pBefore.ox === pAfter.ox && pBefore.oy === pAfter.oy && pBefore.zoom === pAfter.zoom;
+  check("16. 사진 잠금 — 사진이 움직이지 않음", lockState.locked && lockState.sliderDisabled && lockState.modeDisabled && lockState.lock2on && photoFrozen,
+    `slider=${lockState.sliderDisabled} modes=${lockState.modeDisabled} frozen=${photoFrozen}`);
+
+  // 17. 잠금 중에도 선은 조절 가능 + 축 고정 (가로바=위아래만 / 세로바=좌우만)
+  await p.evaluate(() => { const s = window.PB.S; s.sel = "h1"; window.PB.render(); });
+  const hb = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1 }));
+  const hy = box.y + box.height * hb.h1;
+  await p.mouse.move(box.x + box.width * 0.5, hy);
+  await p.mouse.down();
+  // 대각선으로 끌어도 가로바는 세로 성분만 따라야 한다
+  await p.mouse.move(box.x + box.width * 0.5 + 80, hy + 40, { steps: 12 });
+  await p.mouse.up();
+  const ha = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1 }));
+  check("17. 잠금 중에도 선 조절 가능 · 가로바는 위아래로만",
+    near((ha.h1 - hb.h1) * box.height, 40, 3) && ha.v1 === hb.v1,
+    `Δy=${((ha.h1 - hb.h1) * box.height).toFixed(1)}px, v1 불변=${ha.v1 === hb.v1}`);
+
+  // 18. 세로바는 좌우로만 (+ 대칭 유지)
+  await p.evaluate(() => { const s = window.PB.S; s.sel = "v2"; window.PB.render(); });
+  const vb = await p.evaluate(() => ({ ...window.PB.S.g }));
+  const vx = box.x + box.width * vb.v2;
+  await p.mouse.move(vx, box.y + box.height * 0.55);
+  await p.mouse.down();
+  await p.mouse.move(vx - 40, box.y + box.height * 0.55 + 90, { steps: 12 });
+  await p.mouse.up();
+  const va = await p.evaluate(() => ({ ...window.PB.S.g }));
+  check("18. 세로바는 좌우로만 · 대칭 유지",
+    near((va.v2 - vb.v2) * box.width, -40, 3) && va.h1 === vb.h1 && near((va.v2 + va.v3) / 2, va.v1, 0.001),
+    `Δx=${((va.v2 - vb.v2) * box.width).toFixed(1)}px, h1 불변=${va.h1 === vb.h1}, 대칭오차=${Math.abs((va.v2 + va.v3) / 2 - va.v1).toExponential(1)}`);
+
+  // 19. 방향 버튼이 축에 맞게 표시
+  const dirs = await p.evaluate(() => {
+    const out = {};
+    const s = window.PB.S;
+    s.sel = "h1"; window.PB.render();
+    out.h = document.getElementById("posMinus").textContent + document.getElementById("posPlus").textContent;
+    s.sel = "v2"; window.PB.render();
+    out.v = document.getElementById("posMinus").textContent + document.getElementById("posPlus").textContent;
+    return out;
+  });
+  check("19. 방향 버튼 — 가로바 ▼▲ / 세로바 ◀▶", dirs.h === "▼▲" && dirs.v === "◀▶", `${dirs.h} / ${dirs.v}`);
+
+  // 잠금 해제 후 원상복구
+  await p.evaluate(() => { document.getElementById("btnLock2").click(); });
+  await p.waitForTimeout(150);
+  const unlocked = await p.evaluate(() => !window.PB.S.locked && !document.getElementById("phSlider").disabled);
+  check("20. 잠금 해제 — 사진 조작 복구", unlocked);
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;

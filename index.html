@@ -190,6 +190,12 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 input[type=range]:disabled{opacity:.4}
 
 .hint{font-size:10.5px;color:var(--muted);text-align:center;margin-top:4px}
+.ph-right{display:flex;align-items:center;gap:9px}
+.minilock{font-size:11px;font-weight:800;padding:5px 10px;border-radius:8px;
+  background:var(--surface);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
+.minilock.on{background:var(--danger);border-color:var(--danger);color:#fff}
+button:disabled{opacity:.38;pointer-events:none}
+.stepbtn.dir{font-size:15px;font-weight:800}
 
 /* 가로 모드: 라인 선택 버튼 = 왼쪽 세로 레일 (왼손 전용) */
 #lineRail{grid-area:lines;background:var(--bg);border-right:1px solid var(--border);
@@ -312,7 +318,10 @@ input[type=range]:disabled{opacity:.4}
     <div class="panel">
       <div class="panel-h">
         <span class="panel-t" data-i18n="editor_photo_adjustment">사진 보정</span>
-        <span class="panel-v" id="photoVal">1.00×</span>
+        <span class="ph-right">
+          <button class="minilock" id="btnLock2"><span id="lockLabel2">🔓 사진잠금</span></button>
+          <span class="panel-v" id="photoVal">1.00×</span>
+        </span>
       </div>
       <div class="modebtns" id="photoModes">
         <button data-mode="zoom" class="on" data-i18n="editor_zoom">줌</button>

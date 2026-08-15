@@ -83,7 +83,10 @@ const I18N = {
     hint_photo_lr: "◀ 왼쪽　　오른쪽 ▶",
     hint_photo_bal: "◀ 반시계　　시계 ▶",
     hint_drag: "화면의 선을 손가락으로 직접 끌어서 옮길 수 있습니다",
-    locked_msg: "사진이 잠겨 있습니다 (선은 계속 조절 가능)",
+    locked_msg: "사진 잠금 — 사진이 움직이지 않습니다 (선은 계속 조절 가능)",
+    lock_short: "사진잠금",
+    unlock_short: "잠금해제",
+    sel_line: "선택",
     unlocked_msg: "사진 잠금 해제",
     saved_img: "이미지를 저장했습니다",
     export_fail: "이미지 저장에 실패했습니다",
@@ -158,7 +161,10 @@ const I18N = {
     hint_photo_lr: "◀ left　　right ▶",
     hint_photo_bal: "◀ ccw　　cw ▶",
     hint_drag: "Drag any line directly on the photo to move it",
-    locked_msg: "Photo locked (lines still adjustable)",
+    locked_msg: "Photo locked — it will not move (lines still adjustable)",
+    lock_short: "Lock photo",
+    unlock_short: "Unlock",
+    sel_line: "selected",
     unlocked_msg: "Photo unlocked",
     saved_img: "Image saved",
     export_fail: "Could not save image",
@@ -550,6 +556,8 @@ touch.addEventListener("pointerdown", (e) => {
       else if (hit.type === "arm") setSel("outerAngle");
       else setSel(hit.key);
       render();
+      const c0 = posConfig();
+      showHud(`${c0.name} ${t("sel_line")}<br>${c0.axis === "v" ? "▲▼" : "◀▶"} ${c0.disp}`);
     } else if (!S.locked) {
       gMode = "pan";
       gDrag = { ox: S.p.ox, oy: S.p.oy, x0: sp.x, y0: sp.y };
@@ -588,6 +596,8 @@ touch.addEventListener("pointermove", (e) => {
       g.outerAngle = 0.5 + deg / (2 * V_ANGLE_MAX);
     }
     render();
+    const cd = posConfig();
+    showHud(`${cd.name}<br>${cd.axis === "v" ? "▲▼" : "◀▶"} ${cd.disp}`);
   } else if (gMode === "pan" && gDrag) {
     S.p.ox = clamp(gDrag.ox + (sp.x - gDrag.x0) / W, -OFFSET_MAX, OFFSET_MAX);
     S.p.oy = clamp(gDrag.oy + (sp.y - gDrag.y0) / H, -OFFSET_MAX, OFFSET_MAX);
@@ -666,6 +676,11 @@ function updateButtons() {
   const rl = $("btnRotate").querySelector("em");
   if (rl) rl.textContent = rotOn ? t("editor_rotate_off") : t("editor_rotate");
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
+  const l2 = $("btnLock2");
+  if (l2) {
+    l2.classList.toggle("on", S.locked);
+    $("lockLabel2").textContent = (S.locked ? "🔒 " : "🔓 ") + (S.locked ? t("unlock_short") : t("lock_short"));
+  }
 }
 
 /* ── 위치 조절 패널 ── */
@@ -673,19 +688,21 @@ const H_KEYS = new Set(H_SPECS.map((s) => s.key));
 
 function posConfig() {
   const g = S.g, k = S.sel;
+  /* axis: "v" = 위아래로만 움직이는 바(가로선) / "h" = 좌우로만 움직이는 바(세로선)
+     각 바는 자기 축으로만 움직인다. 대칭 처리는 setLine() 이 담당. (BASELINE 1-2) */
   if (k === "outerAngle") {
     const deg = (g.outerAngle - 0.5) * 2 * V_ANGLE_MAX;
-    return { name: t("editor_outer_angle"), v: g.outerAngle, disp: deg.toFixed(1) + "°", hint: t("hint_narrowwide"), step: 0.006, invert: false };
+    return { name: t("editor_outer_angle"), v: g.outerAngle, disp: deg.toFixed(1) + "°", hint: t("hint_narrowwide"), step: 0.006, invert: false, axis: "v" };
   }
   if (k === "innerAngle") {
-    return { name: t("editor_inner_angle"), v: 1 - g.innerAngle, disp: Math.round((1 - g.innerAngle) * 100), hint: t("hint_updown"), step: 0.003, invert: true };
+    return { name: t("editor_inner_angle"), v: 1 - g.innerAngle, disp: Math.round((1 - g.innerAngle) * 100), hint: t("hint_updown"), step: 0.003, invert: true, axis: "v" };
   }
   if (H_KEYS.has(k)) {
     const sp = H_SPECS.find((s) => s.key === k);
-    return { name: sp.label, v: 1 - g[k], disp: Math.round((1 - g[k]) * 100), hint: t("hint_updown"), step: 0.003, invert: true };
+    return { name: sp.label, v: 1 - g[k], disp: Math.round((1 - g[k]) * 100), hint: t("hint_updown"), step: 0.003, invert: true, axis: "v" };
   }
   const sp = V_SPECS.find((s) => s.key === k);
-  return { name: sp.label, v: g[k], disp: Math.round(g[k] * 100), hint: t("hint_leftright"), step: 0.003, invert: false };
+  return { name: sp.label, v: g[k], disp: Math.round(g[k] * 100), hint: t("hint_leftright"), step: 0.003, invert: false, axis: "h" };
 }
 
 function applyPos(v) {
@@ -729,10 +746,23 @@ function updatePanels() {
   $("posHint").textContent = c.hint;
   if (document.activeElement !== posSlider) posSlider.value = c.v;
 
+  /* 선택된 바의 이동 축에 맞는 방향 버튼 */
+  const vAxis = c.axis === "v";
+  $("posMinus").textContent = vAxis ? "▼" : "◀";
+  $("posPlus").textContent = vAxis ? "▲" : "▶";
+  $("posMinus").classList.add("dir");
+  $("posPlus").classList.add("dir");
+
   const pc = photoConfig();
   $("photoVal").textContent = pc.disp;
   $("phHint").textContent = pc.hint;
   if (document.activeElement !== phSlider) phSlider.value = pc.v;
+
+  /* 사진 잠금 시 사진 관련 조작 전부 비활성 — 선 조절은 그대로 가능 */
+  phSlider.disabled = S.locked;
+  $("phMinus").disabled = S.locked;
+  $("phPlus").disabled = S.locked;
+  document.querySelectorAll("#photoModes button[data-mode]").forEach((b) => { b.disabled = S.locked; });
 }
 
 /* ═══════════ 7. presets ═══════════ */
@@ -1133,11 +1163,14 @@ $("btnAlign").onclick = () => {
   render();
 };
 
-$("btnLock").onclick = () => {
+function toggleLock() {
   S.locked = !S.locked;
   updateButtons();
+  updatePanels();
   toast(S.locked ? t("locked_msg") : t("unlocked_msg"));
-};
+}
+$("btnLock").onclick = toggleLock;
+$("btnLock2").onclick = toggleLock;
 
 $("btnExport").onclick = exportImage;
 
