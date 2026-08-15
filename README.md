@@ -3,6 +3,12 @@
 PMU 아티스트용 눈썹 대칭·밸런스 가이드 도구.
 브라우저에서 단독 실행되며 **서버가 필요 없습니다.** 사진은 기기 밖으로 나가지 않습니다.
 
+### 🔗 https://leahkshop.github.io/perfect-brow/
+
+> 📌 **코드를 고치기 전에 반드시 [`BASELINE.md`](./BASELINE.md) 를 읽으세요.**
+> 지키지 않으면 조용히 깨지는 규칙(좌표계·대칭·프리셋 저장소)이 정리돼 있습니다.
+> 고친 뒤에는 `node regression-test.mjs` 로 15개 항목을 자동 검증하세요.
+
 > **가로(landscape) 모드 · 양손 조작 기준으로 설계**되었습니다.
 >
 > ```
@@ -16,30 +22,28 @@ PMU 아티스트용 눈썹 대칭·밸런스 가이드 도구.
 
 ---
 
-## 1. 지금 바로 써보기 (설치 없음)
+## 1. 사용하기
 
-`perfect-brow-standalone.html` 파일을 더블클릭 → 브라우저에서 바로 열립니다.
-혼자 테스트할 때 쓰세요. 홈 화면 앱 설치는 아래 2번이 필요합니다.
+**이미 배포돼 있습니다.** 폰·태블릿에서 아래 주소를 열면 바로 씁니다.
+
+### https://leahkshop.github.io/perfect-brow/
+
+인터넷 없이 혼자 확인만 하려면 `perfect-brow-standalone.html` 을 더블클릭하세요 (전부 한 파일에 들어있는 버전).
 
 ---
 
-## 2. 인터넷에 올리기 (아이패드/아이폰에서 쓰려면 필수)
+## 2. 수정한 내용을 반영하기
 
-가장 빠른 방법 — **Netlify Drop**, 계정 없이 1분:
+1. 파일 수정 (`index.html` / `app.js`)
+2. `node regression-test.mjs` → **15개 항목 전부 통과 확인**
+3. GitHub 저장소에서 `Add file` → `Upload files` → 해당 파일 덮어쓰기 → Commit
+4. 약 1분 뒤 위 주소에 자동 반영
 
-1. 브라우저에서 <https://app.netlify.com/drop> 접속
-2. `perfect-brow-web` **폴더째로** 화면에 끌어다 놓기
-3. `https://xxxxx.netlify.app` 주소가 즉시 생성됨 → 이 주소를 폰에서 열기
-
-> 주소를 고정하고 싶으면 Netlify에 무료 가입 → Site settings → Change site name
-> (GitHub Pages, Vercel 도 동일하게 동작합니다. **HTTPS 주소여야** 홈 화면 설치가 됩니다.)
-
-### 로컬에서 먼저 확인하려면 (맥 터미널)
+로컬에서 먼저 보려면:
 
 ```bash
-cd perfect-brow-web
-python3 -m http.server 8080
-# 브라우저에서 http://localhost:8080
+python3 -m http.server 8080     # 이 폴더에서 실행
+# http://localhost:8080
 ```
 
 ---
@@ -114,7 +118,7 @@ python3 -m http.server 8080
 npm init -y
 npm i @capacitor/core @capacitor/ios @capacitor/android
 npm i -D @capacitor/cli
-npx cap init "Perfect Brow" com.perfectbrow.app --web-dir=perfect-brow-web
+npx cap init "Perfect Brow" com.perfectbrow.app --web-dir=.
 npx cap add ios
 npx cap add android
 npx cap open ios        # Xcode 에서 빌드 → App Store Connect 업로드
@@ -129,12 +133,17 @@ npx cap open android    # Android Studio 에서 빌드 → Play Console 업로�
 ## 7. 파일 구성
 
 ```
-perfect-brow-web/
-├── index.html              화면 구조 + 스타일
-├── app.js                  전체 로직 (섹션별로 주석 구분)
-├── manifest.webmanifest    앱 이름 · 아이콘 · 전체화면 설정
+perfect-brow/
+├── index.html              화면 구조 + 전체 CSS
+├── app.js                  전 로직 (상단 주석에 1~9 섹션 지도)
+├── manifest.webmanifest    앱 이름·아이콘·가로 고정·전체화면
 ├── sw.js                   오프라인 캐시
-└── icons/                  앱 아이콘
+├── icon-192.png            아이콘 (파일 추가 시 sw.js SHELL_FILES 에도 추가)
+├── icon-512.png
+├── apple-touch-icon.png
+├── BASELINE.md             🔒 잠금 사양 · 복구 방법  ← 작업 전 필독
+├── regression-test.mjs     ✅ 자동 회귀 테스트 (15항목)
+└── README.md               이 문서
 ```
 
 ### 자주 바꿀 만한 값 (`app.js` 상단)

@@ -1,0 +1,255 @@
+/* ═══════════════════════════════════════════════════════════════
+   Perfect Brow — 회귀 테스트 (Regression Test)
+
+   코드를 고친 뒤 반드시 실행하세요. 하나라도 FAIL 이면 커밋하지 마세요.
+
+     npm install playwright          (최초 1회)
+     npx playwright install chromium (최초 1회)
+     node regression-test.mjs
+
+   BASELINE.md 6번 항목과 1:1로 대응합니다.
+   ═══════════════════════════════════════════════════════════════ */
+
+import { chromium } from "playwright";
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const PORT = 8931;
+
+/* ── 결과 집계 ───────────────────────────────── */
+const results = [];
+function check(name, pass, detail = "") {
+  results.push({ name, pass, detail });
+  console.log(`${pass ? "  ✅" : "  ❌"} ${name}${detail ? "  — " + detail : ""}`);
+}
+const near = (a, b, tol) => Math.abs(a - b) <= tol;
+
+/* ── 테스트용 얼굴 이미지 (6° 기울어짐) 생성 ───── */
+function makeTestFace() {
+  const W = 900, H = 1200, cx = 450, cy = 470, ang = (6 * Math.PI) / 180;
+  const eye = (x, y) => `
+    <ellipse cx="${x}" cy="${y}" rx="72" ry="30" fill="#fcfaf7"/>
+    <circle cx="${x}" cy="${y}" r="26" fill="#4e3628"/>
+    <circle cx="${x}" cy="${y}" r="11" fill="#14100e"/>`;
+  const brow = (x, y) => `<path d="M ${x - 80} ${y - 62} Q ${x} ${y - 108} ${x + 80} ${y - 62}"
+      stroke="#423028" stroke-width="15" fill="none" stroke-linecap="round"/>`;
+  const L = { x: cx - 125 * Math.cos(ang), y: cy - 125 * Math.sin(ang) };
+  const R = { x: cx + 125 * Math.cos(ang), y: cy + 125 * Math.sin(ang) };
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <rect width="${W}" height="${H}" fill="#e8e2dc"/>
+    <rect x="${cx - 90}" y="700" width="180" height="${H - 700}" fill="#e2beA6"/>
+    <ellipse cx="${cx}" cy="490" rx="235" ry="340" fill="#eecbb2"/>
+    <ellipse cx="${cx}" cy="260" rx="255" ry="170" fill="#3c2c26"/>
+    <ellipse cx="${cx}" cy="368" rx="215" ry="152" fill="#eecbb2"/>
+    ${eye(L.x, L.y)}${eye(R.x, R.y)}${brow(L.x, L.y)}${brow(R.x, R.y)}
+    <path d="M ${cx} 500 L ${cx - 14} 610" stroke="#cea68e" stroke-width="6" fill="none"/>
+    <ellipse cx="${cx}" cy="694" rx="62" ry="22" fill="#c46e68"/>
+  </svg>`;
+  const p = path.join(ROOT, ".test-face.svg");
+  fs.writeFileSync(p, svg);
+  return { file: p, pupilL: L, pupilR: R, iw: W, ih: H };
+}
+
+/* ── 정적 서버 ───────────────────────────────── */
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
+  ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml",
+  ".webmanifest": "application/manifest+json", ".json": "application/json", ".md": "text/markdown" };
+
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent(req.url.split("?")[0]).replace(/^\/+/, "") || "index.html";
+  const file = path.join(ROOT, rel);
+  if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    res.writeHead(404).end("not found");
+    return;
+  }
+  res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" });
+  fs.createReadStream(file).pipe(res);
+});
+await new Promise((r) => server.listen(PORT, r));
+
+const face = makeTestFace();
+const URL_BASE = `http://127.0.0.1:${PORT}/index.html`;
+
+console.log("\n━━━ Perfect Brow 회귀 테스트 ━━━\n");
+
+/* 특수 환경에서 크로미움 경로를 직접 지정해야 할 때: PB_CHROME=/path/to/chrome node regression-test.mjs */
+const browser = await chromium.launch(
+  process.env.PB_CHROME ? { executablePath: process.env.PB_CHROME } : {},
+);
+
+/* ═══════ A. 세로(portrait) — 기능 테스트 ═══════ */
+console.log("[세로 모드 · 기능]");
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const p = await ctx.newPage();
+  const errs = [];
+  p.on("pageerror", (e) => errs.push(e.message));
+  p.on("console", (m) => { if (m.type() === "error" && !/favicon|ERR_|status of 404/.test(m.text())) errs.push(m.text()); });
+
+  await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+  await p.waitForTimeout(500);
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1200);
+
+  check("1. 페이지 로드 · JS 오류 없음", errs.length === 0, errs.join(" | "));
+
+  // 11. 세로에서 라인 버튼이 캔버스 안에 있는지
+  const inStage = await p.evaluate(() => document.getElementById("stage").contains(document.getElementById("hButtons")));
+  check("11. 세로 레이아웃 — 라인 버튼이 캔버스 하단", inStage);
+
+  const box = await p.locator("#stage").boundingBox();
+
+  // 2. 라인 드래그
+  const y0 = await p.evaluate(() => window.PB.S.g.h1);
+  await p.mouse.move(box.x + box.width * 0.5, box.y + box.height * y0);
+  await p.mouse.down();
+  await p.mouse.move(box.x + box.width * 0.5, box.y + box.height * y0 + 60, { steps: 12 });
+  await p.mouse.up();
+  const y1 = await p.evaluate(() => window.PB.S.g.h1);
+  const moved = (y1 - y0) * box.height;
+  check("2. 라인 직접 드래그 (60px)", near(moved, 60, 3), `${moved.toFixed(1)}px`);
+
+  // 5. Center 이동 시 동반 이동
+  await p.evaluate(() => { window.PB.S.g.v4Visible = true; window.PB.render(); });
+  const before = await p.evaluate(() => ({ ...window.PB.S.g }));
+  await p.evaluate(() => {
+    const s = window.PB.S;
+    const d = 0.06;
+    // setLine 을 거쳐야 함 — 직접 대입 금지 (BASELINE 1-2)
+    window.PB.render();
+    const ev = { v1: s.g.v1 + d };
+    window.PB.S.__t = ev;
+  });
+  await p.evaluate(() => {
+    // 앱 내부 setLine 을 쓰기 위해 v1 슬라이더 경로로 이동
+    const s = window.PB.S; s.sel = "v1";
+    const el = document.getElementById("posSlider");
+    el.value = String(s.g.v1 + 0.06);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const after = await p.evaluate(() => ({ ...window.PB.S.g }));
+  const dv1 = after.v1 - before.v1;
+  const okShift = ["v2", "v3", "v4", "v5"].every((k) => near(after[k] - before[k], dv1, 0.002));
+  check("5. Center 이동 시 v2~v5 동반 이동", okShift && dv1 > 0.03, `Δv1=${dv1.toFixed(4)}`);
+
+  // 3 / 4. 대칭
+  const sym = await p.evaluate(() => {
+    const s = window.PB.S;
+    s.sel = "v2";
+    const el = document.getElementById("posSlider");
+    el.value = String(1 - (s.g.v2 - 0.05));   // H가 아닌 V는 비반전이지만 값 변화만 주면 됨
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    const g1 = { ...s.g };
+    s.sel = "v4";
+    const el2 = document.getElementById("posSlider");
+    el2.value = String(g1.v4 + 0.04);
+    el2.dispatchEvent(new Event("input", { bubbles: true }));
+    const g = window.PB.S.g;
+    return { v1: g.v1, v2: g.v2, v3: g.v3, v4: g.v4, v5: g.v5 };
+  });
+  check("3. Inner 좌우 대칭", near((sym.v2 + sym.v3) / 2, sym.v1, 0.001),
+    `mid=${((sym.v2 + sym.v3) / 2).toFixed(5)} v1=${sym.v1.toFixed(5)}`);
+  check("4. Outer 좌우 대칭", near((sym.v4 + sym.v5) / 2, sym.v1, 0.001),
+    `mid=${((sym.v4 + sym.v5) / 2).toFixed(5)} v1=${sym.v1.toFixed(5)}`);
+
+  // 6. 동공정렬
+  await p.evaluate(() => { window.PB.S.g = { ...window.PB.DEFAULT_GUIDE }; window.PB.S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; window.PB.render(); });
+  await p.click("#btnAlign");
+  const geo = await p.evaluate(() => ({ iw: window.PB.S.iw, ih: window.PB.S.ih, s0: window.PB.S.s0, W: window.PB.S.dim.W, H: window.PB.S.dim.H }));
+  const toC = (px, py) => ({ x: geo.W / 2 + (px - geo.iw / 2) * geo.s0, y: geo.H / 2 + (py - geo.ih / 2) * geo.s0 });
+  const A = toC(face.pupilL.x, face.pupilL.y), B = toC(face.pupilR.x, face.pupilR.y);
+  await p.mouse.click(box.x + A.x, box.y + A.y); await p.waitForTimeout(120);
+  await p.mouse.click(box.x + B.x, box.y + B.y); await p.waitForTimeout(300);
+  const st = await p.evaluate(() => ({ ...window.PB.S.p, v1: window.PB.S.g.v1, h1: window.PB.S.g.h1 }));
+  check("6. 동공정렬 — 6° 기울기 보정", near(st.rot, -6, 0.3) && near(st.v1, 0.5, 0.001) && near(st.h1, 0.5, 0.001),
+    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)} h1=${st.h1.toFixed(3)}`);
+
+  // 7. 슬라이더
+  const sl = await p.evaluate(() => {
+    const s = document.getElementById("phSlider");
+    s.value = "0.7"; s.dispatchEvent(new Event("input", { bubbles: true }));
+    const zoom = window.PB.S.p.zoom;
+    document.querySelector('#photoModes button[data-mode="balance"]').click();
+    const s2 = document.getElementById("phSlider");
+    s2.value = "0.65"; s2.dispatchEvent(new Event("input", { bubbles: true }));
+    return { zoom, rot: window.PB.S.p.rot };
+  });
+  check("7. 줌/회전 슬라이더 범위", sl.zoom > 0.5 && sl.zoom <= 8 && sl.rot >= -30 && sl.rot <= 30,
+    `zoom=${sl.zoom.toFixed(2)}× rot=${sl.rot.toFixed(1)}°`);
+
+  // 8. 프리셋 저장 · 영속성
+  await p.evaluate(() => localStorage.removeItem("pb_presets_v1"));
+  await p.click("#btnPresetLoad"); await p.waitForTimeout(200);
+  await p.click("#btnPresetSave");
+  await p.fill("#saveName", "REGRESSION");
+  await p.click("#doSave"); await p.waitForTimeout(300);
+  await p.reload({ waitUntil: "domcontentloaded" }); await p.waitForTimeout(400);
+  const kept = await p.evaluate(() => JSON.parse(localStorage.getItem("pb_presets_v1") || "[]"));
+  check("8. 프리셋 저장 — 새로고침 후 유지", kept.length === 1 && kept[0].name === "REGRESSION",
+    `${kept.length}개`);
+
+  // 9. 이미지 저장
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1200);
+  const dl = p.waitForEvent("download", { timeout: 20000 }).catch(() => null);
+  await p.click("#btnExport");
+  const d = await dl;
+  check("9. 이미지 PNG 저장", !!d, d ? d.suggestedFilename() : "다운로드 실패");
+
+  // 12. 좌표계 규약
+  const norm = await p.evaluate(() => {
+    const g = window.PB.S.g;
+    const keys = ["h1", "h2", "h3", "front", "frontThickness", "archThickness", "v1", "v2", "v3", "v4", "v5", "innerAngle", "outerAngle"];
+    return keys.filter((k) => typeof g[k] !== "number" || g[k] < -0.001 || g[k] > 1.001);
+  });
+  check("12. 좌표계 규약 — 모든 라인 값 0~1", norm.length === 0, norm.join(","));
+
+  await ctx.close();
+}
+
+/* ═══════ B. 가로(landscape) — 레이아웃 테스트 ═══════ */
+console.log("\n[가로 모드 · 레이아웃]");
+for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아이패드 가로 1180×820", w: 1180, h: 820 }]) {
+  const ctx = await browser.newContext({ viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const p = await ctx.newPage();
+  await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+  await p.waitForTimeout(400);
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1000);
+
+  const g = await p.evaluate(() => {
+    const rail = document.getElementById("lineRail");
+    const panels = document.querySelector(".panels");
+    const stage = document.getElementById("stage");
+    return {
+      railVisible: getComputedStyle(rail).display !== "none",
+      railHasButtons: rail.contains(document.getElementById("hButtons")) && rail.contains(document.getElementById("vButtons")),
+      railFits: rail.scrollHeight <= rail.clientHeight + 2,
+      panelsFit: panels.scrollHeight <= panels.clientHeight + 2,
+      stageW: Math.round(stage.getBoundingClientRect().width),
+    };
+  });
+  check(`10. ${dev.n} — 좌측 레일 표시`, g.railVisible && g.railHasButtons);
+  check(`10. ${dev.n} — 레일/패널 잘림 없음`, g.railFits && g.panelsFit,
+    `rail=${g.railFits ? "ok" : "overflow"} panels=${g.panelsFit ? "ok" : "overflow"}`);
+  await ctx.close();
+}
+
+await browser.close();
+server.close();
+fs.unlinkSync(face.file);
+
+/* ── 요약 ───────────────────────────────── */
+const failed = results.filter((r) => !r.pass);
+console.log("\n" + "━".repeat(46));
+console.log(`  통과 ${results.length - failed.length} / ${results.length}`);
+if (failed.length) {
+  console.log("\n  ❌ 실패 항목 — 커밋하지 마세요:");
+  failed.forEach((f) => console.log(`     · ${f.name}  ${f.detail}`));
+  console.log("\n  BASELINE.md 의 해당 항목을 확인하세요.\n");
+  process.exit(1);
+}
+console.log("  ✅ 전 항목 통과 — 커밋해도 안전합니다.\n");
