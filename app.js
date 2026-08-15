@@ -40,6 +40,10 @@ const I18N = {
     editor_photo_unlock: "잠금해제",
     editor_export: "이미지저장",
     editor_change_photo: "사진변경",
+    editor_rotate: "화면가로",
+    editor_rotate_off: "가로해제",
+    rot_on: "화면을 가로로 고정했습니다",
+    rot_off: "기기 방향을 따릅니다",
     pick_1: "① 왼쪽 눈동자 중앙을 탭하세요",
     pick_2: "② 오른쪽 눈동자 중앙을 탭하세요",
     pick_done: "동공 기준 자동 정렬 완료",
@@ -111,6 +115,10 @@ const I18N = {
     editor_photo_unlock: "Unlock",
     editor_export: "Save Image",
     editor_change_photo: "Change Photo",
+    editor_rotate: "Landscape",
+    editor_rotate_off: "Auto rotate",
+    rot_on: "Locked to landscape",
+    rot_off: "Following device orientation",
     pick_1: "① Tap the centre of the left pupil",
     pick_2: "② Tap the centre of the right pupil",
     pick_done: "Aligned to pupils",
@@ -267,9 +275,10 @@ function showHud(html) {
 /* ═══════════ 4. render ═══════════ */
 
 function measure() {
-  const r = stage.getBoundingClientRect();
-  S.dim.W = Math.max(1, Math.round(r.width));
-  S.dim.H = Math.max(1, Math.round(r.height));
+  /* getBoundingClientRect 는 CSS 회전이 걸리면 축정렬 bbox 를 돌려주므로
+     변환과 무관한 레이아웃 크기(offsetWidth/Height)를 쓴다. (BASELINE 1-1) */
+  S.dim.W = Math.max(1, stage.offsetWidth || Math.round(stage.getBoundingClientRect().width));
+  S.dim.H = Math.max(1, stage.offsetHeight || Math.round(stage.getBoundingClientRect().height));
 }
 
 function renderPhoto() {
@@ -501,7 +510,15 @@ function hitTest(x, y) {
 const pts = new Map();
 let gMode = null, gDrag = null;
 
+/* 화면 좌표 → 캔버스 좌표.
+   #guides SVG 가 캔버스와 정확히 겹치고 viewBox 가 0 0 W H 이므로,
+   getScreenCTM 의 역행렬을 쓰면 CSS 회전/스케일이 걸려 있어도 좌표가 정확하다. */
 function stagePoint(e) {
+  const ctm = svg.getScreenCTM && svg.getScreenCTM();
+  if (ctm && typeof DOMPoint !== "undefined") {
+    const q = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    return { x: q.x, y: q.y };
+  }
   const r = stage.getBoundingClientRect();
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
@@ -528,10 +545,11 @@ touch.addEventListener("pointerdown", (e) => {
   }
 
   touch.setPointerCapture(e.pointerId);
-  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const sp = stagePoint(e);
+  pts.set(e.pointerId, sp);
 
   if (pts.size === 1) {
-    const p = stagePoint(e);
+    const p = sp;
     const hit = hitTest(p.x, p.y);
     if (hit) {
       gMode = "line";
@@ -542,7 +560,7 @@ touch.addEventListener("pointerdown", (e) => {
       render();
     } else if (!S.locked) {
       gMode = "pan";
-      gDrag = { ox: S.p.ox, oy: S.p.oy, x0: e.clientX, y0: e.clientY };
+      gDrag = { ox: S.p.ox, oy: S.p.oy, x0: sp.x, y0: sp.y };
     } else {
       gMode = null;
     }
@@ -561,11 +579,12 @@ touch.addEventListener("pointerdown", (e) => {
 touch.addEventListener("pointermove", (e) => {
   if (!pts.has(e.pointerId)) return;
   e.preventDefault();
-  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const sp = stagePoint(e);
+  pts.set(e.pointerId, sp);
   const { W, H } = S.dim, g = S.g;
 
   if (gMode === "line" && gDrag) {
-    const p = stagePoint(e);
+    const p = sp;
     const h = gDrag.hit;
     if (h.type === "h") setLine(h.key, p.y / H);
     else if (h.type === "v") setLine(h.key, h.mirrored ? 2 * g.v1 - p.x / W : p.x / W);
@@ -578,8 +597,8 @@ touch.addEventListener("pointermove", (e) => {
     }
     render();
   } else if (gMode === "pan" && gDrag) {
-    S.p.ox = clamp(gDrag.ox + (e.clientX - gDrag.x0) / W, -OFFSET_MAX, OFFSET_MAX);
-    S.p.oy = clamp(gDrag.oy + (e.clientY - gDrag.y0) / H, -OFFSET_MAX, OFFSET_MAX);
+    S.p.ox = clamp(gDrag.ox + (sp.x - gDrag.x0) / W, -OFFSET_MAX, OFFSET_MAX);
+    S.p.oy = clamp(gDrag.oy + (sp.y - gDrag.y0) / H, -OFFSET_MAX, OFFSET_MAX);
     render();
   } else if (gMode === "xform" && gDrag && pts.size >= 2) {
     const [a, b] = [...pts.values()];
@@ -650,6 +669,10 @@ function updateButtons() {
   $("btnEyeGuide").classList.toggle("on", S.g.eyeGuideVisible);
   $("btnLock").classList.toggle("on", S.locked);
   $("btnAlign").classList.toggle("picking", S.pickMode);
+  const rotOn = document.body.classList.contains("rot90");
+  $("btnRotate").classList.toggle("picking", rotOn);
+  const rl = $("btnRotate").querySelector("em");
+  if (rl) rl.textContent = rotOn ? t("editor_rotate_off") : t("editor_rotate");
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
 }
 
@@ -1097,6 +1120,14 @@ $("btnReset").onclick = () => {
   toast(t("reset_done"));
 };
 
+$("btnRotate").onclick = () => {
+  const rotNow = document.body.classList.contains("rot90");
+  localStorage.setItem(ORIENT_KEY, rotNow ? "off" : "on");
+  if (!rotNow) tryOrientationLock();
+  applyLayout();
+  toast(rotNow ? t("rot_off") : t("rot_on"));
+};
+
 $("btnAlign").onclick = () => {
   if (S.pickMode) {
     S.pickMode = false; S.pick = [];
@@ -1175,26 +1206,63 @@ $("doRename").onclick = () => {
   renderPresetList();
 };
 
-/* 가로 모드에서는 라인 선택 버튼을 우측 패널로 옮긴다 */
-const mqLand = window.matchMedia("(orientation:landscape)");
+/* ═══════════ 화면 방향 (가로 강제) ═══════════
+   pb_orient : "auto"  기기 방향을 따르되, 설치된 앱(standalone)에서 세로면 가로로 돌림
+               "on"    항상 가로로 강제 (기기가 세로여도 화면을 90° 회전)
+               "off"   기기 방향을 그대로 따름                                     */
+const ORIENT_KEY = "pb_orient";
+const getOrient = () => localStorage.getItem(ORIENT_KEY) || "auto";
+const isStandalone = () =>
+  window.matchMedia("(display-mode: standalone)").matches ||
+  window.matchMedia("(display-mode: fullscreen)").matches ||
+  navigator.standalone === true;
+
 function placeLineBars() {
   const L = $("hButtons"), R = $("vButtons");
   /* 가로 = 왼쪽 세로 레일(왼손 선택) / 세로 = 캔버스 위 오버레이 */
-  (mqLand.matches ? $("lineRail") : stage).append(L, R);
+  (document.body.classList.contains("land") ? $("lineRail") : stage).append(L, R);
 }
-mqLand.addEventListener("change", () => { placeLineBars(); measure(); render(); });
+
+function applyLayout() {
+  const mode = getOrient();
+  const devPortrait = window.innerHeight > window.innerWidth;
+  const rot = devPortrait && (mode === "on" || (mode === "auto" && isStandalone()));
+
+  document.body.classList.toggle("rot90", rot);
+  const w = rot ? window.innerHeight : window.innerWidth;
+  const h = rot ? window.innerWidth : window.innerHeight;
+  document.body.classList.toggle("land", w > h);
+  document.body.classList.toggle("compact", h < 560);
+
+  placeLineBars();
+  updateButtons();
+  measure();
+  render();
+}
+
+/* 진짜 방향 잠금이 가능한 기기(안드로이드 PWA 등)에서는 OS 레벨로 고정 시도.
+   아이폰 사파리는 지원하지 않으므로 위의 rot90 회전이 대신 처리한다. */
+function tryOrientationLock() {
+  try {
+    if (screen.orientation && screen.orientation.lock && getOrient() !== "off") {
+      screen.orientation.lock("landscape").catch(() => {});
+    }
+  } catch { /* 미지원 — 무시 */ }
+}
 
 /* 리사이즈 / 회전 대응 */
 const ro = new ResizeObserver(() => { measure(); render(); });
 ro.observe(stage);
-window.addEventListener("orientationchange", () => setTimeout(() => { placeLineBars(); measure(); render(); }, 250));
+window.addEventListener("resize", () => applyLayout());
+window.addEventListener("orientationchange", () => setTimeout(applyLayout, 250));
 
 /* ═══════════ init ═══════════ */
 buildLineButtons();
-placeLineBars();
 applyI18n();
-measure();
-render();
+applyLayout();
+tryOrientationLock();
+/* 설치된 앱은 실행 직후 display-mode 판정이 늦게 잡히는 경우가 있어 한 번 더 확인 */
+setTimeout(applyLayout, 600);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));

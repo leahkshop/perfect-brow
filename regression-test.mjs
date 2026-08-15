@@ -210,6 +210,61 @@ console.log("[세로 모드 · 기능]");
   await ctx.close();
 }
 
+/* ═══════ A-2. 강제 가로 회전 (기기가 세로로 잠겨 있을 때) ═══════ */
+console.log("\n[강제 가로 회전]");
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const p = await ctx.newPage();
+  await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+  await p.evaluate(() => localStorage.setItem("pb_orient", "on"));
+  await p.reload({ waitUntil: "domcontentloaded" });
+  await p.waitForTimeout(500);
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1200);
+
+  const cls = await p.evaluate(() => ({
+    rot: document.body.classList.contains("rot90"),
+    land: document.body.classList.contains("land"),
+    railVisible: getComputedStyle(document.getElementById("lineRail")).display !== "none",
+    stageW: document.getElementById("stage").offsetWidth,
+    stageH: document.getElementById("stage").offsetHeight,
+  }));
+  check("13. 세로 기기에서 가로 강제 — 회전 적용", cls.rot && cls.land && cls.railVisible,
+    `rot90=${cls.rot} land=${cls.land} rail=${cls.railVisible}`);
+  check("13. 세로 기기에서 가로 강제 — 캔버스가 가로", cls.stageW > cls.stageH,
+    `${cls.stageW}×${cls.stageH}`);
+
+  /* 회전 상태에서도 라인 드래그 좌표가 정확한지 (getScreenCTM 역변환 검증) */
+  const toScreen = (x, y) => p.evaluate(([a, b]) => {
+    const q = new DOMPoint(a, b).matrixTransform(document.getElementById("guides").getScreenCTM());
+    return { x: q.x, y: q.y };
+  }, [x, y]);
+
+  const g0 = await p.evaluate(() => window.PB.S.g.h1);
+  const W = cls.stageW, H = cls.stageH;
+  const from = await toScreen(W * 0.5, H * g0);
+  const to = await toScreen(W * 0.5, H * g0 + 60);
+  await p.mouse.move(from.x, from.y);
+  await p.mouse.down();
+  await p.mouse.move(to.x, to.y, { steps: 12 });
+  await p.mouse.up();
+  const g1 = await p.evaluate(() => window.PB.S.g.h1);
+  const moved = (g1 - g0) * H;
+  check("14. 회전 상태에서 라인 드래그 정확도", near(moved, 60, 3), `${moved.toFixed(1)}px`);
+
+  /* 해제하면 다시 세로 레이아웃 */
+  await p.evaluate(() => localStorage.setItem("pb_orient", "off"));
+  await p.reload({ waitUntil: "domcontentloaded" });
+  await p.waitForTimeout(400);
+  const off = await p.evaluate(() => ({
+    rot: document.body.classList.contains("rot90"),
+    land: document.body.classList.contains("land"),
+  }));
+  check("15. 가로 강제 해제 — 기기 방향 복귀", !off.rot && !off.land);
+
+  await ctx.close();
+}
+
 /* ═══════ B. 가로(landscape) — 레이아웃 테스트 ═══════ */
 console.log("\n[가로 모드 · 레이아웃]");
 for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아이패드 가로 1180×820", w: 1180, h: 820 }]) {
