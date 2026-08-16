@@ -49,6 +49,8 @@ const I18N = {
     pick_2: "② 오른쪽 눈동자 중앙을 탭하세요",
     pick_done: "동공 기준 자동 정렬 완료",
     pick_cancel: "정렬을 취소했습니다",
+    picker_rot: "사진 선택 창은 <b>기기 방향</b>을 따릅니다<br>폰을 세로로 세워서 고른 뒤 다시 눕히세요<br><br>제어센터에서 <b>화면 회전 잠금</b>을 풀면<br>이 창도 함께 가로로 돌아갑니다",
+    rot_auto_off: "기기 회전이 되는 환경입니다 · 강제 가로를 껐습니다",
     editor_inner_angle: "V Center Pivot",
     editor_outer_angle: "V Angle",
     editor_photo_adjustment: "사진 보정",
@@ -130,6 +132,8 @@ const I18N = {
     pick_2: "② Tap the centre of the right pupil",
     pick_done: "Aligned to pupils",
     pick_cancel: "Alignment cancelled",
+    picker_rot: "The photo picker follows the <b>device</b> orientation<br>Hold the phone upright to choose, then turn it back<br><br>Unlock <b>rotation lock</b> in Control Centre<br>and the picker will rotate too",
+    rot_auto_off: "Device rotation works — forced landscape turned off",
     editor_inner_angle: "V Center Pivot",
     editor_outer_angle: "V Angle",
     editor_photo_adjustment: "Photo Adjustment",
@@ -277,11 +281,11 @@ function toast(msg) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove("on"), 1900);
 }
-function showHud(html) {
+function showHud(html, ms) {
   hud.innerHTML = html;
   hud.classList.add("show");
   clearTimeout(showHud._t);
-  showHud._t = setTimeout(() => hud.classList.remove("show"), 900);
+  showHud._t = setTimeout(() => hud.classList.remove("show"), ms || 900);
 }
 
 /* ═══════════ 4. render ═══════════ */
@@ -1199,8 +1203,14 @@ function setLang(l) {
 $("langKo").onclick = () => setLang("ko");
 $("langEn").onclick = () => setLang("en");
 
-$("pickBtn").onclick = () => $("fileInput").click();
-$("btnChange").onclick = () => $("fileInput").click();
+function openPicker() {
+  /* iOS 의 사진 선택 시트는 웹페이지 바깥에서 그려지므로 앱이 회전시킬 수 없다.
+     강제 회전 중일 때만 방향이 어긋나므로 그때 안내한다. */
+  if (document.body.classList.contains("rot90")) showHud(t("picker_rot"), 4200);
+  $("fileInput").click();
+}
+$("pickBtn").onclick = openPicker;
+$("btnChange").onclick = openPicker;
 $("fileInput").addEventListener("change", (e) => {
   const f = e.target.files && e.target.files[0];
   if (f) loadPhoto(f);
@@ -1326,8 +1336,17 @@ function placeLineBars() {
 }
 
 function applyLayout() {
-  const mode = getOrient();
+  let mode = getOrient();
   const devPortrait = window.innerHeight > window.innerWidth;
+
+  /* 기기가 실제로 가로가 된 적이 있다 = 회전 잠금이 풀려 있다.
+     그러면 화면을 가짜로 돌릴 필요가 없고, 그래야 사진 선택 창 같은
+     iOS 시스템 UI 도 앱과 같은 방향으로 나온다. (한 번만 자동 전환) */
+  if (mode === "auto" && !devPortrait) {
+    localStorage.setItem(ORIENT_KEY, "off");
+    mode = "off";
+  }
+
   const rot = devPortrait && (mode === "on" || (mode === "auto" && isStandalone()));
 
   document.body.classList.toggle("rot90", rot);

@@ -465,6 +465,22 @@ console.log("\n[강제 가로 회전]");
   const moved = (g1 - g0) * H;
   check("14. 회전 상태에서 라인 드래그 정확도", near(moved, 60, 3), `${moved.toFixed(1)}px`);
 
+  /* 29. auto 모드 + 기기가 실제로 가로 → 강제 회전을 영구히 해제
+        (그래야 iOS 사진 선택 시트가 앱과 같은 방향으로 나옴) */
+  await p.evaluate(() => localStorage.setItem("pb_orient", "auto"));
+  await p.setViewportSize({ width: 844, height: 390 });      // 기기를 실제로 눕힌 상황
+  await p.reload({ waitUntil: "domcontentloaded" });
+  await p.waitForTimeout(500);
+  const autoOff = await p.evaluate(() => ({
+    stored: localStorage.getItem("pb_orient"),
+    rot: document.body.classList.contains("rot90"),
+    land: document.body.classList.contains("land"),
+  }));
+  check("29. 기기 회전이 되면 강제 가로 자동 해제", autoOff.stored === "off" && !autoOff.rot && autoOff.land,
+    `저장값=${autoOff.stored} rot90=${autoOff.rot} land=${autoOff.land}`);
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.waitForTimeout(300);
+
   /* 해제하면 다시 세로 레이아웃 */
   await p.evaluate(() => localStorage.setItem("pb_orient", "off"));
   await p.reload({ waitUntil: "domcontentloaded" });
