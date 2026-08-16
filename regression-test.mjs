@@ -377,6 +377,41 @@ console.log("[세로 모드 · 기능]");
   check("26. 조절자 방향 = 선의 이동 방향", dirMatch.hUp && dirMatch.vRight,
     `위로밀면 위로=${dirMatch.hUp}, 오른쪽으로밀면 오른쪽=${dirMatch.vRight}`);
 
+  // 27. 화면의 선을 탭 → 그 선이 선택되고, 값은 변하지 않음 (데드존)
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.locked = false; S.sel = "h1";
+    S.g.h1 = 0.42; S.g.v2 = 0.30; S.g.v3 = 2 * S.g.v1 - 0.30;
+    window.PB.render();
+  });
+  await p.waitForTimeout(150);
+  const bx = await p.locator("#stage").boundingBox();
+  const st27 = await p.evaluate(() => ({ v1: window.PB.S.g.v1, v2: window.PB.S.g.v2, W: window.PB.S.dim.W, H: window.PB.S.dim.H }));
+  // Inner(v2) 선 위를 탭
+  await p.mouse.click(bx.x + st27.v2 * st27.W, bx.y + st27.H * 0.42);
+  await p.waitForTimeout(200);
+  const a27 = await p.evaluate(() => ({ sel: window.PB.S.sel, v2: window.PB.S.g.v2, h1: window.PB.S.g.h1 }));
+  check("27. 선을 탭하면 그 선이 선택 · 값은 그대로",
+    a27.sel === "v2" && Math.abs(a27.v2 - st27.v2) < 0.0005 && Math.abs(a27.h1 - 0.42) < 0.0005,
+    `선택=${a27.sel}, v2변화=${((a27.v2 - st27.v2) * st27.W).toFixed(2)}px`);
+
+  // 28. 다른 선을 탭하면 그 선으로 전환 + 조절자 축도 함께 전환
+  await p.evaluate(() => {                       // 세로선과 겹치지 않는 깨끗한 상태로
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.g.h1 = 0.42; S.sel = "v2";
+    window.PB.render();
+  });
+  await p.waitForTimeout(150);
+  await p.mouse.click(bx.x + st27.W * 0.22, bx.y + st27.H * 0.42);   // Eye(h1) 선 위, 세로선에서 먼 지점
+  await p.waitForTimeout(200);
+  const a28 = await p.evaluate(() => ({
+    sel: window.PB.S.sel,
+    axisV: document.getElementById("posCtl").classList.contains("axis-v"),
+  }));
+  check("28. 다른 선 탭 → 전환 + 조절자 축도 전환", a28.sel === "h1" && a28.axisV,
+    `선택=${a28.sel}, 세로조절자=${a28.axisV}`);
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;

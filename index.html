@@ -168,7 +168,7 @@ body.rot90 #home.active{overflow-y:auto}
 
 /* ── 위치 조절자 (캔버스 오버레이) ─────────────────────────
    선의 이동 축과 조절자의 축을 일치시킨다: 위로 밀면 선이 위로, 오른쪽으로 밀면 선이 오른쪽으로. */
-.posctl{position:absolute;z-index:30;display:flex;align-items:center;gap:8px;
+.posctl{position:absolute;z-index:30;display:none;align-items:center;gap:8px;
   background:rgba(22,24,28,.60);border:1px solid rgba(255,255,255,.26);border-radius:16px;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);touch-action:auto;padding:8px}
 .posctl .pbtn{flex:0 0 auto;width:44px;height:44px;border-radius:11px;background:rgba(255,255,255,.16);
@@ -179,26 +179,27 @@ body.rot90 #home.active{overflow-y:auto}
   background:rgba(22,24,28,.78);border:1px solid rgba(255,255,255,.24);border-radius:9px;
   padding:4px 9px;font-size:11px;font-weight:800;color:#fff;letter-spacing:.3px}
 .posctl .plabel b{color:#9ec2ff;font-variant-numeric:tabular-nums}
+.posctl.axis-v,.posctl.axis-h{display:flex}   /* 축이 정해지면 항상 표시 */
 .posctl .pslot{position:relative;display:flex;align-items:center;justify-content:center}
 .posctl #posSlider{margin:0}
 .posctl #posSlider::-webkit-slider-runnable-track{background:rgba(255,255,255,.28)}
 .posctl #posSlider::-moz-range-track{background:rgba(255,255,255,.28)}
 
 /* 가로선 선택 → 오른쪽 끝 세로 조절자 */
-.posctl.axis-v{flex-direction:column;right:10px;top:11%;bottom:11%;width:62px}
+.posctl.axis-v{flex-direction:column;right:10px;bottom:10px;top:auto;height:42%;min-height:210px;width:60px}
 .posctl.axis-v .pslot{flex:1;width:44px}
 .posctl.axis-v #posSlider{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
-.posctl.axis-v .plabel{bottom:-30px;left:50%;transform:translateX(-50%)}  /* 상단 칩과 겹치지 않게 아래로 */
+.posctl.axis-v .plabel{top:-28px;left:50%;transform:translateX(-50%)}
 
 /* 세로선 선택 → 아래쪽 가로 조절자 */
-.posctl.axis-h{flex-direction:row-reverse;left:12%;right:12%;bottom:10px;height:62px}
+.posctl.axis-h{flex-direction:row-reverse;right:10px;left:auto;bottom:10px;width:42%;min-width:230px;height:60px}
 .posctl.axis-h .pslot{flex:1;height:44px}
 .posctl.axis-h #posSlider{width:100%}
-.posctl.axis-h .plabel{top:-28px;left:50%;transform:translateX(-50%)}
+.posctl.axis-h .plabel{top:-28px;right:6px}
 
 @media (orientation:portrait){
-  .posctl.axis-h{bottom:52px}
-  .posctl.axis-v{bottom:96px}
+  .posctl.axis-h{bottom:56px}
+  .posctl.axis-v{bottom:56px;height:38%}
 }
 
 /* Panels */
@@ -298,9 +299,9 @@ button:disabled{opacity:.38;pointer-events:none}
   body.land.compact #editor .chip{padding:5px 8px;font-size:10px}
   body.land.compact #editor .posctl{padding:6px;gap:6px}
   body.land.compact #editor .posctl .pbtn{width:38px;height:38px;font-size:15px}
-  body.land.compact #editor .posctl.axis-v{width:52px;top:8%;bottom:8%;right:8px}
+  body.land.compact #editor .posctl.axis-v{width:50px;height:56%;min-height:150px;right:8px;bottom:8px}
   body.land.compact #editor .posctl.axis-v .pslot{width:38px}
-  body.land.compact #editor .posctl.axis-h{height:52px;left:10%;right:10%}
+  body.land.compact #editor .posctl.axis-h{height:50px;width:46%;min-width:190px;right:8px;bottom:8px}
 }
 </style>
 </head>

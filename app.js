@@ -611,6 +611,12 @@ touch.addEventListener("pointermove", (e) => {
   const { W, H } = S.dim, g = S.g;
 
   if (gMode === "line" && gDrag) {
+    /* 탭으로 선을 "고르기만" 할 때 손가락 떨림으로 선이 밀리지 않도록 3px 데드존.
+       넘어선 뒤에는 처음 누른 지점 기준 전체 이동량을 그대로 적용한다(정확도 유지). */
+    if (!gDrag.moved) {
+      if (Math.hypot(sp.x - gDrag.x0, sp.y - gDrag.y0) < 3) return;
+      gDrag.moved = true;
+    }
     dragLineBy(gDrag.key, gDrag.base, (sp.x - gDrag.x0) / W, (sp.y - gDrag.y0) / H, gDrag.mirrored);
     render();
     const cd = posConfig();
