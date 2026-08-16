@@ -1232,7 +1232,7 @@ $("btnReset").onclick = () => {
 $("btnRotate").onclick = () => {
   const rotNow = document.body.classList.contains("rot90");
   localStorage.setItem(ORIENT_KEY, rotNow ? "off" : "on");
-  if (!rotNow) tryOrientationLock();
+  if (!rotNow) { orientLockDone = false; orientLockTries = 0; tryOrientationLock(); }
   applyLayout();
   toast(rotNow ? t("rot_off") : t("rot_on"));
 };
@@ -1318,16 +1318,30 @@ $("doRename").onclick = () => {
   renderPresetList();
 };
 
-/* ═══════════ 화면 방향 (가로 강제) ═══════════
-   pb_orient : "auto"  기기 방향을 따르되, 설치된 앱(standalone)에서 세로면 가로로 돌림
-               "on"    항상 가로로 강제 (기기가 세로여도 화면을 90° 회전)
-               "off"   기기 방향을 그대로 따름                                     */
+/* ═══════════ 화면 방향 (가로 전용) ═══════════ v1.8.0
+   이 앱은 가로 전용이다. 세로 모드는 지원하지 않는다.
+   기기 회전 잠금이 켜져 있어도 항상 가로로 쓸 수 있어야 한다.
+
+   pb_orient : "auto"  (기본) 터치 기기에서 뷰포트가 세로면 무조건 가로로 돌림
+               "on"    항상 가로로 강제 (데스크톱 포함)
+               "off"   기기 방향을 그대로 따름 — 사용자가 ⟳ 버튼으로 끈 경우만  */
 const ORIENT_KEY = "pb_orient";
 const getOrient = () => localStorage.getItem(ORIENT_KEY) || "auto";
 const isStandalone = () =>
   window.matchMedia("(display-mode: standalone)").matches ||
   window.matchMedia("(display-mode: fullscreen)").matches ||
   navigator.standalone === true;
+/* 손가락으로 쓰는 기기인가 — 데스크톱 브라우저 창을 세로로 좁혀놨을 때
+   화면이 통째로 돌아가지 않도록 구분한다. */
+const isTouchDevice = () =>
+  window.matchMedia("(pointer:coarse)").matches || navigator.maxTouchPoints > 0;
+
+/* v1.8.0 마이그레이션 — v1.7.0 은 기기가 가로가 되면 pb_orient 를 스스로 "off" 로 바꿨다.
+   그 저장값이 남아 있으면 새 정책(항상 가로)이 먹히지 않으므로 딱 한 번 지운다. */
+if (localStorage.getItem("pb_orient_v") !== "2") {
+  localStorage.setItem("pb_orient_v", "2");
+  localStorage.removeItem(ORIENT_KEY);
+}
 
 function placeLineBars() {
   const L = $("hButtons"), R = $("vButtons");
@@ -1336,18 +1350,14 @@ function placeLineBars() {
 }
 
 function applyLayout() {
-  let mode = getOrient();
+  const mode = getOrient();
   const devPortrait = window.innerHeight > window.innerWidth;
 
-  /* 기기가 실제로 가로가 된 적이 있다 = 회전 잠금이 풀려 있다.
-     그러면 화면을 가짜로 돌릴 필요가 없고, 그래야 사진 선택 창 같은
-     iOS 시스템 UI 도 앱과 같은 방향으로 나온다. (한 번만 자동 전환) */
-  if (mode === "auto" && !devPortrait) {
-    localStorage.setItem(ORIENT_KEY, "off");
-    mode = "off";
-  }
-
-  const rot = devPortrait && (mode === "on" || (mode === "auto" && isStandalone()));
+  /* v1.8.0 — 세로 지원 중지.
+     뷰포트가 세로면(= 기기 회전 잠금이 켜져 있든 아니든) 화면을 90° 돌려 가로로 만든다.
+     OS 레벨 잠금(tryOrientationLock)이 성공하면 뷰포트 자체가 가로가 되므로
+     devPortrait 가 false 가 되어 이 가짜 회전은 자동으로 꺼진다. */
+  const rot = devPortrait && (mode === "on" || (mode === "auto" && isTouchDevice()));
 
   document.body.classList.toggle("rot90", rot);
   const w = rot ? window.innerHeight : window.innerWidth;
@@ -1361,15 +1371,26 @@ function applyLayout() {
   render();
 }
 
-/* 진짜 방향 잠금이 가능한 기기(안드로이드 PWA 등)에서는 OS 레벨로 고정 시도.
-   아이폰 사파리는 지원하지 않으므로 위의 rot90 회전이 대신 처리한다. */
+/* 진짜 방향 잠금 — 성공하면 폰 화면 자체가 가로로 돌아간다(= 시스템 UI 도 함께 가로).
+   · 안드로이드 설치앱(PWA standalone) : 동작함
+   · 안드로이드 브라우저 탭            : 전체화면 상태에서만 허용되는 경우가 있어 재시도
+   · 아이폰/아이패드 사파리            : 미구현 — 위의 rot90 CSS 회전이 대신 처리한다
+   실패해도 조용히 넘어간다. 실패 = 가짜 회전으로 폴백. */
+let orientLockDone = false, orientLockTries = 0;
 function tryOrientationLock() {
+  if (orientLockDone || getOrient() === "off") return;
+  if (++orientLockTries > 4) { orientLockDone = true; return; }   /* 무한 재시도 방지 */
+  const so = screen.orientation;
+  if (!so || typeof so.lock !== "function") { orientLockDone = true; return; }
   try {
-    if (screen.orientation && screen.orientation.lock && getOrient() !== "off") {
-      screen.orientation.lock("landscape").catch(() => {});
-    }
-  } catch { /* 미지원 — 무시 */ }
+    so.lock("landscape").then(() => {
+      orientLockDone = true;
+      applyLayout();               /* 진짜로 돌아갔으면 가짜 회전 해제 */
+    }).catch(() => { /* 사용자 제스처/전체화면 필요 — 아래에서 재시도 */ });
+  } catch { orientLockDone = true; }
 }
+/* 일부 브라우저는 사용자 제스처가 있어야 잠금을 허용한다. 첫 터치에 한 번 더 시도. */
+window.addEventListener("pointerdown", () => tryOrientationLock(), { once: false, passive: true });
 
 /* 리사이즈 / 회전 대응 */
 const ro = new ResizeObserver(() => { measure(); render(); });

@@ -90,15 +90,19 @@ console.log("[세로 모드 · 기능]");
   p.on("console", (m) => { if (m.type() === "error" && !/favicon|ERR_|status of 404/.test(m.text())) errs.push(m.text()); });
 
   await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+  /* v1.8.0: 기본값(auto)은 세로 기기를 무조건 가로로 돌린다.
+     이 블록은 "회전 없는" 좌표계에서 기능을 검증하는 곳이므로 폴백 모드(off)로 고정한다. */
+  await p.evaluate(() => localStorage.setItem("pb_orient", "off"));
+  await p.reload({ waitUntil: "domcontentloaded" });
   await p.waitForTimeout(500);
   await p.setInputFiles("#fileInput", face.file);
   await p.waitForTimeout(1200);
 
   check("1. 페이지 로드 · JS 오류 없음", errs.length === 0, errs.join(" | "));
 
-  // 11. 세로에서 라인 버튼이 캔버스 안에 있는지
+  // 11. 폴백(⟳ 끔) 세로 레이아웃에서 라인 버튼이 캔버스 안에 있는지
   const inStage = await p.evaluate(() => document.getElementById("stage").contains(document.getElementById("hButtons")));
-  check("11. 세로 레이아웃 — 라인 버튼이 캔버스 하단", inStage);
+  check("11. 세로 폴백 레이아웃 — 라인 버튼이 캔버스 하단", inStage);
 
   const box = await p.locator("#stage").boundingBox();
 
@@ -465,21 +469,43 @@ console.log("\n[강제 가로 회전]");
   const moved = (g1 - g0) * H;
   check("14. 회전 상태에서 라인 드래그 정확도", near(moved, 60, 3), `${moved.toFixed(1)}px`);
 
-  /* 29. auto 모드 + 기기가 실제로 가로 → 강제 회전을 영구히 해제
-        (그래야 iOS 사진 선택 시트가 앱과 같은 방향으로 나옴) */
-  await p.evaluate(() => localStorage.setItem("pb_orient", "auto"));
-  await p.setViewportSize({ width: 844, height: 390 });      // 기기를 실제로 눕힌 상황
+  /* 29. v1.8.0 — 기본(auto)에서 회전 잠금이 켜진 세로 터치 기기도 항상 가로.
+        저장값을 스스로 off 로 바꾸지 않아야 한다(v1.7.0 자동 해제 로직 제거 확인). */
+  await p.evaluate(() => localStorage.removeItem("pb_orient"));
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.waitForTimeout(500);
-  const autoOff = await p.evaluate(() => ({
+  const auto = await p.evaluate(() => ({
+    stored: localStorage.getItem("pb_orient"),
+    rot: document.body.classList.contains("rot90"),
+    land: document.body.classList.contains("land"),
+    railVisible: getComputedStyle(document.getElementById("lineRail")).display !== "none",
+  }));
+  check("29. 기본값에서 세로 기기 → 항상 가로 (자동 해제 없음)",
+    auto.rot && auto.land && auto.railVisible && auto.stored === null,
+    `저장값=${auto.stored} rot90=${auto.rot} land=${auto.land} rail=${auto.railVisible}`);
+
+  /* 30. 기기를 실제로 눕히면(회전 잠금 해제) 가짜 회전은 스스로 꺼진다 — 저장값은 그대로 auto */
+  await p.setViewportSize({ width: 844, height: 390 });
+  await p.waitForTimeout(400);
+  const realLand = await p.evaluate(() => ({
     stored: localStorage.getItem("pb_orient"),
     rot: document.body.classList.contains("rot90"),
     land: document.body.classList.contains("land"),
   }));
-  check("29. 기기 회전이 되면 강제 가로 자동 해제", autoOff.stored === "off" && !autoOff.rot && autoOff.land,
-    `저장값=${autoOff.stored} rot90=${autoOff.rot} land=${autoOff.land}`);
+  check("30. 기기가 실제 가로면 가짜 회전 해제 (설정은 유지)",
+    !realLand.rot && realLand.land && realLand.stored === null,
+    `저장값=${realLand.stored} rot90=${realLand.rot} land=${realLand.land}`);
+
+  /* 31. 다시 세로로 잠기면 즉시 가로 복귀 */
   await p.setViewportSize({ width: 390, height: 844 });
-  await p.waitForTimeout(300);
+  await p.waitForTimeout(400);
+  const backPortrait = await p.evaluate(() => ({
+    rot: document.body.classList.contains("rot90"),
+    land: document.body.classList.contains("land"),
+  }));
+  check("31. 세로로 되돌아가면 즉시 가로 강제 복귀",
+    backPortrait.rot && backPortrait.land,
+    `rot90=${backPortrait.rot} land=${backPortrait.land}`);
 
   /* 해제하면 다시 세로 레이아웃 */
   await p.evaluate(() => localStorage.setItem("pb_orient", "off"));
