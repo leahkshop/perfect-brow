@@ -537,16 +537,20 @@ function hitTest(x, y) {
 const pts = new Map();
 let gMode = null, gDrag = null;
 
-/* 화면 좌표 → 캔버스 좌표.
-   #guides SVG 가 캔버스와 정확히 겹치고 viewBox 가 0 0 W H 이므로,
-   getScreenCTM 의 역행렬을 쓰면 CSS 회전/스케일이 걸려 있어도 좌표가 정확하다. */
+/* 화면(포인터) 좌표 → 캔버스 좌표 ─ v1.10.0
+   ⚠️ getScreenCTM() 은 쓰지 않는다. iOS 사파리(WebKit)는 조상 요소의 **CSS transform 을
+      CTM 에 반영하지 않는** 경우가 있어, body.rot90 상태에서 손가락 방향이 90° 어긋난다
+      (위아래로 끌면 선이 좌우로 움직임). 크로미움은 반영하므로 PC 테스트로는 안 잡힌다.
+   대신 rot90 의 변환을 직접 역으로 푼다. .screen 은
+      transform-origin:0 0; transform: translateX(100dvw) rotate(90deg)
+   이므로  로컬 +x → 뷰포트 +y,  로컬 +y → 뷰포트 −x  이다.
+   회전된 stage 의 축정렬 bbox 로 나타내면  로컬x = clientY − rect.top,
+                                            로컬y = rect.right − clientX. */
 function stagePoint(e) {
-  const ctm = svg.getScreenCTM && svg.getScreenCTM();
-  if (ctm && typeof DOMPoint !== "undefined") {
-    const q = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
-    return { x: q.x, y: q.y };
-  }
   const r = stage.getBoundingClientRect();
+  if (document.body.classList.contains("rot90")) {
+    return { x: e.clientY - r.top, y: r.right - e.clientX };
+  }
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 

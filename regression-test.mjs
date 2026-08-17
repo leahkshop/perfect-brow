@@ -482,16 +482,21 @@ console.log("\n[강제 가로 회전]");
   check("13. 세로 기기에서 가로 강제 — 캔버스가 가로", cls.stageW > cls.stageH,
     `${cls.stageW}×${cls.stageH}`);
 
-  /* 회전 상태에서도 라인 드래그 좌표가 정확한지 (getScreenCTM 역변환 검증) */
-  const toScreen = (x, y) => p.evaluate(([a, b]) => {
-    const q = new DOMPoint(a, b).matrixTransform(document.getElementById("guides").getScreenCTM());
-    return { x: q.x, y: q.y };
-  }, [x, y]);
+  /* 회전 상태에서도 라인 드래그 좌표가 정확한지.
+     ⚠️ getScreenCTM 을 쓰지 않고 rot90 변환을 직접 계산한다 —
+        CTM 을 쓰면 앱과 테스트가 같은 함수를 공유해 축이 뒤바뀌어도 통과해 버린다.
+        rot90: 로컬 +x → 뷰포트 +y, 로컬 +y → 뷰포트 −x */
+  const stageRect = () => p.evaluate(() => {
+    const r = document.getElementById("stage").getBoundingClientRect();
+    return { top: r.top, right: r.right, left: r.left, bottom: r.bottom };
+  });
+  const rr = await stageRect();
+  const toScreen = (x, y) => ({ x: rr.right - y, y: rr.top + x });   // 로컬 → 뷰포트
 
   const g0 = await p.evaluate(() => window.PB.S.g.h1);
   const W = cls.stageW, H = cls.stageH;
-  const from = await toScreen(W * 0.5, H * g0);
-  const to = await toScreen(W * 0.5, H * g0 + 60);
+  const from = toScreen(W * 0.5, H * g0);
+  const to = toScreen(W * 0.5, H * g0 + 60);
   await p.mouse.move(from.x, from.y);
   await p.mouse.down();
   await p.mouse.move(to.x, to.y, { steps: 12 });
@@ -499,6 +504,36 @@ console.log("\n[강제 가로 회전]");
   const g1 = await p.evaluate(() => window.PB.S.g.h1);
   const moved = (g1 - g0) * H;
   check("14. 회전 상태에서 라인 드래그 정확도", near(moved, 60, 3), `${moved.toFixed(1)}px`);
+
+  /* 34. 강제 가로에서 손 제스처 방향이 화면과 일치하는가 (v1.10.0 — iOS 축 뒤바뀜 회귀 방지)
+        화면상 "아래로" = 뷰포트 −x, 화면상 "오른쪽으로" = 뷰포트 +y */
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v2";
+    window.PB.render();
+  });
+  const b34 = await p.evaluate(() => ({ ...window.PB.S.g }));
+  const c34 = toScreen(cls.stageW * 0.30, cls.stageH * 0.55);   // 선·조절자와 겹치지 않는 지점
+  await p.mouse.move(c34.x, c34.y);
+  await p.mouse.down();
+  await p.mouse.move(c34.x - 60, c34.y, { steps: 12 });          // 화면상 아래로 60px
+  await p.mouse.up();
+  const aDown = await p.evaluate(() => ({ ...window.PB.S.g }));
+  const dH = (aDown.h1 - b34.h1) * cls.stageH;
+
+  await p.evaluate(() => { window.PB.S.sel = "v2"; window.PB.render(); });
+  const c35 = toScreen(cls.stageW * 0.30, cls.stageH * 0.55);
+  await p.mouse.move(c35.x, c35.y);
+  await p.mouse.down();
+  await p.mouse.move(c35.x, c35.y + 60, { steps: 12 });          // 화면상 오른쪽으로 60px
+  await p.mouse.up();
+  const aRight = await p.evaluate(() => ({ ...window.PB.S.g }));
+  const dV = (aRight.v2 - aDown.v2) * cls.stageW;
+
+  check("34. 강제 가로 — 손 제스처 축이 화면과 일치",
+    near(dH, 60, 4) && near(dV, 60, 4),
+    `아래로끌기→h1 ${dH.toFixed(1)}px / 오른쪽끌기→v2 ${dV.toFixed(1)}px`);
 
   /* 29. v1.8.0 — 기본(auto)에서 회전 잠금이 켜진 세로 터치 기기도 항상 가로.
         저장값을 스스로 off 로 바꾸지 않아야 한다(v1.7.0 자동 해제 로직 제거 확인). */

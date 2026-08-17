@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 기준 버전 | **v1.9.0** |
+| 기준 버전 | **v1.10.0** |
 | 확정일 | 2026-08-17 |
 | 라이브 주소 | https://leahkshop.github.io/perfect-brow/ |
 | 저장소 | https://github.com/leahkshop/perfect-brow |
@@ -101,11 +101,32 @@ const rot = devPortrait && (mode === "on" || (mode === "auto" && isTouchDevice()
   웹앱이 회전시킬 방법이 없습니다. 사진 선택을 누르면 안내 HUD 를 띄웁니다 (`picker_rot`).
 - 근본 해결은 **네이티브(Capacitor) 빌드** 뿐입니다 — 7번 로드맵 참고.
 
-**좌표 계산은 반드시 `getScreenCTM` 을 거칠 것**
+**포인터 좌표 변환 — `getScreenCTM()` 을 쓰지 마세요 (v1.10.0)**
 
-- `stagePoint()` 는 `#guides` SVG 의 `getScreenCTM().inverse()` 로 CSS 변환을 흡수합니다.
-- `getBoundingClientRect()` 로 직접 빼서 계산하면 **회전 시 좌표가 어긋납니다.**
-- 같은 이유로 캔버스 크기는 `offsetWidth/offsetHeight` 로 잽니다 (`getBoundingClientRect` 는 회전 시 축정렬 bbox 를 돌려줌).
+> ⛔ **이전 버전(v1.5.0~v1.9.0)의 `getScreenCTM().inverse()` 방식은 아이패드에서 실제로 깨졌습니다.**
+> **되돌리지 마세요.**
+
+- **원인:** iOS 사파리(WebKit)는 **조상 요소의 CSS transform 을 `getScreenCTM()` 에 반영하지 않습니다.**
+  그래서 `body.rot90` 상태에서 손가락을 위아래로 끌면 선이 **좌우로** 움직였습니다 (축이 90° 어긋남).
+  크로미움은 반영하므로 **PC 자동 테스트로는 절대 잡히지 않습니다.**
+- **해결:** `stagePoint()` 가 rot90 변환을 **직접 역으로 풉니다.**
+
+  `.screen` 은 `transform-origin:0 0; transform: translateX(100dvw) rotate(90deg)` 이므로
+  **로컬 +x → 뷰포트 +y**, **로컬 +y → 뷰포트 −x** 입니다. 역변환은:
+
+  ```js
+  // body.rot90 일 때
+  x = e.clientY - stageRect.top;
+  y = stageRect.right - e.clientX;
+  // 아닐 때
+  x = e.clientX - stageRect.left;
+  y = e.clientY - stageRect.top;
+  ```
+
+- 회전 CSS(각도·`transform-origin`·`translateX`)를 바꾸면 **이 식도 같이 고쳐야 합니다.**
+- 캔버스 크기는 여전히 `offsetWidth/offsetHeight` 로 잽니다 (`getBoundingClientRect` 는 회전 시 축정렬 bbox 를 돌려줌).
+- **테스트에서도 `getScreenCTM` 을 쓰지 마세요.** 앱과 같은 함수를 공유하면 축이 뒤바뀌어도 통과합니다.
+  회귀 테스트 14·34 는 뷰포트 좌표를 직접 계산해 검증합니다.
 - 레이아웃은 `@media (orientation:…)` 이 아니라 **`body.land` / `body.compact` 클래스**로 결정합니다 (`applyLayout()`).
 - `body:not(.land)` 세로 CSS 는 **`off` 폴백 전용**으로만 남겨둡니다. 지우지는 마세요(비상 탈출구).
 
@@ -159,6 +180,7 @@ const rot = devPortrait && (mode === "on" || (mode === "auto" && isTouchDevice()
 - 그래서 **사진 이동은 두 손가락 드래그**입니다. 한 손가락 드래그는 항상 선 조절입니다.
   (데스크톱 보조: `Shift` + 드래그 = 사진 이동)
 - 대칭선의 거울쪽(`v3`/`v5`)을 잡았을 때는 부호를 뒤집어(`mirrored`) 손가락 방향과 일치시킵니다.
+- **손가락 방향 = 화면에서 보이는 방향**입니다. 강제 가로(`rot90`) 중에도 마찬가지 — 좌표 변환은 1-6 참고.
 
 > ⚠️ **절대 위치 방식으로 되돌리지 마세요.** 선에서 떨어진 곳을 잡으면 선이 손가락 위치로
 > 순간이동해서 미세조정이 불가능해집니다. 반드시 `기준값 + 델타` 로 계산하세요.
@@ -328,7 +350,7 @@ node regression-test.mjs
 | 11 | 세로 폴백 레이아웃 (`off`) | 라인 버튼이 캔버스 하단으로 이동 |
 | 12 | 좌표계 규약 | 모든 라인 값이 0~1 범위 |
 | 13 | 세로 기기에서 가로 강제 | `rot90`+`land` 적용, 캔버스가 가로 |
-| 14 | 회전 상태 드래그 정확도 | 회전 중에도 60px 끌면 60±3px |
+| 14 | 회전 상태 드래그 정확도 | 회전 중에도 60px 끌면 60±3px (CTM 사용 금지) |
 | 15 | 가로 강제 해제 | 기기 방향으로 복귀 |
 | 16 | 사진 잠금 | 사진이 전혀 움직이지 않고 사진 보정 UI 비활성 |
 | 17 | 잠금 중 선 조절 · 가로바 축 고정 | 대각선으로 끌어도 위아래 성분만 반영 |
@@ -348,6 +370,7 @@ node regression-test.mjs
 | 31 | 세로로 되돌아가면 즉시 가로 복귀 | `rot90`+`land` 재적용 |
 | 32 | 두 조절자 겹침 없음 · 캔버스 안 | 세로/가로 조절자가 서로 겹치지 않고 둘 다 캔버스 안 |
 | 33 | **앱 실행 직후 두 조절자 모두 표시** | `#posCtlV`·`#posCtlH` 둘 다 보임 (기본 대상 `h1` / `v1`) |
+| 34 | **강제 가로 — 손 제스처 축이 화면과 일치** | 화면상 아래로 끌면 가로선이 아래로, 오른쪽으로 끌면 세로선이 오른쪽으로 |
 
 ---
 
