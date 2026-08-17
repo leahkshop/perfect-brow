@@ -253,6 +253,10 @@ const S = {
   g: { ...DEFAULT_GUIDE },
   p: { ...DEFAULT_PHOTO },
   sel: "h1",
+  /* 조절자가 2개이므로 축별로 대상을 따로 기억한다 (v1.9.0)
+     selUD = 세로 조절자가 움직일 가로선 / selLR = 가로 조절자가 움직일 세로선 */
+  selUD: "h1",
+  selLR: "v1",
   photoMode: "zoom",
   locked: false,
   dim: { W: 0, H: 0 },
@@ -269,7 +273,7 @@ const S = {
 const $ = (id) => document.getElementById(id);
 const stage = $("stage"), photo = $("photo"), svg = $("guides"), touch = $("touch");
 const hud = $("hud"), aiStatus = $("aiStatus");
-const posSlider = $("posSlider"), phSlider = $("phSlider");
+const posSliderV = $("posSliderV"), posSliderH = $("posSliderH"), phSlider = $("phSlider");
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -661,8 +665,13 @@ touch.addEventListener("wheel", (e) => {
 
 /* ═══════════ 6. 버튼 · 패널 ═══════════ */
 
-function setSel(key) {
+/* 선택 기록 — S.sel(드래그 대상) 과 축별 조절자 대상을 함께 갱신 */
+function noteSel(key) {
   S.sel = key;
+  if (axisOf(key) === "v") S.selUD = key; else S.selLR = key;
+}
+function setSel(key) {
+  noteSel(key);
   updatePanels();
 }
 
@@ -675,7 +684,7 @@ function buildLineButtons() {
     b.textContent = spec.label;
     b.addEventListener("click", () => {
       if (S.sel === spec.key) S.g[spec.vis] = !S.g[spec.vis];
-      else { S.sel = spec.key; S.g[spec.vis] = true; }
+      else { noteSel(spec.key); S.g[spec.vis] = true; }
       render();
     });
     return b;
@@ -713,8 +722,11 @@ function updateButtons() {
 /* ── 위치 조절 패널 ── */
 const H_KEYS = new Set(H_SPECS.map((s) => s.key));
 
-function posConfig() {
-  const g = S.g, k = S.sel;
+/* 이 선은 어느 축으로 움직이는가 — "v" 위아래(가로선) / "h" 좌우(세로선) */
+const axisOf = (k) => (H_KEYS.has(k) || k === "innerAngle" || k === "outerAngle" ? "v" : "h");
+
+function posConfig(key) {
+  const g = S.g, k = key || S.sel;
   /* axis: "v" = 위아래로만 움직이는 바(가로선) / "h" = 좌우로만 움직이는 바(세로선)
      각 바는 자기 축으로만 움직인다. 대칭 처리는 setLine() 이 담당. (BASELINE 1-2) */
   if (k === "outerAngle") {
@@ -732,8 +744,8 @@ function posConfig() {
   return { name: sp.label, v: g[k], disp: Math.round(g[k] * 100), hint: t("hint_leftright"), step: 0.003, invert: false, axis: "h" };
 }
 
-function applyPos(v) {
-  const k = S.sel, c = posConfig();
+function applyPos(v, key) {
+  const k = key || S.sel, c = posConfig(k);
   v = clamp(v, 0, 1);
   if (k === "outerAngle") S.g.outerAngle = v;
   else if (k === "innerAngle") S.g.innerAngle = clamp(1 - v, 0.02, 0.98);
@@ -785,7 +797,7 @@ function renderValueList() {
       const b = document.createElement("button");
       b.className = "vrow";
       b.innerHTML = `<span class="dot" style="background:${it.color}"></span><span class="nm"></span><span class="ax">${it.ax}</span><span class="vl"></span>`;
-      b.onclick = () => { S.sel = it.key; render(); };
+      b.onclick = () => { noteSel(it.key); render(); };
       vRows.set(it.key, b);
       return b;
     }));
@@ -801,36 +813,33 @@ function renderValueList() {
 
 /* 세로 조절자는 가로 range 를 -90° 회전해 쓰므로 트랙 길이를 슬롯 높이에 맞춘다.
    (writing-mode 세로 range 는 구형 사파리에서 동작하지 않음) */
-function sizePosSlider(vertical) {
-  const slot = $("pSlot");
+function sizePosSlider() {
+  const slot = $("pSlotV");
   if (!slot) return;
-  if (vertical) {
-    const len = Math.max(80, slot.clientHeight);
-    if (posSlider.dataset.len !== String(len)) {
-      posSlider.style.width = len + "px";
-      posSlider.dataset.len = String(len);
-    }
-  } else if (posSlider.dataset.len) {
-    posSlider.style.width = "";
-    delete posSlider.dataset.len;
+  const len = Math.max(80, slot.clientHeight);
+  if (posSliderV.dataset.len !== String(len)) {
+    posSliderV.style.width = len + "px";
+    posSliderV.dataset.len = String(len);
   }
 }
 
 function updatePanels() {
-  const c = posConfig();
-  $("selName").textContent = c.name;
-  $("posVal").textContent = c.disp;
-  if (document.activeElement !== posSlider) posSlider.value = c.v;
+  /* 조절자는 2개이고 둘 다 항상 보인다 (v1.9.0 · BASELINE 1-7)
+     세로 조절자(오른쪽·아래) = S.selUD 가로선 / 가로 조절자(아래·오른쪽) = S.selLR 세로선
+     축 클래스는 HTML 에 고정돼 있으므로 서로 바뀌지 않는다. */
+  const cv = posConfig(S.selUD), ch = posConfig(S.selLR);
+  $("selNameV").textContent = cv.name;
+  $("posValV").textContent = cv.disp;
+  if (document.activeElement !== posSliderV) posSliderV.value = cv.v;
+  $("selNameH").textContent = ch.name;
+  $("posValH").textContent = ch.disp;
+  if (document.activeElement !== posSliderH) posSliderH.value = ch.v;
 
-  /* 조절자를 선택된 선의 이동 축과 같은 방향으로 놓는다 (BASELINE 1-7)
-     가로선(위아래) → 사진 오른쪽 끝 세로 조절자 / 세로선(좌우) → 사진 아래 가로 조절자 */
-  const vAxis = c.axis === "v";
-  const ctl = $("posCtl");
-  ctl.classList.toggle("axis-v", vAxis);
-  ctl.classList.toggle("axis-h", !vAxis);
-  $("posMinus").textContent = vAxis ? "▼" : "◀";
-  $("posPlus").textContent = vAxis ? "▲" : "▶";
-  sizePosSlider(vAxis);
+  /* 지금 드래그 대상인 쪽만 강조 — 어느 쪽도 숨기지 않는다 */
+  const vActive = axisOf(S.sel) === "v";
+  $("posCtlV").classList.toggle("active", vActive);
+  $("posCtlH").classList.toggle("active", !vActive);
+  sizePosSlider();
 
   const pc = photoConfig();
   $("photoVal").textContent = pc.disp;
@@ -1155,7 +1164,7 @@ function loadPhoto(file) {
     S.p = { ...DEFAULT_PHOTO };
     S.locked = false;
     S.hiddenSnapshot = null;
-    S.sel = "h1";
+    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1";
     S.pickMode = false;
     S.pick = [];
     show("editor");
@@ -1221,7 +1230,7 @@ $("btnReset").onclick = () => {
   S.g = { ...DEFAULT_GUIDE };
   S.p = { ...DEFAULT_PHOTO };
   S.hiddenSnapshot = null;
-  S.sel = "h1";
+  S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1";
   S.pickMode = false;
   S.pick = [];
   if (S.landmarks) autoAlign(S.landmarks);
@@ -1274,19 +1283,24 @@ $("btnAllLine").onclick = () => {
 
 $("btnPivot").onclick = () => {
   if (S.sel === "innerAngle" && S.g.baseStructureVisible) S.g.baseStructureVisible = false;
-  else { S.sel = "innerAngle"; S.g.baseStructureVisible = true; }
+  else { noteSel("innerAngle"); S.g.baseStructureVisible = true; }
   render();
 };
 $("btnVAngle").onclick = () => {
   if (S.sel === "outerAngle" && S.g.baseStructureVisible) S.g.baseStructureVisible = false;
-  else { S.sel = "outerAngle"; S.g.baseStructureVisible = true; }
+  else { noteSel("outerAngle"); S.g.baseStructureVisible = true; }
   render();
 };
 $("btnEyeGuide").onclick = () => { S.g.eyeGuideVisible = !S.g.eyeGuideVisible; render(); };
 
-posSlider.addEventListener("input", (e) => applyPos(parseFloat(e.target.value)));
-$("posMinus").onclick = () => applyPos(parseFloat(posSlider.value) - posConfig().step);
-$("posPlus").onclick = () => applyPos(parseFloat(posSlider.value) + posConfig().step);
+/* 두 조절자 — 각자 자기 축의 선을 움직인다. 만지면 그 선이 드래그 대상(S.sel)도 된다. */
+function wirePos(slider, minusId, plusId, getKey) {
+  slider.addEventListener("input", (e) => { noteSel(getKey()); applyPos(parseFloat(e.target.value), getKey()); });
+  $(minusId).onclick = () => { const k = getKey(); noteSel(k); applyPos(parseFloat(slider.value) - posConfig(k).step, k); };
+  $(plusId).onclick  = () => { const k = getKey(); noteSel(k); applyPos(parseFloat(slider.value) + posConfig(k).step, k); };
+}
+wirePos(posSliderV, "posMinusV", "posPlusV", () => S.selUD);
+wirePos(posSliderH, "posMinusH", "posPlusH", () => S.selLR);
 
 phSlider.addEventListener("input", (e) => applyPhoto(parseFloat(e.target.value)));
 $("phMinus").onclick = () => applyPhoto(parseFloat(phSlider.value) - photoConfig().step);
@@ -1395,7 +1409,7 @@ window.addEventListener("pointerdown", () => tryOrientationLock(), { once: false
 /* 리사이즈 / 회전 대응 */
 const ro = new ResizeObserver(() => { measure(); render(); });
 ro.observe(stage);
-new ResizeObserver(() => sizePosSlider($("posCtl").classList.contains("axis-v"))).observe($("pSlot"));
+new ResizeObserver(() => sizePosSlider()).observe($("pSlotV"));
 window.addEventListener("resize", () => applyLayout());
 window.addEventListener("orientationchange", () => setTimeout(applyLayout, 250));
 

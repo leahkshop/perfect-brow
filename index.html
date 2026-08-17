@@ -165,7 +165,9 @@ body.rot90 #home.active{overflow-y:auto}
   opacity:0;transition:opacity .18s;pointer-events:none}
 .hud.show{opacity:1}
 
-.aistatus{position:absolute;bottom:76px;left:50%;transform:translateX(-50%);z-index:22}
+/* 조절자 2개가 오른쪽·아래를 차지하므로 AI 안내는 왼쪽 아래로 */
+.aistatus{position:absolute;bottom:12px;left:12px;transform:none;z-index:22;max-width:46%}
+body:not(.land) .aistatus{bottom:124px;left:50%;transform:translateX(-50%);max-width:92%}
 
 /* ── 위치 조절자 (캔버스 오버레이) ─────────────────────────
    선의 이동 축과 조절자의 축을 일치시킨다: 위로 밀면 선이 위로, 오른쪽으로 밀면 선이 오른쪽으로. */
@@ -180,27 +182,30 @@ body.rot90 #home.active{overflow-y:auto}
   background:rgba(22,24,28,.78);border:1px solid rgba(255,255,255,.24);border-radius:9px;
   padding:4px 9px;font-size:11px;font-weight:800;color:#fff;letter-spacing:.3px}
 .posctl .plabel b{color:#9ec2ff;font-variant-numeric:tabular-nums}
-.posctl.axis-v,.posctl.axis-h{display:flex}   /* 축이 정해지면 항상 표시 */
+.posctl.axis-v,.posctl.axis-h{display:flex}   /* 두 조절자는 항상 함께 표시된다 (v1.9.0) */
 .posctl .pslot{position:relative;display:flex;align-items:center;justify-content:center}
-.posctl #posSlider{margin:0}
-.posctl #posSlider::-webkit-slider-runnable-track{background:rgba(255,255,255,.28)}
-.posctl #posSlider::-moz-range-track{background:rgba(255,255,255,.28)}
+.posctl input[type=range]{margin:0}
+.posctl input[type=range]::-webkit-slider-runnable-track{background:rgba(255,255,255,.28)}
+.posctl input[type=range]::-moz-range-track{background:rgba(255,255,255,.28)}
+/* 지금 드래그 대상인 쪽을 테두리로 표시 — 숨기지는 않는다 */
+.posctl.active{border-color:rgba(120,165,255,.85);box-shadow:0 0 0 1px rgba(120,165,255,.35)}
+.posctl:not(.active){opacity:.82}
 
-/* 가로선 선택 → 오른쪽 끝 세로 조절자 */
-.posctl.axis-v{flex-direction:column;right:10px;bottom:10px;top:auto;height:42%;min-height:210px;width:60px}
+/* 위아래 이동(가로선) → 오른쪽 · 아래 정렬 세로 조절자 */
+.posctl.axis-v{flex-direction:column;right:10px;bottom:78px;top:auto;height:36%;min-height:170px;width:60px}
 .posctl.axis-v .pslot{flex:1;width:44px}
-.posctl.axis-v #posSlider{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
-.posctl.axis-v .plabel{top:-28px;left:50%;transform:translateX(-50%)}
+.posctl.axis-v input[type=range]{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
+.posctl.axis-v .plabel{top:-28px;right:0;left:auto;transform:none}   /* 캔버스 밖으로 넘치지 않게 우측 정렬 */
 
-/* 세로선 선택 → 아래쪽 가로 조절자 */
+/* 좌우 이동(세로선) → 아래 · 오른쪽 정렬 가로 조절자 */
 .posctl.axis-h{flex-direction:row-reverse;right:10px;left:auto;bottom:10px;width:42%;min-width:230px;height:60px}
 .posctl.axis-h .pslot{flex:1;height:44px}
-.posctl.axis-h #posSlider{width:100%}
-.posctl.axis-h .plabel{top:-28px;right:6px}
+.posctl.axis-h input[type=range]{width:100%}
+.posctl.axis-h .plabel{top:-28px;left:6px}
 
 @media (orientation:portrait){
   .posctl.axis-h{bottom:56px}
-  .posctl.axis-v{bottom:56px;height:38%}
+  .posctl.axis-v{bottom:124px;height:32%}
 }
 
 /* Panels */
@@ -300,7 +305,7 @@ button:disabled{opacity:.38;pointer-events:none}
   body.land.compact #editor .chip{padding:5px 8px;font-size:10px}
   body.land.compact #editor .posctl{padding:6px;gap:6px}
   body.land.compact #editor .posctl .pbtn{width:38px;height:38px;font-size:15px}
-  body.land.compact #editor .posctl.axis-v{width:50px;height:56%;min-height:150px;right:8px;bottom:8px}
+  body.land.compact #editor .posctl.axis-v{width:50px;height:38%;min-height:118px;right:8px;bottom:66px}
   body.land.compact #editor .posctl.axis-v .pslot{width:38px}
   body.land.compact #editor .posctl.axis-h{height:50px;width:46%;min-width:190px;right:8px;bottom:8px}
 }
@@ -355,14 +360,20 @@ button:disabled{opacity:.38;pointer-events:none}
     <div class="linebar linebar-left" id="hButtons"></div>
     <div class="linebar linebar-right" id="vButtons"></div>
 
-    <!-- 위치 조절자 — 선택된 선의 이동 축과 같은 방향으로 놓인다.
-         가로선(위아래 이동) → 사진 오른쪽 끝의 세로 조절자
-         세로선(좌우 이동)   → 사진 아래쪽의 가로 조절자 -->
-    <div class="posctl" id="posCtl">
-      <div class="plabel"><span id="selName">Eye</span><b id="posVal">50</b></div>
-      <button class="pbtn" id="posPlus">▲</button>
-      <div class="pslot" id="pSlot"><input type="range" id="posSlider" min="0" max="1" step="0.0005" value="0.5" /></div>
-      <button class="pbtn" id="posMinus">▼</button>
+    <!-- 위치 조절자 2개 — 앱을 열면 둘 다 항상 보인다 (v1.9.0). 어느 쪽도 숨기지 않는다.
+         ① 세로 조절자 : 오른쪽 · 아래 정렬 — 위아래로 움직이는 가로선(Eye/Front/Arch…)을 조절
+         ② 가로 조절자 : 아래 · 오른쪽 정렬 — 좌우로 움직이는 세로선(Center/Inner/Outer)을 조절 -->
+    <div class="posctl axis-v" id="posCtlV">
+      <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
+      <button class="pbtn" id="posPlusV">▲</button>
+      <div class="pslot" id="pSlotV"><input type="range" id="posSliderV" min="0" max="1" step="0.0005" value="0.5" /></div>
+      <button class="pbtn" id="posMinusV">▼</button>
+    </div>
+    <div class="posctl axis-h" id="posCtlH">
+      <div class="plabel"><span id="selNameH">Center</span><b id="posValH">50</b></div>
+      <button class="pbtn" id="posPlusH">▶</button>
+      <div class="pslot" id="pSlotH"><input type="range" id="posSliderH" min="0" max="1" step="0.0005" value="0.5" /></div>
+      <button class="pbtn" id="posMinusH">◀</button>
     </div>
 
     <div class="hud" id="hud"></div>

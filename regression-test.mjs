@@ -100,6 +100,17 @@ console.log("[세로 모드 · 기능]");
 
   check("1. 페이지 로드 · JS 오류 없음", errs.length === 0, errs.join(" | "));
 
+  // 33. 앱을 열자마자 두 조절자가 모두 보여야 한다 (어느 하나도 숨기지 않음)
+  const bothOpen = await p.evaluate(() => {
+    const vis = (id) => {
+      const e = document.getElementById(id), r = e.getBoundingClientRect();
+      return getComputedStyle(e).display !== "none" && r.width > 20 && r.height > 20;
+    };
+    return { v: vis("posCtlV"), h: vis("posCtlH"), selUD: window.PB.S.selUD, selLR: window.PB.S.selLR };
+  });
+  check("33. 앱 실행 직후 두 조절자 모두 표시", bothOpen.v && bothOpen.h,
+    `세로=${bothOpen.v} 가로=${bothOpen.h} 대상=${bothOpen.selUD}/${bothOpen.selLR}`);
+
   // 11. 폴백(⟳ 끔) 세로 레이아웃에서 라인 버튼이 캔버스 안에 있는지
   const inStage = await p.evaluate(() => document.getElementById("stage").contains(document.getElementById("hButtons")));
   check("11. 세로 폴백 레이아웃 — 라인 버튼이 캔버스 하단", inStage);
@@ -129,8 +140,8 @@ console.log("[세로 모드 · 기능]");
   });
   await p.evaluate(() => {
     // 앱 내부 setLine 을 쓰기 위해 v1 슬라이더 경로로 이동
-    const s = window.PB.S; s.sel = "v1";
-    const el = document.getElementById("posSlider");
+    const s = window.PB.S; s.sel = "v1"; s.selLR = "v1";
+    const el = document.getElementById("posSliderH");
     el.value = String(s.g.v1 + 0.06);
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
@@ -142,13 +153,13 @@ console.log("[세로 모드 · 기능]");
   // 3 / 4. 대칭
   const sym = await p.evaluate(() => {
     const s = window.PB.S;
-    s.sel = "v2";
-    const el = document.getElementById("posSlider");
+    s.sel = "v2"; s.selLR = "v2";
+    const el = document.getElementById("posSliderH");
     el.value = String(1 - (s.g.v2 - 0.05));   // H가 아닌 V는 비반전이지만 값 변화만 주면 됨
     el.dispatchEvent(new Event("input", { bubbles: true }));
     const g1 = { ...s.g };
-    s.sel = "v4";
-    const el2 = document.getElementById("posSlider");
+    s.sel = "v4"; s.selLR = "v4";
+    const el2 = document.getElementById("posSliderH");
     el2.value = String(g1.v4 + 0.04);
     el2.dispatchEvent(new Event("input", { bubbles: true }));
     const g = window.PB.S.g;
@@ -255,9 +266,9 @@ console.log("[세로 모드 · 기능]");
     const out = {};
     const s = window.PB.S;
     s.sel = "h1"; window.PB.render();
-    out.h = document.getElementById("posMinus").textContent + document.getElementById("posPlus").textContent;
+    out.h = document.getElementById("posMinusV").textContent + document.getElementById("posPlusV").textContent;
     s.sel = "v2"; window.PB.render();
-    out.v = document.getElementById("posMinus").textContent + document.getElementById("posPlus").textContent;
+    out.v = document.getElementById("posMinusH").textContent + document.getElementById("posPlusH").textContent;
     return out;
   });
   check("19. 방향 버튼 — 가로바 ▼▲ / 세로바 ◀▶", dirs.h === "▼▲" && dirs.v === "◀▶", `${dirs.h} / ${dirs.v}`);
@@ -279,13 +290,15 @@ console.log("[세로 모드 · 기능]");
     const S = window.PB.S, W = S.dim.W, H = S.dim.H, g = S.g;
     const vx = ["v1", "v2", "v3", "v4", "v5"].map((k) => g[k] * W);
     const hy = ["h1", "h2", "h3", "front", "frontThickness", "archThickness"].map((k) => g[k] * H);
-    const ctl = document.getElementById("posCtl").getBoundingClientRect();
+    const cv = document.getElementById("posCtlV").getBoundingClientRect();
+    const chz = document.getElementById("posCtlH").getBoundingClientRect();
     const st = document.getElementById("stage").getBoundingClientRect();
     for (let fy = 0.16; fy < 0.60; fy += 0.02)
       for (let fx = 0.10; fx < 0.80; fx += 0.02) {
         const x = fx * W, y = fy * H;
         const sx = st.left + x, sy = st.top + y;
-        if (sx > ctl.left - 12 && sx < ctl.right + 12 && sy > ctl.top - 12 && sy < ctl.bottom + 12) continue;
+        const over = (r) => sx > r.left - 12 && sx < r.right + 12 && sy > r.top - 12 && sy < r.bottom + 12;
+        if (over(cv) || over(chz)) continue;
         if (vx.every((v) => Math.abs(v - x) > 45) && hy.every((v) => Math.abs(v - y) > 45)) return { x, y };
       }
     return { x: W * 0.2, y: H * 0.25 };
@@ -336,39 +349,56 @@ console.log("[세로 모드 · 기능]");
     near((a23.p.ox - b23.p.ox) * box2.width, 50, 6) && a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2,
     `Δox=${((a23.p.ox - b23.p.ox) * box2.width).toFixed(1)}px, 선 불변=${a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2}`);
 
-  // 24. 가로선 선택 → 조절자가 사진 오른쪽 끝에 세로로, ▲ 위 / ▼ 아래
+  // 24. 세로 조절자 = 오른쪽 · 아래 정렬, ▲ 위 / ▼ 아래
   const ctlV = await p.evaluate(() => {
     window.PB.S.sel = "h1"; window.PB.render();
-    const c = document.getElementById("posCtl").getBoundingClientRect();
+    const c = document.getElementById("posCtlV").getBoundingClientRect();
     const st = document.getElementById("stage").getBoundingClientRect();
-    const up = document.getElementById("posPlus").getBoundingClientRect();
-    const dn = document.getElementById("posMinus").getBoundingClientRect();
-    return { vert: c.height > c.width, rightEdge: st.right - c.right, upAbove: up.top < dn.top,
-             glyph: document.getElementById("posPlus").textContent + document.getElementById("posMinus").textContent };
+    const up = document.getElementById("posPlusV").getBoundingClientRect();
+    const dn = document.getElementById("posMinusV").getBoundingClientRect();
+    return { vert: c.height > c.width, rightEdge: st.right - c.right, bottomHalf: c.top > st.top + st.height * 0.35,
+             upAbove: up.top < dn.top,
+             glyph: document.getElementById("posPlusV").textContent + document.getElementById("posMinusV").textContent };
   });
-  check("24. 가로선 → 오른쪽 끝 세로 조절자 (▲위/▼아래)",
-    ctlV.vert && ctlV.rightEdge >= 0 && ctlV.rightEdge < 30 && ctlV.upAbove && ctlV.glyph === "▲▼",
-    `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
+  check("24. 세로 조절자 — 오른쪽·아래 정렬 (▲위/▼아래)",
+    ctlV.vert && ctlV.rightEdge >= 0 && ctlV.rightEdge < 30 && ctlV.bottomHalf && ctlV.upAbove && ctlV.glyph === "▲▼",
+    `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 아래쪽=${ctlV.bottomHalf} 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
 
-  // 25. 세로선 선택 → 조절자가 사진 아래쪽에 가로로, ◀ 왼쪽 / ▶ 오른쪽
+  // 25. 가로 조절자 = 아래 · 오른쪽 정렬, ◀ 왼쪽 / ▶ 오른쪽
   const ctlH = await p.evaluate(() => {
     window.PB.S.sel = "v2"; window.PB.render();
-    const c = document.getElementById("posCtl").getBoundingClientRect();
+    const c = document.getElementById("posCtlH").getBoundingClientRect();
     const st = document.getElementById("stage").getBoundingClientRect();
-    const rt = document.getElementById("posPlus").getBoundingClientRect();
-    const lf = document.getElementById("posMinus").getBoundingClientRect();
-    return { horiz: c.width > c.height, bottomEdge: st.bottom - c.bottom, rightOfLeft: rt.left > lf.left,
-             glyph: document.getElementById("posMinus").textContent + document.getElementById("posPlus").textContent };
+    const rt = document.getElementById("posPlusH").getBoundingClientRect();
+    const lf = document.getElementById("posMinusH").getBoundingClientRect();
+    return { horiz: c.width > c.height, bottomEdge: st.bottom - c.bottom, rightEdge: st.right - c.right,
+             rightOfLeft: rt.left > lf.left,
+             glyph: document.getElementById("posMinusH").textContent + document.getElementById("posPlusH").textContent };
   });
-  check("25. 세로선 → 아래쪽 가로 조절자 (◀왼쪽/▶오른쪽)",
-    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 70 && ctlH.rightOfLeft && ctlH.glyph === "◀▶",
-    `가로=${ctlH.horiz} 하단여백=${ctlH.bottomEdge.toFixed(0)}px 오른쪽화살표오른쪽=${ctlH.rightOfLeft} ${ctlH.glyph}`);
+  check("25. 가로 조절자 — 아래·오른쪽 정렬 (◀왼쪽/▶오른쪽)",
+    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 70 && ctlH.rightEdge >= 0 && ctlH.rightEdge < 30
+      && ctlH.rightOfLeft && ctlH.glyph === "◀▶",
+    `가로=${ctlH.horiz} 하단여백=${ctlH.bottomEdge.toFixed(0)}px 우측여백=${ctlH.rightEdge.toFixed(0)}px 오른쪽화살표오른쪽=${ctlH.rightOfLeft} ${ctlH.glyph}`);
+
+  // 32. 두 조절자가 겹치지 않고 둘 다 화면 안에 있음
+  const noOverlap = await p.evaluate(() => {
+    const a = document.getElementById("posCtlV").getBoundingClientRect();
+    const b = document.getElementById("posCtlH").getBoundingClientRect();
+    const st = document.getElementById("stage").getBoundingClientRect();
+    const sep = a.bottom <= b.top + 1 || a.right <= b.left + 1 || b.right <= a.left + 1 || b.bottom <= a.top + 1;
+    const inside = (r) => r.top >= st.top - 1 && r.bottom <= st.bottom + 1 && r.left >= st.left - 1 && r.right <= st.right + 1;
+    return { sep, inside: inside(a) && inside(b), gap: (b.top - a.bottom).toFixed(0) };
+  });
+  check("32. 두 조절자 겹침 없음 · 캔버스 안", noOverlap.sep && noOverlap.inside,
+    `겹침없음=${noOverlap.sep} 캔버스안=${noOverlap.inside} 세로-가로 간격=${noOverlap.gap}px`);
 
   // 26. 조절자 방향 = 선의 이동 방향 (위로 밀면 위로 / 오른쪽으로 밀면 오른쪽으로)
   const dirMatch = await p.evaluate(() => {
-    const S = window.PB.S, sl = document.getElementById("posSlider");
+    const S = window.PB.S;
     const bump = (key, d) => {
-      S.sel = key; window.PB.render();
+      S.sel = key; if (key[0] === "h" || key === "front") S.selUD = key; else S.selLR = key;
+      window.PB.render();
+      const sl = document.getElementById(key[0] === "v" ? "posSliderH" : "posSliderV");
       const v0 = parseFloat(sl.value), before = S.g[key];
       sl.value = String(Math.min(1, Math.max(0, v0 + d)));
       sl.dispatchEvent(new Event("input", { bubbles: true }));
@@ -411,7 +441,8 @@ console.log("[세로 모드 · 기능]");
   await p.waitForTimeout(200);
   const a28 = await p.evaluate(() => ({
     sel: window.PB.S.sel,
-    axisV: document.getElementById("posCtl").classList.contains("axis-v"),
+    axisV: document.getElementById("posCtlV").classList.contains("active"),
+    selUD: window.PB.S.selUD,
   }));
   check("28. 다른 선 탭 → 전환 + 조절자 축도 전환", a28.sel === "h1" && a28.axisV,
     `선택=${a28.sel}, 세로조절자=${a28.axisV}`);
