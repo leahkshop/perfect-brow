@@ -172,25 +172,27 @@ console.log("[세로 모드 · 기능]");
 
   // 6. 동공정렬
   await p.evaluate(() => { window.PB.S.g = { ...window.PB.DEFAULT_GUIDE }; window.PB.S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; window.PB.render(); });
-  await p.click("#btnAlign");
   const geo = await p.evaluate(() => ({ iw: window.PB.S.iw, ih: window.PB.S.ih, s0: window.PB.S.s0, W: window.PB.S.dim.W, H: window.PB.S.dim.H }));
   const toC = (px, py) => ({ x: geo.W / 2 + (px - geo.iw / 2) * geo.s0, y: geo.H / 2 + (py - geo.ih / 2) * geo.s0 });
   const A = toC(face.pupilL.x, face.pupilL.y), B = toC(face.pupilR.x, face.pupilR.y);
-  await p.mouse.click(box.x + A.x, box.y + A.y); await p.waitForTimeout(120);
-  await p.mouse.click(box.x + B.x, box.y + B.y); await p.waitForTimeout(300);
+  await p.evaluate(([a, b]) => { window.PB.alignFromPupils(a, b); window.PB.render(); }, [A, B]);
+  await p.waitForTimeout(200);
   const st = await p.evaluate(() => ({ ...window.PB.S.p, v1: window.PB.S.g.v1, h1: window.PB.S.g.h1 }));
   check("6. 동공정렬 — 6° 기울기 보정", near(st.rot, -6, 0.3) && near(st.v1, 0.5, 0.001) && near(st.h1, 0.5, 0.001),
     `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)} h1=${st.h1.toFixed(3)}`);
 
   // 7. 슬라이더
   const sl = await p.evaluate(() => {
-    const s = document.getElementById("phSlider");
+    const s = document.getElementById("posSliderH");
+    document.querySelector('#photoModes button[data-mode="zoom"]').click();
     s.value = "0.7"; s.dispatchEvent(new Event("input", { bubbles: true }));
     const zoom = window.PB.S.p.zoom;
     document.querySelector('#photoModes button[data-mode="balance"]').click();
-    const s2 = document.getElementById("phSlider");
-    s2.value = "0.65"; s2.dispatchEvent(new Event("input", { bubbles: true }));
-    return { zoom, rot: window.PB.S.p.rot };
+    s.value = "0.65"; s.dispatchEvent(new Event("input", { bubbles: true }));
+    const out = { zoom, rot: window.PB.S.p.rot };
+    document.querySelector('#photoModes button[data-mode="balance"]').click();   // 선 조절로 복귀
+    window.PB.S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; window.PB.render();
+    return out;
   });
   check("7. 줌/회전 슬라이더 범위", sl.zoom > 0.5 && sl.zoom <= 8 && sl.rot >= -30 && sl.rot <= 30,
     `zoom=${sl.zoom.toFixed(2)}× rot=${sl.rot.toFixed(1)}°`);
@@ -219,9 +221,10 @@ console.log("[세로 모드 · 기능]");
   await p.waitForTimeout(200);
   const lockState = await p.evaluate(() => ({
     locked: window.PB.S.locked,
-    sliderDisabled: document.getElementById("phSlider").disabled,
+    hMode: window.PB.S.hMode,
     modeDisabled: [...document.querySelectorAll('#photoModes button[data-mode]')].every(b => b.disabled),
-    lock2on: document.getElementById("btnLock2").classList.contains("on"),
+    modeFaded: [...document.querySelectorAll('#photoModes button[data-mode]')].every(b => parseFloat(getComputedStyle(b).opacity) < 0.6),
+    lockOn: document.getElementById("btnLock").classList.contains("on"),
   }));
   const pBefore = await p.evaluate(() => ({ ...window.PB.S.p }));
   // 잠금 상태에서 사진 팬 시도 (빈 영역 드래그)
@@ -231,8 +234,10 @@ console.log("[세로 모드 · 기능]");
   await p.mouse.up();
   const pAfter = await p.evaluate(() => ({ ...window.PB.S.p }));
   const photoFrozen = pBefore.ox === pAfter.ox && pBefore.oy === pAfter.oy && pBefore.zoom === pAfter.zoom;
-  check("16. 사진 잠금 — 사진이 움직이지 않음", lockState.locked && lockState.sliderDisabled && lockState.modeDisabled && lockState.lock2on && photoFrozen,
-    `slider=${lockState.sliderDisabled} modes=${lockState.modeDisabled} frozen=${photoFrozen}`);
+  check("16. 사진 잠금 — 사진 고정 · 보정 버튼 반투명 잠김",
+    lockState.locked && lockState.modeDisabled && lockState.modeFaded && lockState.lockOn
+      && lockState.hMode === "line" && photoFrozen,
+    `잠김=${lockState.modeDisabled} 반투명=${lockState.modeFaded} 사진고정=${photoFrozen} 바=${lockState.hMode}`);
 
   // 17. 잠금 중에도 선은 조절 가능 + 축 고정 (가로바=위아래만 / 세로바=좌우만)
   await p.evaluate(() => { const s = window.PB.S; s.sel = "h1"; window.PB.render(); });
@@ -274,13 +279,19 @@ console.log("[세로 모드 · 기능]");
   check("19. 방향 버튼 — 가로바 ▼▲ / 세로바 ◀▶", dirs.h === "▼▲" && dirs.v === "◀▶", `${dirs.h} / ${dirs.v}`);
 
   // 잠금 해제 후 원상복구
-  await p.evaluate(() => { document.getElementById("btnLock2").click(); });
+  await p.evaluate(() => { document.getElementById("btnLock").click(); });
   await p.waitForTimeout(150);
-  const unlocked = await p.evaluate(() => !window.PB.S.locked && !document.getElementById("phSlider").disabled);
-  check("20. 잠금 해제 — 사진 조작 복구", unlocked);
+  const unlocked = await p.evaluate(() => ({
+    locked: window.PB.S.locked,
+    modesOn: [...document.querySelectorAll('#photoModes button[data-mode]')].every(b => !b.disabled),
+    bright: [...document.querySelectorAll('#photoModes button[data-mode]')].every(b => parseFloat(getComputedStyle(b).opacity) > 0.9),
+  }));
+  check("20. 잠금 해제 — 사진 보정 버튼 다시 밝아지고 눌림",
+    !unlocked.locked && unlocked.modesOn && unlocked.bright,
+    `버튼활성=${unlocked.modesOn} 밝기복구=${unlocked.bright}`);
 
-  // 21. 선 선택 후 빈 곳 드래그 → 선택된 가로 바가 손을 따라 위아래로
-  await p.evaluate(() => { const s = window.PB.S; s.locked = false; s.sel = "h1"; window.PB.render(); });
+  // 21. 사진 잠금 중 빈 곳 드래그 → 선택된 가로 바가 손을 따라 위아래로 (v1.11.0: 잠금 시에만)
+  await p.evaluate(() => { const s = window.PB.S; s.locked = true; s.sel = "h1"; window.PB.render(); });
   await p.waitForTimeout(150);
   const box2 = await p.locator("#stage").boundingBox();   // 패널 높이 변화 반영해 다시 측정
   const b21 = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1, p: { ...window.PB.S.p } }));
@@ -333,7 +344,7 @@ console.log("[세로 모드 · 기능]");
     `Δv2=${((a22.v2 - b22.v2) * box2.width).toFixed(1)}px, Δv3=${((a22.v3 - b22.v3) * box2.width).toFixed(1)}px, 대칭오차=${Math.abs((a22.v2 + a22.v3) / 2 - a22.v1).toExponential(1)}`);
 
   // 23. 두 손가락 드래그 = 사진 이동 (선은 그대로)
-  await p.evaluate(() => { window.PB.S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; window.PB.render(); });
+  await p.evaluate(() => { window.PB.S.locked = false; window.PB.S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; window.PB.render(); });
   const b23 = await p.evaluate(() => ({ g: { ...window.PB.S.g }, p: { ...window.PB.S.p } }));
   {
     const t1 = await p.context().newCDPSession(p);
@@ -349,20 +360,23 @@ console.log("[세로 모드 · 기능]");
     near((a23.p.ox - b23.p.ox) * box2.width, 50, 6) && a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2,
     `Δox=${((a23.p.ox - b23.p.ox) * box2.width).toFixed(1)}px, 선 불변=${a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2}`);
 
-  // 24. 세로 조절자 = 오른쪽 · 아래 정렬, ▲ 위 / ▼ 아래
+  // 24. 세로 조절자 = 오른쪽 끝 · 세로 중앙, ▲ 위 / ▼ 아래 (v1.11.0)
   const ctlV = await p.evaluate(() => {
     window.PB.S.sel = "h1"; window.PB.render();
     const c = document.getElementById("posCtlV").getBoundingClientRect();
     const st = document.getElementById("stage").getBoundingClientRect();
     const up = document.getElementById("posPlusV").getBoundingClientRect();
     const dn = document.getElementById("posMinusV").getBoundingClientRect();
-    return { vert: c.height > c.width, rightEdge: st.right - c.right, bottomHalf: c.top > st.top + st.height * 0.35,
+    const dockTop = document.getElementById("bottomDock").getBoundingClientRect().top;
+    const mid = (c.top + c.bottom) / 2, region = (st.top + dockTop) / 2;
+    return { vert: c.height > c.width, rightEdge: st.right - c.right,
+             centered: Math.abs(mid - region) < st.height * 0.10,
              upAbove: up.top < dn.top,
              glyph: document.getElementById("posPlusV").textContent + document.getElementById("posMinusV").textContent };
   });
-  check("24. 세로 조절자 — 오른쪽·아래 정렬 (▲위/▼아래)",
-    ctlV.vert && ctlV.rightEdge >= 0 && ctlV.rightEdge < 30 && ctlV.bottomHalf && ctlV.upAbove && ctlV.glyph === "▲▼",
-    `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 아래쪽=${ctlV.bottomHalf} 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
+  check("24. 세로 조절자 — 오른쪽 끝 · 세로 중앙 (▲위/▼아래)",
+    ctlV.vert && ctlV.rightEdge >= 0 && ctlV.rightEdge < 30 && ctlV.centered && ctlV.upAbove && ctlV.glyph === "▲▼",
+    `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 세로중앙=${ctlV.centered} 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
 
   // 25. 가로 조절자 = 아래 · 오른쪽 정렬, ◀ 왼쪽 / ▶ 오른쪽
   const ctlH = await p.evaluate(() => {
@@ -376,7 +390,7 @@ console.log("[세로 모드 · 기능]");
              glyph: document.getElementById("posMinusH").textContent + document.getElementById("posPlusH").textContent };
   });
   check("25. 가로 조절자 — 아래·오른쪽 정렬 (◀왼쪽/▶오른쪽)",
-    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 70 && ctlH.rightEdge >= 0 && ctlH.rightEdge < 30
+    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 120 && ctlH.rightEdge >= 0 && ctlH.rightEdge < 30
       && ctlH.rightOfLeft && ctlH.glyph === "◀▶",
     `가로=${ctlH.horiz} 하단여백=${ctlH.bottomEdge.toFixed(0)}px 우측여백=${ctlH.rightEdge.toFixed(0)}px 오른쪽화살표오른쪽=${ctlH.rightOfLeft} ${ctlH.glyph}`);
 
@@ -447,6 +461,97 @@ console.log("[세로 모드 · 기능]");
   check("28. 다른 선 탭 → 전환 + 조절자 축도 전환", a28.sel === "h1" && a28.axisV,
     `선택=${a28.sel}, 세로조절자=${a28.axisV}`);
 
+  /* ── v1.11.0 신규 ─────────────────────────────────────── */
+
+  // 35. 잠금 해제 + 빈 곳 한 손가락 드래그 → 사진이 사방으로 자유 이동 (선은 불변)
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.locked = false; S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.p = { zoom: 2, ox: 0, oy: 0, rot: 0 };
+    window.PB.render();
+  });
+  await p.waitForTimeout(150);
+  const fp35 = await freeSpot();
+  const b35 = await p.evaluate(() => ({ g: { ...window.PB.S.g }, p: { ...window.PB.S.p } }));
+  await p.mouse.move(box2.x + fp35.x, box2.y + fp35.y);
+  await p.mouse.down();
+  await p.mouse.move(box2.x + fp35.x + 70, box2.y + fp35.y - 55, { steps: 14 });   // 사선
+  await p.mouse.up();
+  const a35 = await p.evaluate(() => ({ g: { ...window.PB.S.g }, p: { ...window.PB.S.p } }));
+  const dx35 = (a35.p.ox - b35.p.ox) * box2.width, dy35 = (a35.p.oy - b35.p.oy) * box2.height;
+  check("35. 잠금 해제 · 한 손가락 사선 드래그 = 사진 자유 이동",
+    near(dx35, 70, 4) && near(dy35, -55, 4) && a35.g.h1 === b35.g.h1 && a35.g.v2 === b35.g.v2,
+    `Δ=(${dx35.toFixed(1)}, ${dy35.toFixed(1)})px, 선 불변=${a35.g.h1 === b35.g.h1 && a35.g.v2 === b35.g.v2}`);
+
+  // 36. 사진보정 버튼 → 아래 가로 바가 사진 조절로 전환, 다시 누르면 선 조절로 복귀
+  const share = await p.evaluate(() => {
+    const S = window.PB.S, out = {};
+    S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; S.hMode = "line"; window.PB.render();
+    const sl = document.getElementById("posSliderH");
+    document.querySelector('#photoModes button[data-mode="balance"]').click();
+    out.photoMode = S.hMode === "photo";
+    out.label = document.getElementById("selNameH").textContent;
+    const v2before = S.g.v2;
+    sl.value = "0.7"; sl.dispatchEvent(new Event("input", { bubbles: true }));
+    out.rotChanged = Math.abs(S.p.rot) > 1;
+    out.lineUntouched = S.g.v2 === v2before;
+    document.querySelector('#photoModes button[data-mode="balance"]').click();   // 같은 버튼 재클릭
+    out.backToLine = S.hMode === "line";
+    const rotBefore = S.p.rot;
+    sl.value = "0.3"; sl.dispatchEvent(new Event("input", { bubbles: true }));
+    out.lineMoved = S.g.v2 !== v2before && S.p.rot === rotBefore;
+    S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; S.g = { ...window.PB.DEFAULT_GUIDE }; window.PB.render();
+    return out;
+  });
+  check("36. 아래 가로 바 하나로 선 조절 ↔ 사진 보정 겸용",
+    share.photoMode && share.rotChanged && share.lineUntouched && share.backToLine && share.lineMoved,
+    `사진모드=${share.photoMode}(${share.label}) 사진반응=${share.rotChanged} 선불변=${share.lineUntouched} 선복귀=${share.backToLine}`);
+
+  // 37. 세로선을 고르면 가로 바가 자동으로 선 조절로 돌아온다
+  const backLine = await p.evaluate(() => {
+    const S = window.PB.S;
+    document.querySelector('#photoModes button[data-mode="zoom"]').click();
+    const wasPhoto = S.hMode === "photo";
+    document.querySelector('#vButtons .lbtn[data-key="v2"]').click();
+    return { wasPhoto, now: S.hMode, sel: S.sel };
+  });
+  check("37. 세로선 선택 → 가로 바가 선 조절로 자동 복귀",
+    backLine.wasPhoto && backLine.now === "line" && backLine.sel === "v2",
+    `이전=${backLine.wasPhoto ? "photo" : "line"} → ${backLine.now} (선택 ${backLine.sel})`);
+
+  // 38. 아래 도크 순서 — 위에서부터 [사진보정 버튼] [좌우 드래그] [메뉴 5버튼], 모두 오른쪽 정렬
+  const dockOrder = await p.evaluate(() => {
+    const r = (id) => document.getElementById(id).getBoundingClientRect();
+    const m = r("photoModes"), h = r("posCtlH"), n = r("menuRow"), st = r("stage");
+    return {
+      order: m.bottom <= h.top + 1 && h.bottom <= n.top + 1,
+      bottomRow: st.bottom - n.bottom < 30,
+      rightAligned: Math.abs(m.right - n.right) < 2 && Math.abs(h.right - n.right) < 2,
+      count: document.querySelectorAll("#menuRow button").length,
+      ids: [...document.querySelectorAll("#menuRow button")].map((b) => b.id).join(","),
+    };
+  });
+  check("38. 아래 도크 — 사진보정 / 좌우 드래그 / 메뉴 5버튼 (맨 아래, 오른쪽 정렬)",
+    dockOrder.order && dockOrder.bottomRow && dockOrder.rightAligned && dockOrder.count === 5
+      && dockOrder.ids === "btnChange,btnPresetLoad,btnEyeGuide,btnExport,btnLock",
+    `순서=${dockOrder.order} 맨아래=${dockOrder.bottomRow} 우측정렬=${dockOrder.rightAligned} [${dockOrder.ids}]`);
+
+  // 39. 초기화 버튼이 위아래 드래그 바 바로 위 · 삭제된 버튼/패널이 남아 있지 않음
+  //     (V 버튼이 왼쪽 레일에 있는지는 가로 레이아웃 테스트 10번에서 검증)
+  const placed = await p.evaluate(() => {
+    const rst = document.getElementById("btnReset").getBoundingClientRect();
+    const v = document.getElementById("posCtlV").getBoundingClientRect();
+    return {
+      resetAbove: rst.bottom <= v.top + 1 && Math.abs((rst.left + rst.right) / 2 - (v.left + v.right) / 2) < 12,
+      removed: !document.getElementById("btnAlign") && !document.getElementById("btnRotate")
+               && !document.getElementById("phSlider") && !document.getElementById("btnLock2")
+               && !document.querySelector(".topbar") && !document.querySelector(".panels"),
+    };
+  });
+  check("39. 초기화 = 위아래 드래그 바 바로 위 · 삭제 버튼/패널 정리",
+    placed.resetAbove && placed.removed,
+    `초기화위=${placed.resetAbove} 삭제완료=${placed.removed}`);
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;
@@ -511,6 +616,7 @@ console.log("\n[강제 가로 회전]");
     const S = window.PB.S;
     S.g = { ...window.PB.DEFAULT_GUIDE };
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v2";
+    S.locked = true;          /* v1.11.0: 잠금 해제 상태의 빈 곳 드래그는 사진 이동이므로 */
     window.PB.render();
   });
   const b34 = await p.evaluate(() => ({ ...window.PB.S.g }));
@@ -598,19 +704,26 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
 
   const g = await p.evaluate(() => {
     const rail = document.getElementById("lineRail");
-    const panels = document.querySelector(".panels");
     const stage = document.getElementById("stage");
+    const sr = stage.getBoundingClientRect();
+    const bd = document.getElementById("bottomDock").getBoundingClientRect();
+    const rd = document.getElementById("rightDock").getBoundingClientRect();
+    const inside = (r) => r.top >= sr.top - 1 && r.bottom <= sr.bottom + 1 && r.left >= sr.left - 1 && r.right <= sr.right + 1;
     return {
       railVisible: getComputedStyle(rail).display !== "none",
       railHasButtons: rail.contains(document.getElementById("hButtons")) && rail.contains(document.getElementById("vButtons")),
+      railHasV: rail.contains(document.getElementById("railExtra")),
       railFits: rail.scrollHeight <= rail.clientHeight + 2,
-      panelsFit: panels.scrollHeight <= panels.clientHeight + 2,
-      stageW: Math.round(stage.getBoundingClientRect().width),
+      docksFit: inside(bd) && inside(rd),
+      dockGap: Math.round(bd.top - rd.bottom),
+      stageW: Math.round(sr.width),
+      stageShare: sr.width / window.innerWidth,
     };
   });
-  check(`10. ${dev.n} — 좌측 레일 표시`, g.railVisible && g.railHasButtons);
-  check(`10. ${dev.n} — 레일/패널 잘림 없음`, g.railFits && g.panelsFit,
-    `rail=${g.railFits ? "ok" : "overflow"} panels=${g.panelsFit ? "ok" : "overflow"}`);
+  check(`10. ${dev.n} — 좌측 레일 + V 버튼`, g.railVisible && g.railHasButtons && g.railHasV);
+  check(`10. ${dev.n} — 도크 잘림/겹침 없음 · 사진 ${Math.round(g.stageShare * 100)}%`,
+    g.railFits && g.docksFit && g.dockGap > 0 && g.stageShare > 0.9,
+    `rail=${g.railFits ? "ok" : "overflow"} 도크안쪽=${g.docksFit} 도크간격=${g.dockGap}px`);
   await ctx.close();
 }
 

@@ -38,7 +38,7 @@ const I18N = {
     editor_preset_load: "프리셋",
     editor_photo_lock: "사진잠금",
     editor_photo_unlock: "잠금해제",
-    editor_export: "이미지저장",
+    editor_export: "사진저장",
     editor_change_photo: "사진변경",
     editor_rotate: "화면가로",
     editor_eyeguide: "눈가이드",
@@ -77,7 +77,7 @@ const I18N = {
     preset_builtin: "기본",
     ai_loading: "AI 얼굴 인식 중…",
     ai_ok: "AI 자동 정렬 완료",
-    ai_fail: "AI 사용 불가 · [동공정렬]을 눌러 정렬하세요",
+    ai_fail: "AI 얼굴 인식 실패 · 사진을 손으로 맞춰 주세요",
     ai_noface: "얼굴 인식 실패 · [동공정렬]을 눌러 정렬하세요",
     hint_updown: "▼ 아래　　위 ▲ · 화면을 드래그해도 조절됩니다",
     hint_leftright: "◀ 왼쪽　　오른쪽 ▶ · 화면을 드래그해도 조절됩니다",
@@ -121,7 +121,7 @@ const I18N = {
     editor_preset_load: "Presets",
     editor_photo_lock: "Lock Photo",
     editor_photo_unlock: "Unlock",
-    editor_export: "Save Image",
+    editor_export: "Save Photo",
     editor_change_photo: "Change Photo",
     editor_rotate: "Landscape",
     editor_eyeguide: "Eye guide",
@@ -160,7 +160,7 @@ const I18N = {
     preset_builtin: "Built-in",
     ai_loading: "Detecting face…",
     ai_ok: "Auto-aligned",
-    ai_fail: "AI unavailable · use [Pupil Align]",
+    ai_fail: "Face detection failed · adjust the photo by hand",
     ai_noface: "No face found · use [Pupil Align]",
     hint_updown: "▼ down　　up ▲ · drag anywhere to adjust",
     hint_leftright: "◀ left　　right ▶ · drag anywhere to adjust",
@@ -257,6 +257,9 @@ const S = {
      selUD = 세로 조절자가 움직일 가로선 / selLR = 가로 조절자가 움직일 세로선 */
   selUD: "h1",
   selLR: "v1",
+  /* 아래 오른쪽 가로 드래그 바는 하나로 두 가지를 조절한다 (v1.11.0)
+     "line"  = S.selLR 세로선 좌우 이동  /  "photo" = 사진 보정(줌·위아래·좌우·밸런스) */
+  hMode: "line",
   photoMode: "zoom",
   locked: false,
   dim: { W: 0, H: 0 },
@@ -273,7 +276,7 @@ const S = {
 const $ = (id) => document.getElementById(id);
 const stage = $("stage"), photo = $("photo"), svg = $("guides"), touch = $("touch");
 const hud = $("hud"), aiStatus = $("aiStatus");
-const posSliderV = $("posSliderV"), posSliderH = $("posSliderH"), phSlider = $("phSlider");
+const posSliderV = $("posSliderV"), posSliderH = $("posSliderH");
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -537,6 +540,9 @@ function hitTest(x, y) {
 const pts = new Map();
 let gMode = null, gDrag = null;
 
+/* 사진 이동 한계 — 배율이 커질수록 더 멀리 밀 수 있어야 자연스럽다 */
+const panLimit = () => OFFSET_MAX * Math.max(1, S.p.zoom);
+
 /* 화면(포인터) 좌표 → 캔버스 좌표 ─ v1.10.0
    ⚠️ getScreenCTM() 은 쓰지 않는다. iOS 사파리(WebKit)는 조상 요소의 **CSS transform 을
       CTM 에 반영하지 않는** 경우가 있어, body.rot90 상태에서 손가락 방향이 90° 어긋난다
@@ -586,8 +592,11 @@ touch.addEventListener("pointerdown", (e) => {
       gDrag = { ox: S.p.ox, oy: S.p.oy, x0: sp.x, y0: sp.y };
       return;
     }
-    /* 선 위를 직접 잡으면 그 선을 선택하고, 빈 곳을 잡으면 이미 선택된 선을 끈다.
-       어느 쪽이든 손가락 이동량을 그대로 따라간다. (사진 이동은 두 손가락) */
+    /* v1.11.0 — 한 손가락 규칙
+         · 선 위를 잡으면        → 그 선을 선택하고 끈다 (잠금 여부 무관)
+         · 빈 곳 + 잠금 해제     → 사진을 사방으로 자유 이동 (팬)
+         · 빈 곳 + 사진 잠금     → 이미 선택된 선을 끈다 (미세조정 모드)
+       두 손가락은 항상 줌·회전·이동. */
     const hit = hitTest(sp.x, sp.y);
     let key, mirrored = false;
     if (hit) {
@@ -595,6 +604,10 @@ touch.addEventListener("pointerdown", (e) => {
       else if (hit.type === "arm") key = "outerAngle";
       else { key = hit.key; mirrored = !!hit.mirrored; }
       setSel(key);
+    } else if (!S.locked) {
+      gMode = "pan";
+      gDrag = { ox: S.p.ox, oy: S.p.oy, x0: sp.x, y0: sp.y };
+      return;
     } else {
       key = S.sel;
     }
@@ -634,8 +647,11 @@ touch.addEventListener("pointermove", (e) => {
     const cd = posConfig();
     showHud(`${cd.name}<br>${cd.axis === "v" ? "▲▼" : "◀▶"} ${cd.disp}`);
   } else if (gMode === "pan" && gDrag) {
-    S.p.ox = clamp(gDrag.ox + (sp.x - gDrag.x0) / W, -OFFSET_MAX, OFFSET_MAX);
-    S.p.oy = clamp(gDrag.oy + (sp.y - gDrag.y0) / H, -OFFSET_MAX, OFFSET_MAX);
+    /* 손가락 이동량을 1:1 로 따라간다. 확대할수록 더 멀리 밀 수 있어야 하므로
+       한계도 배율에 비례시킨다 (panLimit). */
+    const lim = panLimit();
+    S.p.ox = clamp(gDrag.ox + (sp.x - gDrag.x0) / W, -lim, lim);
+    S.p.oy = clamp(gDrag.oy + (sp.y - gDrag.y0) / H, -lim, lim);
     render();
   } else if (gMode === "xform" && gDrag && pts.size >= 2) {
     const [a, b] = [...pts.values()];
@@ -644,8 +660,9 @@ touch.addEventListener("pointermove", (e) => {
     const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
     S.p.zoom = clamp(gDrag.zoom0 * (d / gDrag.d0), ZOOM_MIN, ZOOM_MAX);
     S.p.rot = clamp(gDrag.rot0 + ((ang - gDrag.a0) * 180) / Math.PI, -ROT_MAX, ROT_MAX);
-    S.p.ox = clamp(gDrag.ox0 + (cx - gDrag.cx0) / W, -OFFSET_MAX, OFFSET_MAX);
-    S.p.oy = clamp(gDrag.oy0 + (cy - gDrag.cy0) / H, -OFFSET_MAX, OFFSET_MAX);
+    const lim2 = panLimit();
+    S.p.ox = clamp(gDrag.ox0 + (cx - gDrag.cx0) / W, -lim2, lim2);
+    S.p.oy = clamp(gDrag.oy0 + (cy - gDrag.cy0) / H, -lim2, lim2);
     showHud(`${t("editor_zoom")} ${S.p.zoom.toFixed(2)}×<br>${t("editor_balance")} ${S.p.rot.toFixed(1)}°`);
     render();
   }
@@ -672,7 +689,9 @@ touch.addEventListener("wheel", (e) => {
 /* 선택 기록 — S.sel(드래그 대상) 과 축별 조절자 대상을 함께 갱신 */
 function noteSel(key) {
   S.sel = key;
-  if (axisOf(key) === "v") S.selUD = key; else S.selLR = key;
+  /* 세로선(좌우 이동)을 고르면 아래 가로 바를 선 조절로 되돌린다 (v1.11.0) */
+  if (axisOf(key) === "v") S.selUD = key;
+  else { S.selLR = key; S.hMode = "line"; }
 }
 function setSel(key) {
   noteSel(key);
@@ -687,8 +706,11 @@ function buildLineButtons() {
     b.dataset.vis = spec.vis;
     b.textContent = spec.label;
     b.addEventListener("click", () => {
-      if (S.sel === spec.key) S.g[spec.vis] = !S.g[spec.vis];
-      else { noteSel(spec.key); S.g[spec.vis] = true; }
+      /* 1번 탭 = 선택, 같은 버튼 다시 탭 = 숨김/표시.
+         사진 보정 중이었다면 첫 탭은 선 조절로 되돌리는 역할만 한다 (v1.11.0). */
+      if (S.sel === spec.key && S.hMode === "line") S.g[spec.vis] = !S.g[spec.vis];
+      else S.g[spec.vis] = true;
+      noteSel(spec.key);
       render();
     });
     return b;
@@ -710,17 +732,7 @@ function updateButtons() {
   $("btnAllLine").classList.toggle("on", !!S.hiddenSnapshot);
   $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
   $("btnLock").classList.toggle("on", S.locked);
-  $("btnAlign").classList.toggle("picking", S.pickMode);
-  const rotOn = document.body.classList.contains("rot90");
-  $("btnRotate").classList.toggle("picking", rotOn);
-  const rl = $("btnRotate").querySelector("em");
-  if (rl) rl.textContent = rotOn ? t("editor_rotate_off") : t("editor_rotate");
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
-  const l2 = $("btnLock2");
-  if (l2) {
-    l2.classList.toggle("on", S.locked);
-    $("lockLabel2").textContent = (S.locked ? "🔒 " : "🔓 ") + (S.locked ? t("unlock_short") : t("lock_short"));
-  }
 }
 
 /* ── 위치 조절 패널 ── */
@@ -759,60 +771,27 @@ function applyPos(v, key) {
 
 /* ── 사진 보정 패널 ── */
 function photoConfig() {
-  const p = S.p;
+  const p = S.p, lim = panLimit();
   switch (S.photoMode) {
     case "zoom":
-      return { v: Math.log(p.zoom / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN), disp: p.zoom.toFixed(2) + "×", hint: t("hint_zoom"), step: 0.03 };
+      return { name: t("editor_zoom"), v: Math.log(p.zoom / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN), disp: p.zoom.toFixed(2) + "×", step: 0.03 };
     case "vertical":
-      return { v: clamp(p.oy / (2 * SLIDER_OFFSET) + 0.5, 0, 1), disp: Math.round(p.oy * 100), hint: t("hint_photo_ud"), step: 0.012 };
+      return { name: t("editor_vertical"), v: clamp(p.oy / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.oy * 100), step: 0.012 };
     case "horizontal":
-      return { v: clamp(p.ox / (2 * SLIDER_OFFSET) + 0.5, 0, 1), disp: Math.round(p.ox * 100), hint: t("hint_photo_lr"), step: 0.012 };
+      return { name: t("editor_horizontal"), v: clamp(p.ox / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.ox * 100), step: 0.012 };
     case "balance":
-      return { v: p.rot / (2 * ROT_MAX) + 0.5, disp: p.rot.toFixed(1) + "°", hint: t("hint_photo_bal"), step: 0.008 };
+      return { name: t("editor_balance"), v: p.rot / (2 * ROT_MAX) + 0.5, disp: p.rot.toFixed(1) + "°", step: 0.008 };
   }
 }
 
 function applyPhoto(v) {
   v = clamp(v, 0, 1);
-  const p = S.p;
+  const p = S.p, lim = panLimit();
   if (S.photoMode === "zoom") p.zoom = ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, v);
-  else if (S.photoMode === "vertical") p.oy = (v - 0.5) * 2 * SLIDER_OFFSET;
-  else if (S.photoMode === "horizontal") p.ox = (v - 0.5) * 2 * SLIDER_OFFSET;
+  else if (S.photoMode === "vertical") p.oy = (v - 0.5) * 2 * lim;
+  else if (S.photoMode === "horizontal") p.ox = (v - 0.5) * 2 * lim;
   else if (S.photoMode === "balance") p.rot = (v - 0.5) * 2 * ROT_MAX;
   render();
-}
-
-const vRows = new Map();
-function renderValueList() {
-  const g = S.g, box = $("valueList");
-  const items = [];
-  for (const sp of H_SPECS) if (g[sp.vis]) items.push({ key: sp.key, label: sp.label, color: sp.color, ax: "▲▼", v: Math.round((1 - g[sp.key]) * 100) });
-  for (const sp of V_SPECS) if (g[sp.vis]) items.push({ key: sp.key, label: sp.label, color: sp.color, ax: "◀▶", v: Math.round(g[sp.key] * 100) });
-  if (g.baseStructureVisible) {
-    items.push({ key: "innerAngle", label: t("editor_inner_angle"), color: "#FF3B30", ax: "▲▼", v: Math.round((1 - g.innerAngle) * 100) });
-    items.push({ key: "outerAngle", label: t("editor_outer_angle"), color: "#111111", ax: "▲▼", v: ((g.outerAngle - 0.5) * 2 * V_ANGLE_MAX).toFixed(1) + "°" });
-  }
-  $("valuePanel").classList.toggle("show", items.length > 0);
-  const keys = items.map((i) => i.key).join("|");
-  if (box.dataset.sig !== keys) {          // 구성이 바뀔 때만 DOM 재생성
-    box.dataset.sig = keys;
-    vRows.clear();
-    box.replaceChildren(...items.map((it) => {
-      const b = document.createElement("button");
-      b.className = "vrow";
-      b.innerHTML = `<span class="dot" style="background:${it.color}"></span><span class="nm"></span><span class="ax">${it.ax}</span><span class="vl"></span>`;
-      b.onclick = () => { noteSel(it.key); render(); };
-      vRows.set(it.key, b);
-      return b;
-    }));
-  }
-  for (const it of items) {
-    const b = vRows.get(it.key);
-    if (!b) continue;
-    b.querySelector(".nm").textContent = it.label;
-    b.querySelector(".vl").textContent = it.v;
-    b.classList.toggle("sel", S.sel === it.key);
-  }
 }
 
 /* 세로 조절자는 가로 range 를 -90° 회전해 쓰므로 트랙 길이를 슬롯 높이에 맞춘다.
@@ -827,11 +806,19 @@ function sizePosSlider() {
   }
 }
 
+/* 아래 오른쪽 가로 바가 지금 무엇을 조절하는가 (v1.11.0) */
+const hIsPhoto = () => S.hMode === "photo" && !S.locked;
+const hConfig = () => (hIsPhoto() ? photoConfig() : posConfig(S.selLR));
+function applyH(v) {
+  if (hIsPhoto()) applyPhoto(v);
+  else applyPos(v, S.selLR);
+}
+
 function updatePanels() {
-  /* 조절자는 2개이고 둘 다 항상 보인다 (v1.9.0 · BASELINE 1-7)
-     세로 조절자(오른쪽·아래) = S.selUD 가로선 / 가로 조절자(아래·오른쪽) = S.selLR 세로선
-     축 클래스는 HTML 에 고정돼 있으므로 서로 바뀌지 않는다. */
-  const cv = posConfig(S.selUD), ch = posConfig(S.selLR);
+  /* 조절자는 2개이고 둘 다 항상 보인다 (BASELINE 1-7)
+     세로 조절자(오른쪽 끝·세로 중앙) = S.selUD 가로선
+     가로 조절자(아래·오른쪽)         = S.selLR 세로선  또는  사진 보정 (S.hMode) */
+  const cv = posConfig(S.selUD), ch = hConfig();
   $("selNameV").textContent = cv.name;
   $("posValV").textContent = cv.disp;
   if (document.activeElement !== posSliderV) posSliderV.value = cv.v;
@@ -839,24 +826,17 @@ function updatePanels() {
   $("posValH").textContent = ch.disp;
   if (document.activeElement !== posSliderH) posSliderH.value = ch.v;
 
-  /* 지금 드래그 대상인 쪽만 강조 — 어느 쪽도 숨기지 않는다 */
-  const vActive = axisOf(S.sel) === "v";
+  /* 지금 조작 대상인 쪽만 강조 — 어느 쪽도 숨기지 않는다 */
+  const vActive = !hIsPhoto() && axisOf(S.sel) === "v";
   $("posCtlV").classList.toggle("active", vActive);
   $("posCtlH").classList.toggle("active", !vActive);
   sizePosSlider();
 
-  const pc = photoConfig();
-  $("photoVal").textContent = pc.disp;
-  $("phHint").textContent = pc.hint;
-  if (document.activeElement !== phSlider) phSlider.value = pc.v;
-
-  /* 사진 잠금 시 사진 관련 조작 전부 비활성 — 선 조절은 그대로 가능 */
-  phSlider.disabled = S.locked;
-  $("phMinus").disabled = S.locked;
-  $("phPlus").disabled = S.locked;
-  document.querySelectorAll("#photoModes button[data-mode]").forEach((b) => { b.disabled = S.locked; });
-
-  renderValueList();
+  /* 사진 잠금 시 사진 보정 버튼은 반투명 + 잠김. 선 조절은 그대로 가능 */
+  document.querySelectorAll("#photoModes button[data-mode]").forEach((b) => {
+    b.disabled = S.locked;
+    b.classList.toggle("on", !S.locked && S.hMode === "photo" && b.dataset.mode === S.photoMode);
+  });
 }
 
 /* ═══════════ 7. presets ═══════════ */
@@ -1168,7 +1148,7 @@ function loadPhoto(file) {
     S.p = { ...DEFAULT_PHOTO };
     S.locked = false;
     S.hiddenSnapshot = null;
-    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1";
+    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
     S.pickMode = false;
     S.pick = [];
     show("editor");
@@ -1234,7 +1214,7 @@ $("btnReset").onclick = () => {
   S.g = { ...DEFAULT_GUIDE };
   S.p = { ...DEFAULT_PHOTO };
   S.hiddenSnapshot = null;
-  S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1";
+  S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
   S.pickMode = false;
   S.pick = [];
   if (S.landmarks) autoAlign(S.landmarks);
@@ -1242,35 +1222,15 @@ $("btnReset").onclick = () => {
   toast(t("reset_done"));
 };
 
-$("btnRotate").onclick = () => {
-  const rotNow = document.body.classList.contains("rot90");
-  localStorage.setItem(ORIENT_KEY, rotNow ? "off" : "on");
-  if (!rotNow) { orientLockDone = false; orientLockTries = 0; tryOrientationLock(); }
-  applyLayout();
-  toast(rotNow ? t("rot_off") : t("rot_on"));
-};
-
-$("btnAlign").onclick = () => {
-  if (S.pickMode) {
-    S.pickMode = false; S.pick = [];
-    setAI(t("pick_cancel"), "warn");
-  } else {
-    S.pickMode = true; S.pick = [];
-    S.locked = false;
-    setAI(t("pick_1"));
-  }
-  updateButtons();
-  render();
-};
-
 function toggleLock() {
   S.locked = !S.locked;
+  /* 잠그면 사진 보정을 쓸 수 없으므로 가로 바를 선 조절로 되돌린다 */
+  if (S.locked) S.hMode = "line";
   updateButtons();
   updatePanels();
   toast(S.locked ? t("locked_msg") : t("unlocked_msg"));
 }
 $("btnLock").onclick = toggleLock;
-$("btnLock2").onclick = toggleLock;
 
 $("btnExport").onclick = exportImage;
 
@@ -1297,24 +1257,23 @@ $("btnVAngle").onclick = () => {
 };
 $("btnEyeGuide").onclick = () => { S.g.eyeGuideVisible = !S.g.eyeGuideVisible; render(); };
 
-/* 두 조절자 — 각자 자기 축의 선을 움직인다. 만지면 그 선이 드래그 대상(S.sel)도 된다. */
-function wirePos(slider, minusId, plusId, getKey) {
-  slider.addEventListener("input", (e) => { noteSel(getKey()); applyPos(parseFloat(e.target.value), getKey()); });
-  $(minusId).onclick = () => { const k = getKey(); noteSel(k); applyPos(parseFloat(slider.value) - posConfig(k).step, k); };
-  $(plusId).onclick  = () => { const k = getKey(); noteSel(k); applyPos(parseFloat(slider.value) + posConfig(k).step, k); };
-}
-wirePos(posSliderV, "posMinusV", "posPlusV", () => S.selUD);
-wirePos(posSliderH, "posMinusH", "posPlusH", () => S.selLR);
+/* 세로 조절자 — 위아래로 움직이는 가로선(S.selUD) 전담 */
+posSliderV.addEventListener("input", (e) => { noteSel(S.selUD); applyPos(parseFloat(e.target.value), S.selUD); });
+$("posMinusV").onclick = () => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); };
+$("posPlusV").onclick  = () => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); };
 
-phSlider.addEventListener("input", (e) => applyPhoto(parseFloat(e.target.value)));
-$("phMinus").onclick = () => applyPhoto(parseFloat(phSlider.value) - photoConfig().step);
-$("phPlus").onclick = () => applyPhoto(parseFloat(phSlider.value) + photoConfig().step);
+/* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
+posSliderH.addEventListener("input", (e) => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(e.target.value)); });
+$("posMinusH").onclick = () => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) - hConfig().step); };
+$("posPlusH").onclick  = () => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) + hConfig().step); };
 
+/* 사진 보정 모드 버튼 — 누르면 아래 가로 바가 사진 조절로 전환된다.
+   같은 버튼을 다시 누르면 선 조절로 되돌아간다. */
 $("photoModes").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-mode]");
-  if (!b) return;
-  S.photoMode = b.dataset.mode;
-  document.querySelectorAll("#photoModes button[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
+  if (!b || b.disabled) return;
+  if (S.hMode === "photo" && S.photoMode === b.dataset.mode) S.hMode = "line";
+  else { S.photoMode = b.dataset.mode; S.hMode = "photo"; }
   updatePanels();
 });
 
@@ -1362,9 +1321,18 @@ if (localStorage.getItem("pb_orient_v") !== "2") {
 }
 
 function placeLineBars() {
-  const L = $("hButtons"), R = $("vButtons");
-  /* 가로 = 왼쪽 세로 레일(왼손 선택) / 세로 = 캔버스 위 오버레이 */
-  (document.body.classList.contains("land") ? $("lineRail") : stage).append(L, R);
+  const L = $("hButtons"), R = $("vButtons"), X = $("railExtra");
+  /* 가로 = 왼쪽 세로 레일(왼손 선택) / 세로 = 캔버스 위 오버레이.
+     V 기본구조 버튼(railExtra)은 항상 라인 버튼 아래에 온다. */
+  if (document.body.classList.contains("land")) $("lineRail").append(L, R, X);
+  else stage.append(L, R);
+}
+
+/* 오른쪽 도크는 아래 도크와 겹치면 안 되므로 아래 도크 높이를 CSS 변수로 넘긴다 */
+function syncDockSpace() {
+  const b = $("bottomDock");
+  if (!b) return;
+  stage.style.setProperty("--bdock", (b.offsetHeight + 18) + "px");
 }
 
 function applyLayout() {
@@ -1414,6 +1382,7 @@ window.addEventListener("pointerdown", () => tryOrientationLock(), { once: false
 const ro = new ResizeObserver(() => { measure(); render(); });
 ro.observe(stage);
 new ResizeObserver(() => sizePosSlider()).observe($("pSlotV"));
+new ResizeObserver(() => syncDockSpace()).observe($("bottomDock"));
 window.addEventListener("resize", () => applyLayout());
 window.addEventListener("orientationchange", () => setTimeout(applyLayout, 250));
 
@@ -1430,4 +1399,4 @@ if ("serviceWorker" in navigator) {
 }
 
 /* 개발/디버깅용 */
-window.PB = { S, DEFAULT_GUIDE, render, runFaceAI, loadPhoto };
+window.PB = { S, DEFAULT_GUIDE, render, runFaceAI, loadPhoto, alignFromPupils };

@@ -89,25 +89,18 @@ input,textarea{font:inherit}
    세로(portrait)에서도 그대로 동작하도록 grid-area 로 전환 */
 #editor{background:var(--bg);display:none}
 #editor.active{display:grid}
-.topbar{grid-area:topbar}
 .stage{grid-area:stage}
-.panels{grid-area:panels}
-.topbar{display:flex;gap:4px;padding:calc(var(--safe-t) + 7px) 8px 7px;background:var(--chrome);border-bottom:1px solid var(--border)}
-/* 레이아웃은 기기 방향이 아니라 body 클래스로 결정한다 (app.js applyLayout()).
+/* v1.11.0 — 상단바·우측 패널 제거. 사진이 화면 전부를 쓰고 모든 컨트롤은 캔버스 오버레이.
+   레이아웃은 기기 방향이 아니라 body 클래스로 결정한다 (app.js applyLayout()).
    .land = 가로 레이아웃 / .rot90 = 화면을 90° 돌려 가로 강제 / .compact = 짧은 화면 */
-body:not(.land) #editor.active{grid-template-columns:100%;grid-template-rows:auto minmax(0,1fr) auto;
-  grid-template-areas:"topbar" "stage" "panels"}
-body:not(.land) #editor .panels{max-height:44dvh;border-top:1px solid var(--border)}
+body:not(.land) #editor.active{grid-template-columns:100%;grid-template-rows:minmax(0,1fr);
+  grid-template-areas:"stage"}
 body:not(.land) #lineRail{display:none}
-body:not(.land) #editor .topbar{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
 
-/* 가로: [왼쪽 라인 레일] [사진] [오른쪽 조절 패널] — 왼손 선택 / 오른손 조절 */
-body.land #editor.active{grid-template-columns:62px minmax(0,1fr) clamp(228px,25vw,286px);
-  grid-template-rows:auto minmax(0,1fr);
-  grid-template-areas:"lines stage topbar" "lines stage panels"}
-body.land #editor .panels{max-height:none;border-left:1px solid var(--border);height:100%}
-body.land #editor .topbar{border-left:1px solid var(--border);
-  display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:calc(var(--safe-t) + 7px) 9px 7px}
+/* 가로: [왼쪽 라인 레일] [사진 — 나머지 전부] */
+body.land #editor.active{grid-template-columns:62px minmax(0,1fr);
+  grid-template-rows:minmax(0,1fr);
+  grid-template-areas:"lines stage"}
 body.land #lineRail{display:flex}
 
 /* ── 화면 강제 가로 회전 ──────────────────────────────────
@@ -125,15 +118,6 @@ body.rot90 .screen.active{
   overflow:hidden;
 }
 body.rot90 #home.active{overflow-y:auto}
-.topbar button{flex:1;height:44px;border-radius:9px;background:var(--surface);border:1px solid var(--border);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:0;padding:0 1px}
-.topbar button i{font-style:normal;font-size:15px;line-height:1}
-.topbar button em{font-style:normal;font-size:9px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.topbar button:active{background:var(--primary);color:#fff;border-color:var(--primary)}
-.topbar button.on{background:var(--danger);color:#fff;border-color:var(--danger)}
-.topbar button.picking{background:var(--accent);color:#fff;border-color:var(--accent)}
-
 /* Stage */
 .stage{position:relative;min-height:0;min-width:0;background:var(--stage);overflow:hidden;touch-action:none}
 #photo{position:absolute;inset:0;margin:auto;transform-origin:50% 50%;will-change:transform;pointer-events:none;
@@ -169,63 +153,69 @@ body.rot90 #home.active{overflow-y:auto}
 .aistatus{position:absolute;bottom:12px;left:12px;transform:none;z-index:22;max-width:46%}
 body:not(.land) .aistatus{bottom:124px;left:50%;transform:translateX(-50%);max-width:92%}
 
-/* ── 위치 조절자 (캔버스 오버레이) ─────────────────────────
-   선의 이동 축과 조절자의 축을 일치시킨다: 위로 밀면 선이 위로, 오른쪽으로 밀면 선이 오른쪽으로. */
-.posctl{position:absolute;z-index:30;display:none;align-items:center;gap:8px;
-  background:rgba(22,24,28,.60);border:1px solid rgba(255,255,255,.26);border-radius:16px;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);touch-action:auto;padding:8px}
-.posctl .pbtn{flex:0 0 auto;width:44px;height:44px;border-radius:11px;background:rgba(255,255,255,.16);
-  color:#fff;font-size:17px;font-weight:800;display:flex;align-items:center;justify-content:center;
+/* ── 캔버스 오버레이 컨트롤 (v1.11.0) ────────────────────────────
+   오른쪽 도크 : [초기화] + 위아래 드래그 바   — 오른쪽 끝 · 세로 중앙
+   아래  도크 : 사진보정 4버튼 / 좌우 드래그 바 / 메뉴 5버튼 — 모두 오른쪽 정렬 */
+.posctl{position:relative;z-index:30;display:flex;align-items:center;gap:6px;
+  background:rgba(22,24,28,.60);border:1px solid rgba(255,255,255,.26);border-radius:13px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);touch-action:auto;padding:5px}
+.posctl .pbtn{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.16);
+  color:#fff;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;
   border:1px solid rgba(255,255,255,.22)}
 .posctl .pbtn:active{background:var(--primary);border-color:var(--primary)}
 .posctl .plabel{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;
-  background:rgba(22,24,28,.78);border:1px solid rgba(255,255,255,.24);border-radius:9px;
-  padding:4px 9px;font-size:11px;font-weight:800;color:#fff;letter-spacing:.3px}
+  background:rgba(22,24,28,.78);border:1px solid rgba(255,255,255,.24);border-radius:8px;
+  padding:3px 8px;font-size:10.5px;font-weight:800;color:#fff;letter-spacing:.3px;
+  right:calc(100% + 6px);top:50%;transform:translateY(-50%)}
 .posctl .plabel b{color:#9ec2ff;font-variant-numeric:tabular-nums}
-.posctl.axis-v,.posctl.axis-h{display:flex}   /* 두 조절자는 항상 함께 표시된다 (v1.9.0) */
 .posctl .pslot{position:relative;display:flex;align-items:center;justify-content:center}
 .posctl input[type=range]{margin:0}
 .posctl input[type=range]::-webkit-slider-runnable-track{background:rgba(255,255,255,.28)}
 .posctl input[type=range]::-moz-range-track{background:rgba(255,255,255,.28)}
-/* 지금 드래그 대상인 쪽을 테두리로 표시 — 숨기지는 않는다 */
+/* 지금 조작 대상인 쪽을 테두리로 표시 — 숨기지는 않는다 */
 .posctl.active{border-color:rgba(120,165,255,.85);box-shadow:0 0 0 1px rgba(120,165,255,.35)}
-.posctl:not(.active){opacity:.82}
+.posctl:not(.active){opacity:.86}
 
-/* 위아래 이동(가로선) → 오른쪽 · 아래 정렬 세로 조절자 */
-.posctl.axis-v{flex-direction:column;right:10px;bottom:78px;top:auto;height:36%;min-height:170px;width:60px}
-.posctl.axis-v .pslot{flex:1;width:44px}
+/* 오른쪽 도크 — 아래 도크 높이(--bdock)를 뺀 영역의 세로 한가운데 */
+.rdock{position:absolute;right:8px;top:0;bottom:var(--bdock,152px);height:46%;min-height:180px;
+  margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px}
+.posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
+.posctl.axis-v .pslot{flex:1;width:34px}
 .posctl.axis-v input[type=range]{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
-.posctl.axis-v .plabel{top:-28px;right:0;left:auto;transform:none}   /* 캔버스 밖으로 넘치지 않게 우측 정렬 */
 
-/* 좌우 이동(세로선) → 아래 · 오른쪽 정렬 가로 조절자 */
-.posctl.axis-h{flex-direction:row-reverse;right:10px;left:auto;bottom:10px;width:42%;min-width:230px;height:60px}
-.posctl.axis-h .pslot{flex:1;height:44px}
-.posctl.axis-h input[type=range]{width:100%}
-.posctl.axis-h .plabel{top:-28px;left:6px}
+/* 아래 도크 */
+.bdock{position:absolute;right:8px;bottom:calc(var(--safe-b) + 8px);z-index:30;
+  display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 16px)}
+.posctl.axis-h{flex-direction:row-reverse;width:min(46vw,430px);min-width:230px;height:46px}
+.posctl.axis-h .pslot{flex:1;height:34px}
+.posctl.axis-h input[type=range]{width:100%;height:34px}
 
-@media (orientation:portrait){
-  .posctl.axis-h{bottom:56px}
-  .posctl.axis-v{bottom:124px;height:32%}
-}
+/* 도크 버튼 공통 */
+.dockbtn{height:34px;min-width:46px;border-radius:10px;background:rgba(22,24,28,.62);
+  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:9.5px;font-weight:800;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);flex:0 0 auto;padding:0 6px}
+.dockbtn i{font-style:normal;font-size:13px;line-height:1}
+.dockbtn:active{background:var(--primary);border-color:var(--primary)}
 
-/* Panels */
-.panels{background:var(--chrome);padding:0 11px calc(var(--safe-b) + 8px);overflow-y:auto;-webkit-overflow-scrolling:touch}
-.panel{padding:9px 0 6px;border-bottom:1px solid var(--border)}
-.panel:last-child{border-bottom:none}
-.panel-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
-.panel-t{font-size:10.5px;font-weight:800;letter-spacing:.5px;color:var(--faint);text-transform:uppercase}
-.panel-v{font-size:12px;font-weight:800;color:var(--primary);font-variant-numeric:tabular-nums}
+.menurow{display:flex;gap:5px}
+.menurow button{height:42px;min-width:58px;border-radius:10px;background:rgba(22,24,28,.62);
+  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:9.5px;font-weight:800;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  padding:0 8px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.menurow button i{font-style:normal;font-size:14px;line-height:1}
+.menurow button:active{background:var(--primary);border-color:var(--primary)}
+.menurow button.on{background:var(--danger);border-color:var(--danger)}
+.menurow button.eyeon{background:#ffffff;color:#111;border-color:#ffffff}
 
-.modebtns{display:flex;gap:5px;margin-bottom:8px}
-.modebtns button{flex:1;height:32px;border-radius:8px;background:var(--surface);border:1px solid var(--border);
-  font-size:11.5px;font-weight:700;color:var(--muted);min-width:0;padding:0 2px}
-.modebtns button.on{background:var(--accent);border-color:#5A4FD8;color:#fff}
-.topbar button.eyeon{background:#ffffff;color:#111;border-color:#111;box-shadow:inset 0 0 0 1px #111}
+/* 사진 보정 모드 버튼 — 좌우 드래그 바 바로 위. 사진 잠금 시 반투명 + 잠김 */
+.modebtns{display:flex;gap:5px;margin:0}
+.modebtns button{height:30px;min-width:58px;border-radius:9px;background:rgba(22,24,28,.62);
+  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:11px;font-weight:700;padding:0 10px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.modebtns button.on{background:var(--accent);border-color:#9a92f0;color:#fff}
+.modebtns button:disabled{opacity:.30}
 
-.sliderrow{display:flex;align-items:center;gap:8px}
-.stepbtn{flex:0 0 42px;height:40px;border-radius:10px;background:var(--surface-2);font-size:21px;font-weight:700;
-  display:flex;align-items:center;justify-content:center;color:#333;border:1px solid var(--border)}
-.stepbtn:active{background:var(--primary);color:#fff}
 input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:40px;background:transparent}
 input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:3px;background:var(--surface-2)}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--primary);
@@ -234,25 +224,7 @@ input[type=range]::-moz-range-track{height:5px;border-radius:3px;background:var(
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--primary);border:3px solid #fff}
 input[type=range]:disabled{opacity:.4}
 
-.hint{font-size:10.5px;color:var(--muted);text-align:center;margin-top:4px}
-/* 표시 중인 가이드의 수치 목록 — 눌러서 바로 선택 */
-.vlist{display:flex;flex-direction:column;gap:3px}
-.vrow{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;
-  background:var(--surface);border:1px solid transparent;text-align:left;width:100%}
-.vrow.sel{border-color:var(--primary);background:#eef2fc}
-.vrow .dot{width:9px;height:9px;border-radius:2px;flex:0 0 auto;border:1px solid rgba(0,0,0,.18)}
-.vrow .nm{flex:1;font-size:11.5px;font-weight:750}
-.vrow .ax{font-size:9.5px;color:var(--faint);font-weight:800}
-.vrow .vl{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--muted);min-width:30px;text-align:right}
-/* 가이드 값 목록은 세로 공간이 남는 가로 큰 화면에서만 — 작은 화면의 사진 영역을 뺏지 않는다 */
-#valuePanel{display:none}
-body.land:not(.compact) #valuePanel.show{display:block}
-.ph-right{display:flex;align-items:center;gap:9px}
-.minilock{font-size:11px;font-weight:800;padding:5px 10px;border-radius:8px;
-  background:var(--surface);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
-.minilock.on{background:var(--danger);border-color:var(--danger);color:#fff}
 button:disabled{opacity:.38;pointer-events:none}
-.stepbtn.dir{font-size:15px;font-weight:800}
 
 /* 가로 모드: 라인 선택 버튼 = 왼쪽 세로 레일 (왼손 전용) */
 #lineRail{grid-area:lines;background:var(--chrome);border-right:1px solid var(--border);
@@ -264,6 +236,11 @@ button:disabled{opacity:.38;pointer-events:none}
 #lineRail .lbtn{width:52px;height:29px;font-size:9.5px;border-radius:7px}
 #lineRail #hButtons{position:relative;padding-bottom:12px}
 #lineRail #hButtons::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--border)}
+/* V 기본구조 버튼은 라인 버튼 아래에 (v1.11.0) */
+#railExtra{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:11px;width:100%}
+#railExtra::before{content:"";position:absolute;left:6px;right:6px;top:4px;height:1px;background:var(--border)}
+#railExtra .chip{width:52px;padding:5px 3px;font-size:8.5px;line-height:1.15;white-space:normal;text-align:center}
+body:not(.land) #railExtra{display:none}
 
 /* Modal */
 .mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
@@ -289,25 +266,25 @@ button:disabled{opacity:.38;pointer-events:none}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* 가로 화면이 낮을 때(아이폰 가로 등) 컨트롤 압축 */
-@media all{ /* 짧은 가로 화면 압축 */
-  body.land.compact #editor .topbar button{height:38px}
-  body.land.compact #editor .topbar button i{font-size:13px}
-  body.land.compact #editor .panel{padding:6px 0 3px}
-  body.land.compact #editor .panel-h{margin-bottom:5px}
-  body.land.compact #editor .hint{display:none}
-  body.land.compact #editor .stepbtn{height:34px;flex-basis:38px}
-  body.land.compact #editor input[type=range]{height:34px}
-  body.land.compact #editor .modebtns{margin-bottom:6px}
-  body.land.compact #editor .modebtns button{height:28px;font-size:11px}
-  body.land.compact #editor #lineRail{gap:9px;padding-top:6px;padding-bottom:6px}
+@media all{
+  body.land.compact #editor #lineRail{gap:7px;padding-top:5px;padding-bottom:5px}
   body.land.compact #editor #lineRail .linebar{gap:3px;padding:4px}
-  body.land.compact #editor #lineRail .lbtn{width:56px;height:26px;font-size:9px}
+  body.land.compact #editor #lineRail .lbtn{width:56px;height:24px;font-size:9px}
+  body.land.compact #editor #railExtra .chip{width:56px;padding:4px 3px;font-size:8px}
   body.land.compact #editor .chip{padding:5px 8px;font-size:10px}
-  body.land.compact #editor .posctl{padding:6px;gap:6px}
-  body.land.compact #editor .posctl .pbtn{width:38px;height:38px;font-size:15px}
-  body.land.compact #editor .posctl.axis-v{width:50px;height:38%;min-height:118px;right:8px;bottom:66px}
-  body.land.compact #editor .posctl.axis-v .pslot{width:38px}
-  body.land.compact #editor .posctl.axis-h{height:50px;width:46%;min-width:190px;right:8px;bottom:8px}
+  body.land.compact #editor .posctl{padding:4px;gap:5px}
+  body.land.compact #editor .posctl .pbtn{width:30px;height:30px;font-size:14px}
+  body.land.compact #editor .posctl.axis-v{width:40px}
+  body.land.compact #editor .posctl.axis-v .pslot{width:30px}
+  body.land.compact #editor .posctl.axis-h{height:40px;width:min(50vw,360px);min-width:196px}
+  body.land.compact #editor .posctl.axis-h .pslot{height:30px}
+  body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
+  body.land.compact #editor .rdock{height:54%;min-height:124px;gap:6px}
+  body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
+  body.land.compact #editor .menurow button{height:36px;min-width:50px;font-size:8.5px;padding:0 6px}
+  body.land.compact #editor .menurow button i{font-size:12px}
+  body.land.compact #editor .modebtns button{height:26px;min-width:48px;font-size:10px;padding:0 7px}
+  body.land.compact #editor .bdock{gap:5px;bottom:calc(var(--safe-b) + 6px)}
 }
 </style>
 </head>
@@ -333,17 +310,6 @@ button:disabled{opacity:.38;pointer-events:none}
 
 <!-- ═══════════ EDITOR ═══════════ -->
 <section id="editor" class="screen">
-  <div class="topbar">
-    <button id="btnAlign"><i>◎</i><em data-i18n="editor_align">동공정렬</em></button>
-    <button id="btnLock"><i>🔒</i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
-    <button id="btnChange"><i>🖼</i><em data-i18n="editor_change_photo">사진변경</em></button>
-    <button id="btnPresetLoad"><i>☆</i><em data-i18n="editor_preset">프리셋</em></button>
-    <button id="btnExport"><i>⬇</i><em data-i18n="editor_export">이미지저장</em></button>
-    <button id="btnEyeGuide"><i>👁</i><em data-i18n="editor_eyeguide">눈가이드</em></button>
-    <button id="btnReset"><i>↺</i><em data-i18n="editor_reset">초기화</em></button>
-    <button id="btnRotate"><i>⟳</i><em data-i18n="editor_rotate">화면가로</em></button>
-  </div>
-
   <div class="stage" id="stage">
     <img id="photo" alt="" />
     <svg id="guides" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -352,64 +318,54 @@ button:disabled{opacity:.38;pointer-events:none}
     <div class="ov ov-tl">
       <button class="chip" id="btnAllLine">all line</button>
     </div>
-    <div class="ov ov-tr">
-      <button class="chip" id="btnPivot" data-i18n="editor_inner_angle">V Center Pivot</button>
-      <button class="chip" id="btnVAngle" data-i18n="editor_outer_angle">V Angle</button>
-    </div>
 
     <div class="linebar linebar-left" id="hButtons"></div>
     <div class="linebar linebar-right" id="vButtons"></div>
 
-    <!-- 위치 조절자 2개 — 앱을 열면 둘 다 항상 보인다 (v1.9.0). 어느 쪽도 숨기지 않는다.
-         ① 세로 조절자 : 오른쪽 · 아래 정렬 — 위아래로 움직이는 가로선(Eye/Front/Arch…)을 조절
-         ② 가로 조절자 : 아래 · 오른쪽 정렬 — 좌우로 움직이는 세로선(Center/Inner/Outer)을 조절 -->
-    <div class="posctl axis-v" id="posCtlV">
-      <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
-      <button class="pbtn" id="posPlusV">▲</button>
-      <div class="pslot" id="pSlotV"><input type="range" id="posSliderV" min="0" max="1" step="0.0005" value="0.5" /></div>
-      <button class="pbtn" id="posMinusV">▼</button>
-    </div>
-    <div class="posctl axis-h" id="posCtlH">
-      <div class="plabel"><span id="selNameH">Center</span><b id="posValH">50</b></div>
-      <button class="pbtn" id="posPlusH">▶</button>
-      <div class="pslot" id="pSlotH"><input type="range" id="posSliderH" min="0" max="1" step="0.0005" value="0.5" /></div>
-      <button class="pbtn" id="posMinusH">◀</button>
-    </div>
-
-    <div class="hud" id="hud"></div>
-    <div class="ov aistatus"><span class="chip" id="aiStatus" hidden></span></div>
-  </div>
-
-  <aside id="lineRail"></aside>
-
-  <div class="panels">
-    <div class="panel" id="valuePanel">
-      <div class="panel-h"><span class="panel-t" data-i18n="panel_values">가이드 값</span></div>
-      <div class="vlist" id="valueList"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-h">
-        <span class="panel-t" data-i18n="editor_photo_adjustment">사진 보정</span>
-        <span class="ph-right">
-          <button class="minilock" id="btnLock2"><span id="lockLabel2">🔓 사진잠금</span></button>
-          <span class="panel-v" id="photoVal">1.00×</span>
-        </span>
+    <!-- 오른쪽 도크 (v1.11.0) — 초기화 + 위아래 드래그 바. 오른쪽 끝 · 세로 중앙 -->
+    <div class="rdock" id="rightDock">
+      <button class="dockbtn" id="btnReset"><i>↺</i><em data-i18n="editor_reset">초기화</em></button>
+      <div class="posctl axis-v" id="posCtlV">
+        <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
+        <button class="pbtn" id="posPlusV">▲</button>
+        <div class="pslot" id="pSlotV"><input type="range" id="posSliderV" min="0" max="1" step="0.0005" value="0.5" /></div>
+        <button class="pbtn" id="posMinusV">▼</button>
       </div>
+    </div>
+
+    <!-- 아래 도크 (v1.11.0) — 사진보정 버튼 / 좌우 드래그 바 / 메뉴 버튼. 모두 오른쪽 정렬 -->
+    <div class="bdock" id="bottomDock">
       <div class="modebtns" id="photoModes">
         <button data-mode="zoom" class="on" data-i18n="editor_zoom">줌</button>
         <button data-mode="vertical" data-i18n="editor_vertical">위아래</button>
         <button data-mode="horizontal" data-i18n="editor_horizontal">좌우</button>
         <button data-mode="balance" data-i18n="editor_balance">밸런스</button>
       </div>
-      <div class="sliderrow">
-        <button class="stepbtn" id="phMinus">−</button>
-        <input type="range" id="phSlider" min="0" max="1" step="0.001" value="0.25" />
-        <button class="stepbtn" id="phPlus">+</button>
+      <div class="posctl axis-h" id="posCtlH">
+        <div class="plabel"><span id="selNameH">Center</span><b id="posValH">50</b></div>
+        <button class="pbtn" id="posPlusH">▶</button>
+        <div class="pslot" id="pSlotH"><input type="range" id="posSliderH" min="0" max="1" step="0.0005" value="0.5" /></div>
+        <button class="pbtn" id="posMinusH">◀</button>
       </div>
-      <div class="hint" id="phHint"></div>
+      <div class="menurow" id="menuRow">
+        <button id="btnChange"><i>🖼</i><em data-i18n="editor_change_photo">사진변경</em></button>
+        <button id="btnPresetLoad"><i>☆</i><em data-i18n="editor_preset">프리셋</em></button>
+        <button id="btnEyeGuide"><i>👁</i><em data-i18n="editor_eyeguide">눈가이드</em></button>
+        <button id="btnExport"><i>⬇</i><em data-i18n="editor_export">사진저장</em></button>
+        <button id="btnLock"><i>🔒</i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
+      </div>
     </div>
+
+    <div class="hud" id="hud"></div>
+    <div class="ov aistatus"><span class="chip" id="aiStatus" hidden></span></div>
   </div>
+
+  <aside id="lineRail">
+    <div id="railExtra">
+      <button class="chip" id="btnPivot" data-i18n="editor_inner_angle">V Center Pivot</button>
+      <button class="chip" id="btnVAngle" data-i18n="editor_outer_angle">V Angle</button>
+    </div>
+  </aside>
 </section>
 
 <!-- ═══════════ MODALS ═══════════ -->
