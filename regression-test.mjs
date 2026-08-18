@@ -178,9 +178,14 @@ console.log("[세로 모드 · 기능]");
   await p.evaluate(([a, b]) => { window.PB.alignFromPupils(a, b); window.PB.render(); }, [A, B]);
   await p.waitForTimeout(200);
   const st = await p.evaluate(() => ({ ...window.PB.S.p, v1: window.PB.S.g.v1, h1: window.PB.S.g.h1 }));
-  check("6. 동공정렬 — 6° 기울기 보정 · 기준점 (0.40, 0.55) (v1.14.0)",
-    near(st.rot, -6, 0.3) && near(st.v1, 0.40, 0.001) && near(st.h1, 0.55, 0.001),
-    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 0.400) h1=${st.h1.toFixed(3)}(기대 0.550)`);
+  /* 기준점 = 메인 작업 영역(캔버스 왼쪽 ~ 오른쪽 드래그 바)의 한가운데 (v1.17.0) */
+  const cxExp = await p.evaluate(() => {
+    const d = document.getElementById("rightDock");
+    return (d.offsetLeft - 8) / window.PB.S.dim.W / 2;
+  });
+  check("6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 0.55",
+    near(st.rot, -6, 0.3) && near(st.v1, cxExp, 0.003) && near(st.h1, 0.55, 0.001),
+    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 ${cxExp.toFixed(3)}) h1=${st.h1.toFixed(3)}`);
 
   // 44. 얼굴(동공 중점)이 실제로 캔버스 가로 35% 지점에 온다 — 오른쪽 컨트롤을 피하려고 왼쪽으로 15%
   const faceCenter = await p.evaluate(([px, py]) => {
@@ -191,9 +196,9 @@ console.log("[세로 모드 · 기능]");
     const cy = S.dim.H / 2 + p.oy * S.dim.H + p.zoom * (vx * Math.sin(r) + vy * Math.cos(r));
     return { x: cx / S.dim.W, y: cy / S.dim.H };
   }, [(face.pupilL.x + face.pupilR.x) / 2, (face.pupilL.y + face.pupilR.y) / 2]);
-  check("44. 자동 정렬 — 얼굴이 캔버스 (40%, 55%) 지점 (왼쪽 10% · 아래 5%)",
-    near(faceCenter.x, 0.40, 0.01) && near(faceCenter.y, 0.55, 0.01),
-    `얼굴 중심 = (${(faceCenter.x * 100).toFixed(1)}%, ${(faceCenter.y * 100).toFixed(1)}%)`);
+  check("44. 자동 정렬 — 얼굴이 작업 영역 가로 한가운데 · 세로 55%",
+    near(faceCenter.x, cxExp, 0.01) && near(faceCenter.y, 0.55, 0.01),
+    `얼굴 중심 = (${(faceCenter.x * 100).toFixed(1)}%, ${(faceCenter.y * 100).toFixed(1)}%) / 기대 x ${(cxExp * 100).toFixed(1)}%`);
 
   // 7. 슬라이더
   const sl = await p.evaluate(() => {
@@ -847,6 +852,44 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       count: rects.length, top: Math.min(...rects.map((r) => r.y)), hitChip,
     };
   });
+  // 48. 가로 가이드 선이 오른쪽 위아래 드래그 바를 넘지 않는다 (v1.17.0)
+  const hLine = await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.g.h2Visible = true; S.g.h3Visible = true; S.g.archThicknessVisible = true;
+    window.PB.render();
+    const lines = [...document.getElementById("guides").querySelectorAll("line")]
+      .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+                     y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2") }))
+      .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.x1 - l.x2) > 1);
+    const dockL = document.getElementById("rightDock").offsetLeft;
+    return { n: lines.length, maxX: Math.max(...lines.map((l) => Math.max(l.x1, l.x2))), dockL, W: S.dim.W };
+  });
+  check(`48. ${dev.n} — 가로선이 오른쪽 드래그 바를 넘지 않음`,
+    hLine.n >= 4 && hLine.maxX <= hLine.dockL + 1 && hLine.maxX > hLine.dockL - 30,
+    `가로선 ${hLine.n}개, 오른쪽 끝 ${Math.round(hLine.maxX)}px / 바 왼쪽 ${hLine.dockL}px (캔버스 ${hLine.W}px)`);
+
+  // 47. 컨트롤 영역 스크림 — 터치를 막지 않고, 가이드 선보다 아래에 깔린다 (v1.16.0)
+  const scrim = await p.evaluate(() => {
+    const b = document.querySelector(".scrim-b"), r = document.querySelector(".scrim-r");
+    const g = document.getElementById("guides"), st = document.getElementById("stage");
+    if (!b || !r) return { ok: false };
+    const kids = [...st.children];
+    const br = b.getBoundingClientRect(), rr = r.getBoundingClientRect();
+    const bd = document.getElementById("bottomDock").getBoundingClientRect();
+    const ld = document.getElementById("leftDock").getBoundingClientRect();
+    return {
+      ok: true,
+      noTouch: getComputedStyle(b).pointerEvents === "none" && getComputedStyle(r).pointerEvents === "none",
+      belowGuides: kids.indexOf(b) < kids.indexOf(g) && kids.indexOf(r) < kids.indexOf(g),
+      coversDocks: br.top <= bd.top + 2 && br.top <= ld.top + 2,
+      coversBar: rr.left <= document.getElementById("posCtlV").getBoundingClientRect().left + 2,
+    };
+  });
+  check(`47. ${dev.n} — 컨트롤 영역 스크림 (터치 통과 · 선이 위)`,
+    scrim.ok && scrim.noTouch && scrim.belowGuides && scrim.coversDocks && scrim.coversBar,
+    `터치통과=${scrim.noTouch} 선위=${scrim.belowGuides} 아래도크덮음=${scrim.coversDocks} 세로바덮음=${scrim.coversBar}`);
+
   check(`45. ${dev.n} — 세로 조절자 값 라벨이 바 오른쪽 · 캔버스 안`,
     lab.rightOfBar && lab.inside, `바 오른쪽=${lab.rightOfBar}(간격 ${lab.gap}px) 캔버스안=${lab.inside}`);
   check(`46. ${dev.n} — 세로선 라벨이 캔버스 맨 위(갭 6px) · 칩과 겹침 없음`,

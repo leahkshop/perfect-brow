@@ -250,12 +250,19 @@ const OFFSET_MAX = 1.0;   // 사진 좌우/위아래 이동 한계 (캔버스 �
 const SLIDER_OFFSET = 0.5;// 좌우/위아래 슬라이더 범위 (드래그는 OFFSET_MAX 까지)
 const HIT_PX = 28;        // 화면에서 선을 탭/드래그로 잡는 인식 반경
 const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭 (클수록 얼굴이 크게 잡힘)
-/* 자동 정렬의 기준점 (v1.14.0) — 캔버스 정중앙(0.5, 0.5)이 아니다.
-   가로 0.40 : 오른쪽에 위아래 드래그 바·버튼이 있어 얼굴이 가려지므로 왼쪽으로 10%
-   세로 0.55 : 위쪽에 눈썹을 그릴 여유를 두려고 아래로 5%
-   두 값은 alignFromPupils() 과 autoAlign() 에서 함께 쓴다. */
-const CENTER_X = 0.40;
+/* ── 메인 작업 영역 (v1.17.0) ──────────────────────────────────
+   캔버스 왼쪽 끝 ~ **오른쪽 위아래 드래그 바 왼쪽 끝**까지가 실제 작업 공간이다.
+   · 가로 가이드 선은 이 영역을 넘어가지 않는다 (오른쪽 컨트롤·스크림 위로 튀어나오지 않게)
+   · 사진 자동 배치와 라인 배치도 이 영역의 **한가운데**를 기준으로 한다
+   세로는 위쪽에 눈썹을 그릴 여유를 두려고 55% (CENTER_Y). */
+const WORK_GAP = 8;              // 드래그 바 왼쪽에서 띄우는 여유
 const CENTER_Y = 0.55;
+function workRight() {           // 0~1 정규화. 도크가 아직 없으면 1(전체)
+  const d = $("rightDock"), W = S.dim.W;
+  if (!d || !d.offsetWidth || !W) return 1;
+  return clamp((d.offsetLeft - WORK_GAP) / W, 0.5, 1);
+}
+const centerX = () => workRight() / 2;
 /* 인체 계측 평균비 — 동공 간 거리 기준 (동공 오프셋 = 1.0) */
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
 const R_OUTER = 1.50;     // 눈꼬리(외안각)
@@ -354,7 +361,7 @@ function drawBadge(frag, text, x, y, color, anchor) {
   let bx = x;
   if (anchor === "middle") bx = x - w / 2;
   else if (anchor === "end") bx = x - w;
-  bx = clamp(bx, 1, S.dim.W - w - 1);
+  bx = clamp(bx, 1, (S.wr || S.dim.W) - w - 1);
   frag.appendChild(mk("rect", {
     x: bx, y, width: w, height: h, rx: 3, fill: color, "fill-opacity": 0.92,
   }));
@@ -369,6 +376,8 @@ function drawBadge(frag, text, x, y, color, anchor) {
 
 function renderGuides() {
   const { W, H } = S.dim, g = S.g;
+  const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
+  S.wr = WR;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const frag = document.createDocumentFragment();
   const vBadges = [];   // 세로선 라벨은 겹치지 않게 나중에 한꺼번에 배치
@@ -399,7 +408,7 @@ function renderGuides() {
     const y = g[sp.key] * H;
     const sel = S.sel === sp.key;
     for (const [a, b] of sp.segs) {
-      drawLine(frag, a * W, y, b * W, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
+      drawLine(frag, a * WR, y, b * WR, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
     }
   }
 
@@ -455,7 +464,7 @@ function renderGuides() {
     const selA = S.sel === "outerAngle", selP = S.sel === "innerAngle";
     const w = selA ? 3.4 : 2.2;
     drawLine(frag, px, py, 0, py - tn * px, "#111111", w, 0.85);
-    drawLine(frag, px, py, W, py - tn * (W - px), "#111111", w, 0.85);
+    drawLine(frag, px, py, WR, py - tn * (WR - px), "#111111", w, 0.85);
     frag.appendChild(mk("circle", { cx: px, cy: py, r: selP ? 9 : 6.5, fill: "#FF3B30", stroke: "#ffffff", "stroke-width": 2 }));
   }
 
@@ -555,7 +564,8 @@ function hitTest(x, y) {
   for (const L of linePixels()) {
     let d;
     if (L.type === "h") {
-      const inSeg = L.segs.some(([a, b]) => x >= a * W - 12 && x <= b * W + 12);
+      const WRh = (S.wr || W);
+      const inSeg = L.segs.some(([a, b]) => x >= a * WRh - 12 && x <= b * WRh + 12);
       if (!inSeg) continue;
       d = Math.abs(y - L.y);
     } else {
@@ -1061,10 +1071,10 @@ function alignFromPupils(a, b) {
 
   S.p = {
     zoom, rot,
-    ox: clamp(-nx / W + (CENTER_X - 0.5), -OFFSET_MAX, OFFSET_MAX),
+    ox: clamp(-nx / W + (centerX() - 0.5), -OFFSET_MAX, OFFSET_MAX),
     oy: clamp(-ny / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX),
   };
-  placeLinesFromEyes(CENTER_X, CENTER_Y, EYE_FRAC / 2);
+  placeLinesFromEyes(centerX(), CENTER_Y, EYE_FRAC / 2);
 }
 
 function autoAlign(lm) {
@@ -1099,12 +1109,12 @@ function autoAlign(lm) {
   const r = (rot * Math.PI) / 180;
   const rx = vx * Math.cos(r) - vy * Math.sin(r);
   const ry = vx * Math.sin(r) + vy * Math.cos(r);
-  const tr = { zoom, rot, ox: clamp(-(rx * zoom) / W + (CENTER_X - 0.5), -OFFSET_MAX, OFFSET_MAX), oy: clamp(-(ry * zoom) / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX) };
+  const tr = { zoom, rot, ox: clamp(-(rx * zoom) / W + (centerX() - 0.5), -OFFSET_MAX, OFFSET_MAX), oy: clamp(-(ry * zoom) / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX) };
   S.p = tr;
 
   /* 라인 자동 배치 */
   const g = S.g;
-  g.v1 = CENTER_X;
+  g.v1 = centerX();
   g.h1 = clamp(imgToCanvas(mx, my, tr).y / H, 0.02, 0.98);
 
   const cIn = imgToCanvas(innerL.x, innerL.y, tr);

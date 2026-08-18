@@ -128,13 +128,20 @@ body.rot90 #home.active{overflow-y:auto}
 body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
 #photo{position:absolute;inset:0;margin:auto;transform-origin:50% 50%;will-change:transform;pointer-events:none;
   image-rendering:auto;display:block}
-#guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-#touch{position:absolute;inset:0;touch-action:none}
+/* 컨트롤이 놓이는 아래·오른쪽을 어둡게 깔아 사진이 주인공이 되게 한다 (v1.16.0).
+   불투명 띠로 만들면 사진 영역을 영구히 잃으므로 가장자리만 진한 그라데이션으로 처리. */
+.scrim{position:absolute;pointer-events:none;z-index:1}
+.scrim-b{left:0;right:0;bottom:0;height:calc(var(--bdock,120px) + 30px);
+  background:linear-gradient(to top,rgba(16,18,22,.94) 0%,rgba(16,18,22,.90) 45%,rgba(16,18,22,.52) 74%,rgba(16,18,22,0) 100%)}
+.scrim-r{top:0;bottom:0;right:0;width:calc(var(--redge) + 62px);
+  background:linear-gradient(to left,rgba(16,18,22,.90) 0%,rgba(16,18,22,.72) 55%,rgba(16,18,22,0) 100%)}
+#guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+#touch{position:absolute;inset:0;touch-action:none;z-index:3}
 
 .ov{position:absolute;z-index:20}
 .ov-tl{top:8px;left:8px}
 .ov-tr{top:8px;right:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
-.chip{background:rgba(22,24,28,.62);color:#fff;border:1px solid rgba(255,255,255,.30);
+.chip{background:rgba(54,59,69,.80);color:#fff;border:1px solid rgba(255,255,255,.30);
   border-radius:8px;padding:6px 10px;font-size:10.5px;font-weight:700;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}
 .chip.on{background:var(--primary);border-color:var(--primary)}
@@ -163,8 +170,8 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
    오른쪽아래 `.bdock`  : 사진보정 4버튼 / 좌우 드래그 바        — 오른쪽 끝 아래
    왼쪽아래   `.ldock`  : 사진변경·프리셋·눈가이드·사진저장·사진잠금  …띄어서…  초기화 */
 .posctl{position:relative;z-index:30;display:flex;align-items:center;gap:6px;
-  background:rgba(22,24,28,.60);border:1px solid rgba(255,255,255,.26);border-radius:13px;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);touch-action:auto;padding:5px}
+  background:rgba(54,59,69,.90);border:1px solid rgba(255,255,255,.26);border-radius:13px;
+  touch-action:auto;padding:5px}
 .posctl .pbtn{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.16);
   color:#fff;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;
   border:1px solid rgba(255,255,255,.22)}
@@ -210,10 +217,10 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
   min-width:72px;justify-content:center;background:transparent;border:none;padding:0 4px}
 
 /* 도크 버튼 공통 */
-.dockbtn{height:34px;min-width:46px;border-radius:10px;background:rgba(22,24,28,.62);
+.dockbtn{height:34px;min-width:46px;border-radius:10px;background:rgba(54,59,69,.92);
   border:1px solid rgba(255,255,255,.28);color:#fff;font-size:9.5px;font-weight:800;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);flex:0 0 auto;padding:0 6px}
+  flex:0 0 auto;padding:0 6px}
 .dockbtn i{font-style:normal;font-size:13px;line-height:1}
 .dockbtn:active{background:var(--primary);border-color:var(--primary)}
 /* 되돌리기 — 자주 쓰는 버튼이라 한 단계 크게 */
@@ -221,10 +228,10 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 .dockbtn.big i{font-size:19px}
 
 .menurow{display:flex;gap:5px}
-.menurow button{height:42px;min-width:58px;border-radius:10px;background:rgba(22,24,28,.62);
+.menurow button{height:42px;min-width:58px;border-radius:10px;background:rgba(54,59,69,.92);
   border:1px solid rgba(255,255,255,.28);color:#fff;font-size:9.5px;font-weight:800;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
-  padding:0 8px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  padding:0 8px}
 .menurow button i{font-style:normal;font-size:14px;line-height:1}
 .menurow button:active{background:var(--primary);border-color:var(--primary)}
 .menurow button.on{background:var(--danger);border-color:var(--danger)}
@@ -233,9 +240,8 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 
 /* 사진 보정 모드 버튼 — 좌우 드래그 바 바로 위. 사진 잠금 시 반투명 + 잠김 */
 .modebtns{display:flex;gap:5px;margin:0}
-.modebtns button{height:30px;min-width:58px;border-radius:9px;background:rgba(22,24,28,.62);
-  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:11px;font-weight:700;padding:0 10px;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.modebtns button{height:30px;min-width:58px;border-radius:9px;background:rgba(54,59,69,.92);
+  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:11px;font-weight:700;padding:0 10px}
 .modebtns button.on{background:var(--accent);border-color:#9a92f0;color:#fff}
 .modebtns button:disabled{opacity:.30}
 
@@ -311,6 +317,8 @@ body:not(.land) #railExtra{display:none}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
   body.land.compact #editor .dockbtn.big i{font-size:16px}
   body.land.compact #editor .ldock{bottom:calc(var(--safe-b) + 6px);left:6px}
+  body.land.compact #editor .scrim-b{height:calc(var(--bdock,110px) + 22px)}
+  body.land.compact #editor .scrim-r{width:calc(var(--redge) + 50px)}
   body.land.compact #editor .menurow button i{font-size:12px}
   body.land.compact #editor .modebtns button{height:26px;min-width:48px;font-size:10px;padding:0 7px}
   body.land.compact #editor .bdock{gap:5px;bottom:calc(var(--safe-b) + 6px)}
@@ -341,6 +349,9 @@ body:not(.land) #railExtra{display:none}
 <section id="editor" class="screen">
   <div class="stage" id="stage">
     <img id="photo" alt="" />
+    <!-- 컨트롤 영역 어둡게 (v1.16.0) — 가이드 SVG 보다 아래에 두어 선은 그대로 밝게 보인다 -->
+    <div class="scrim scrim-b"></div>
+    <div class="scrim scrim-r"></div>
     <svg id="guides" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="touch"></div>
 
