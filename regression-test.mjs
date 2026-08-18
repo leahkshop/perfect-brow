@@ -519,38 +519,107 @@ console.log("[세로 모드 · 기능]");
     backLine.wasPhoto && backLine.now === "line" && backLine.sel === "v2",
     `이전=${backLine.wasPhoto ? "photo" : "line"} → ${backLine.now} (선택 ${backLine.sel})`);
 
-  // 38. 아래 도크 순서 — 위에서부터 [사진보정 버튼] [좌우 드래그] [메뉴 5버튼], 모두 오른쪽 정렬
+  // 38. 오른쪽 아래 도크 — [사진보정 버튼] 위, [좌우 드래그 바] 아래, 둘 다 오른쪽 끝 정렬 (v1.12.0)
   const dockOrder = await p.evaluate(() => {
     const r = (id) => document.getElementById(id).getBoundingClientRect();
-    const m = r("photoModes"), h = r("posCtlH"), n = r("menuRow"), st = r("stage");
+    const m = r("photoModes"), h = r("posCtlH"), st = r("stage");
     return {
-      order: m.bottom <= h.top + 1 && h.bottom <= n.top + 1,
-      bottomRow: st.bottom - n.bottom < 30,
-      rightAligned: Math.abs(m.right - n.right) < 2 && Math.abs(h.right - n.right) < 2,
-      count: document.querySelectorAll("#menuRow button").length,
-      ids: [...document.querySelectorAll("#menuRow button")].map((b) => b.id).join(","),
+      order: m.bottom <= h.top + 1,
+      rightEnd: st.right - h.right < 20 && Math.abs(m.right - h.right) < 2,
+      bottomEnd: st.bottom - h.bottom < 20,
     };
   });
-  check("38. 아래 도크 — 사진보정 / 좌우 드래그 / 메뉴 5버튼 (맨 아래, 오른쪽 정렬)",
-    dockOrder.order && dockOrder.bottomRow && dockOrder.rightAligned && dockOrder.count === 5
-      && dockOrder.ids === "btnChange,btnPresetLoad,btnEyeGuide,btnExport,btnLock",
-    `순서=${dockOrder.order} 맨아래=${dockOrder.bottomRow} 우측정렬=${dockOrder.rightAligned} [${dockOrder.ids}]`);
+  check("38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 드래그 바가 오른쪽 끝 아래",
+    dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd,
+    `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd}`);
 
-  // 39. 초기화 버튼이 위아래 드래그 바 바로 위 · 삭제된 버튼/패널이 남아 있지 않음
-  //     (V 버튼이 왼쪽 레일에 있는지는 가로 레이아웃 테스트 10번에서 검증)
+  // 39. 되돌리기 버튼이 위아래 드래그 바 바로 위 · 초기화보다 크다 · 삭제된 버튼/패널 없음
   const placed = await p.evaluate(() => {
-    const rst = document.getElementById("btnReset").getBoundingClientRect();
+    const u = document.getElementById("btnUndo").getBoundingClientRect();
     const v = document.getElementById("posCtlV").getBoundingClientRect();
+    const rst = document.getElementById("btnReset").getBoundingClientRect();
     return {
-      resetAbove: rst.bottom <= v.top + 1 && Math.abs((rst.left + rst.right) / 2 - (v.left + v.right) / 2) < 12,
+      undoAbove: u.bottom <= v.top + 1 && Math.abs((u.left + u.right) / 2 - (v.left + v.right) / 2) < 12,
+      bigger: u.height > rst.height * 1.05 || u.height >= 40,
       removed: !document.getElementById("btnAlign") && !document.getElementById("btnRotate")
                && !document.getElementById("phSlider") && !document.getElementById("btnLock2")
                && !document.querySelector(".topbar") && !document.querySelector(".panels"),
     };
   });
-  check("39. 초기화 = 위아래 드래그 바 바로 위 · 삭제 버튼/패널 정리",
-    placed.resetAbove && placed.removed,
-    `초기화위=${placed.resetAbove} 삭제완료=${placed.removed}`);
+  check("39. 되돌리기 = 위아래 드래그 바 바로 위 (크게) · 삭제 버튼/패널 정리",
+    placed.undoAbove && placed.bigger && placed.removed,
+    `되돌리기위=${placed.undoAbove} 크게=${placed.bigger} 삭제완료=${placed.removed}`);
+
+  // 41. 되돌리기 — 직전 작업 1단계씩, 두 번 누르면 그 전 작업까지
+  const undoTest = await p.evaluate(async () => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 };
+    S.sel = "h1"; S.selUD = "h1"; S.hist = [];
+    window.PB.render();
+    const v0 = S.g.h1;
+    document.getElementById("posPlusV").click();     // 작업 1
+    const v1 = S.g.h1;
+    document.getElementById("posPlusV").click();     // 작업 2
+    const v2 = S.g.h1;
+    const depth = S.hist.length;
+    document.getElementById("btnUndo").click();      // 작업 2 취소
+    const u1 = S.g.h1;
+    document.getElementById("btnUndo").click();      // 작업 1 취소
+    const u2 = S.g.h1;
+    const emptyDisabled = document.getElementById("btnUndo").disabled;
+    return { v0, v1, v2, u1, u2, depth, emptyDisabled };
+  });
+  check("41. 되돌리기 — 직전 작업만, 다시 누르면 그 전 작업",
+    undoTest.depth === 2 && undoTest.v1 !== undoTest.v0 && undoTest.v2 !== undoTest.v1
+      && Math.abs(undoTest.u1 - undoTest.v1) < 1e-9 && Math.abs(undoTest.u2 - undoTest.v0) < 1e-9
+      && undoTest.emptyDisabled,
+    `단계=${undoTest.depth} ${undoTest.v0.toFixed(3)}→${undoTest.v1.toFixed(3)}→${undoTest.v2.toFixed(3)} ⇢ ${undoTest.u1.toFixed(3)} ⇢ ${undoTest.u2.toFixed(3)}, 빈스택잠김=${undoTest.emptyDisabled}`);
+
+  // 42. 드래그 제스처 1회 = 되돌리기 1단계 (탭만 하면 기록 안 됨)
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.locked = true; S.sel = "h1"; S.hist = [];
+    window.PB.render();
+  });
+  await p.waitForTimeout(120);
+  const gy = await p.evaluate(() => window.PB.S.g.h1);
+  await p.mouse.click(box2.x + box2.width * 0.5, box2.y + box2.height * gy);   // 탭만
+  await p.waitForTimeout(120);
+  const afterTap = await p.evaluate(() => window.PB.S.hist.length);
+  await p.mouse.move(box2.x + box2.width * 0.5, box2.y + box2.height * gy);
+  await p.mouse.down();
+  await p.mouse.move(box2.x + box2.width * 0.5, box2.y + box2.height * gy + 50, { steps: 12 });
+  await p.mouse.up();
+  await p.waitForTimeout(120);
+  const dragRes = await p.evaluate(() => {
+    const S = window.PB.S;
+    const moved = S.g.h1;
+    const depth = S.hist.length;
+    document.getElementById("btnUndo").click();
+    return { moved, depth, back: S.g.h1 };
+  });
+  check("42. 드래그 1회 = 되돌리기 1단계 (탭만 하면 기록 안 됨)",
+    afterTap === 0 && dragRes.depth === 1 && Math.abs(dragRes.back - gy) < 1e-9,
+    `탭후=${afterTap}단계, 드래그후=${dragRes.depth}단계, 복원=${Math.abs(dragRes.back - gy) < 1e-9}`);
+
+  // 43. 라인 버튼 — 1탭 = 선택(표시 유지) / 같은 버튼 다시 탭 = 숨김
+  const lineBtn = await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; S.hMode = "line"; window.PB.render();
+    const b = document.querySelector('#hButtons .lbtn[data-key="h2"]');
+    b.click();                                   // 1탭 → 선택 + 표시
+    const first = { sel: S.sel, vis: S.g.h2Visible };
+    b.click();                                   // 2탭 → 숨김
+    const second = { sel: S.sel, vis: S.g.h2Visible };
+    b.click();                                   // 3탭 → 다시 표시
+    return { first, second, third: S.g.h2Visible };
+  });
+  check("43. 라인 버튼 — 1탭 선택(움직임) · 다시 탭 숨김",
+    lineBtn.first.sel === "h2" && lineBtn.first.vis === true
+      && lineBtn.second.sel === "h2" && lineBtn.second.vis === false && lineBtn.third === true,
+    `1탭=${lineBtn.first.sel}/표시${lineBtn.first.vis} → 2탭 표시${lineBtn.second.vis} → 3탭 표시${lineBtn.third}`);
+  await p.evaluate(() => { window.PB.S.locked = false; window.PB.S.hist = []; window.PB.render(); });
 
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
@@ -724,6 +793,23 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
   check(`10. ${dev.n} — 도크 잘림/겹침 없음 · 사진 ${Math.round(g.stageShare * 100)}%`,
     g.railFits && g.docksFit && g.dockGap > 0 && g.stageShare > 0.9,
     `rail=${g.railFits ? "ok" : "overflow"} 도크안쪽=${g.docksFit} 도크간격=${g.dockGap}px`);
+
+  // 40. 메뉴 행 = 왼쪽 아래 · 초기화는 같은 행에 띄어서 · 좌우 드래그 바와 겹치지 않음 (가로 전용)
+  const menuPos = await p.evaluate(() => {
+    const r = (id) => document.getElementById(id).getBoundingClientRect();
+    const n = r("menuRow"), st = r("stage"), rst = r("btnReset"), lock = r("btnLock"), h = r("posCtlH");
+    return {
+      leftBottom: n.left - st.left < 20 && st.bottom - n.bottom < 24,
+      ids: [...document.querySelectorAll("#menuRow button")].map((b) => b.id).join(","),
+      sameRow: Math.abs(rst.top - lock.top) < 6,
+      spaced: rst.left - lock.right > 12,
+      noOverlap: n.right < h.left,
+    };
+  });
+  check(`40. ${dev.n} — 메뉴 행 왼쪽 아래 · 초기화 띄어서 같은 행`,
+    menuPos.leftBottom && menuPos.sameRow && menuPos.spaced && menuPos.noOverlap
+      && menuPos.ids === "btnChange,btnPresetLoad,btnEyeGuide,btnExport,btnLock,btnReset",
+    `왼쪽아래=${menuPos.leftBottom} 같은행=${menuPos.sameRow} 띄움=${menuPos.spaced} 겹침없음=${menuPos.noOverlap}`);
   await ctx.close();
 }
 

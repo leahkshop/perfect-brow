@@ -31,6 +31,9 @@ const I18N = {
     home_footer: "전문가용 눈썹 측정 도구",
     select_photo: "사진 선택",
     editor_reset: "초기화",
+    editor_undo: "되돌리기",
+    undo_done: "한 단계 되돌렸습니다",
+    undo_none: "되돌릴 작업이 없습니다",
     editor_align: "동공정렬",
     editor_preset: "프리셋",
     editor_preset_save: "현재 설정 저장",
@@ -114,6 +117,9 @@ const I18N = {
     home_footer: "Professional Eyebrow Measurement Tool",
     select_photo: "Select Photo",
     editor_reset: "Reset",
+    editor_undo: "Undo",
+    undo_done: "Undone one step",
+    undo_none: "Nothing to undo",
     editor_align: "Pupil Align",
     editor_preset: "Presets",
     editor_preset_save: "Save current",
@@ -260,6 +266,7 @@ const S = {
   /* 아래 오른쪽 가로 드래그 바는 하나로 두 가지를 조절한다 (v1.11.0)
      "line"  = S.selLR 세로선 좌우 이동  /  "photo" = 사진 보정(줌·위아래·좌우·밸런스) */
   hMode: "line",
+  hist: [],              // 되돌리기 스택 (v1.12.0) — 한 번에 한 작업씩
   photoMode: "zoom",
   locked: false,
   dim: { W: 0, H: 0 },
@@ -584,6 +591,7 @@ touch.addEventListener("pointerdown", (e) => {
   touch.setPointerCapture(e.pointerId);
   const sp = stagePoint(e);
   pts.set(e.pointerId, sp);
+  beginEdit();                       /* 제스처 1회 = 되돌리기 1단계 (v1.12.0) */
 
   if (pts.size === 1) {
     /* 데스크톱 보조: Shift + 드래그 = 사진 이동 */
@@ -671,6 +679,7 @@ touch.addEventListener("pointermove", (e) => {
 function endPointer(e) {
   pts.delete(e.pointerId);
   if (pts.size < 2) { gMode = pts.size === 1 ? null : null; gDrag = null; }
+  if (pts.size === 0) commitEdit();   /* 손을 다 떼면 한 작업으로 확정 */
 }
 touch.addEventListener("pointerup", endPointer);
 touch.addEventListener("pointercancel", endPointer);
@@ -683,6 +692,50 @@ touch.addEventListener("wheel", (e) => {
   showHud(`${t("editor_zoom")} ${S.p.zoom.toFixed(2)}×`);
   render();
 }, { passive: false });
+
+/* ═══════════ 6. 되돌리기 (undo) ═══════════ v1.12.0
+   "작업" 하나 = 사용자가 손을 뗄 때까지의 한 동작.
+   · 드래그/핀치 제스처 1회      (pointerdown → pointerup)
+   · 슬라이더 드래그 1회          (pointerdown → change)
+   · 버튼 한 번                   (± · 숨김/표시 · 초기화 · 프리셋 적용)
+   시작 전에 beginEdit() 로 스냅샷을 잡고, 끝나면 commitEdit() 이
+   **실제로 값이 바뀌었을 때만** 스택에 넣는다. (탭만 한 경우는 기록되지 않음) */
+const HIST_MAX = 60;
+const snapState = () => ({
+  g: { ...S.g },
+  p: { ...S.p },
+  hs: S.hiddenSnapshot ? { ...S.hiddenSnapshot } : null,
+});
+const sameState = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+let editSnap = null;
+function beginEdit() { if (!editSnap) editSnap = snapState(); }
+function commitEdit() {
+  if (!editSnap) return;
+  const before = editSnap;
+  editSnap = null;
+  if (sameState(before, snapState())) return;          // 값이 그대로면 기록하지 않는다
+  S.hist.push(before);
+  if (S.hist.length > HIST_MAX) S.hist.shift();
+  updateUndoBtn();
+}
+function clearHist() { S.hist = []; editSnap = null; updateUndoBtn(); }
+function updateUndoBtn() {
+  const b = $("btnUndo");
+  if (b) b.disabled = S.hist.length === 0;
+}
+function undo() {
+  const prev = S.hist.pop();
+  if (!prev) { toast(t("undo_none")); return; }
+  S.g = { ...prev.g };
+  S.p = { ...prev.p };
+  S.hiddenSnapshot = prev.hs ? { ...prev.hs } : null;
+  render();
+  updateUndoBtn();
+  toast(t("undo_done"));
+}
+/* 한 번의 클릭으로 끝나는 작업을 감싸는 helper */
+function step(fn) { beginEdit(); fn(); commitEdit(); }
 
 /* ═══════════ 6. 버튼 · 패널 ═══════════ */
 
@@ -706,10 +759,12 @@ function buildLineButtons() {
     b.dataset.vis = spec.vis;
     b.textContent = spec.label;
     b.addEventListener("click", () => {
-      /* 1번 탭 = 선택, 같은 버튼 다시 탭 = 숨김/표시.
-         사진 보정 중이었다면 첫 탭은 선 조절로 되돌리는 역할만 한다 (v1.11.0). */
-      if (S.sel === spec.key && S.hMode === "line") S.g[spec.vis] = !S.g[spec.vis];
-      else S.g[spec.vis] = true;
+      /* 1번 탭 = 선택(움직일 수 있음), 같은 버튼 다시 탭 = 숨김/표시.
+         사진 보정 중이었다면 첫 탭은 선 조절로 되돌리는 역할만 한다. */
+      step(() => {
+        if (S.sel === spec.key && S.hMode === "line") S.g[spec.vis] = !S.g[spec.vis];
+        else S.g[spec.vis] = true;
+      });
       noteSel(spec.key);
       render();
     });
@@ -733,6 +788,7 @@ function updateButtons() {
   $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
   $("btnLock").classList.toggle("on", S.locked);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
+  updateUndoBtn();
 }
 
 /* ── 위치 조절 패널 ── */
@@ -863,7 +919,7 @@ function savePreset(name) {
   toast(t("preset_saved"));
 }
 function applyPreset(p) {
-  S.g = { ...DEFAULT_GUIDE, ...p.state };   // 누락 필드 자동 보정
+  step(() => { S.g = { ...DEFAULT_GUIDE, ...p.state }; });   // 누락 필드 자동 보정
   render();
   toast(t("preset_loaded"));
 }
@@ -1151,6 +1207,7 @@ function loadPhoto(file) {
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
     S.pickMode = false;
     S.pick = [];
+    clearHist();                 /* 새 사진 = 되돌리기 기록 초기화 */
     show("editor");
     requestAnimationFrame(() => {
       measure();
@@ -1211,16 +1268,20 @@ $("fileInput").addEventListener("change", (e) => {
 });
 
 $("btnReset").onclick = () => {
-  S.g = { ...DEFAULT_GUIDE };
-  S.p = { ...DEFAULT_PHOTO };
-  S.hiddenSnapshot = null;
-  S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
-  S.pickMode = false;
-  S.pick = [];
-  if (S.landmarks) autoAlign(S.landmarks);
+  step(() => {
+    S.g = { ...DEFAULT_GUIDE };
+    S.p = { ...DEFAULT_PHOTO };
+    S.hiddenSnapshot = null;
+    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
+    S.pickMode = false;
+    S.pick = [];
+    if (S.landmarks) autoAlign(S.landmarks);
+  });
   render();
   toast(t("reset_done"));
 };
+
+$("btnUndo").onclick = undo;
 
 function toggleLock() {
   S.locked = !S.locked;
@@ -1234,7 +1295,7 @@ $("btnLock").onclick = toggleLock;
 
 $("btnExport").onclick = exportImage;
 
-$("btnAllLine").onclick = () => {
+$("btnAllLine").onclick = () => step(() => {
   if (S.hiddenSnapshot) {
     Object.assign(S.g, S.hiddenSnapshot);
     S.hiddenSnapshot = null;
@@ -1243,29 +1304,40 @@ $("btnAllLine").onclick = () => {
     ALL_VIS.forEach((k) => { S.hiddenSnapshot[k] = S.g[k]; S.g[k] = false; });
   }
   render();
-};
+});
 
-$("btnPivot").onclick = () => {
+$("btnPivot").onclick = () => step(() => {
   if (S.sel === "innerAngle" && S.g.baseStructureVisible) S.g.baseStructureVisible = false;
   else { noteSel("innerAngle"); S.g.baseStructureVisible = true; }
   render();
-};
-$("btnVAngle").onclick = () => {
+});
+$("btnVAngle").onclick = () => step(() => {
   if (S.sel === "outerAngle" && S.g.baseStructureVisible) S.g.baseStructureVisible = false;
   else { noteSel("outerAngle"); S.g.baseStructureVisible = true; }
   render();
-};
-$("btnEyeGuide").onclick = () => { S.g.eyeGuideVisible = !S.g.eyeGuideVisible; render(); };
+});
+$("btnEyeGuide").onclick = () => step(() => { S.g.eyeGuideVisible = !S.g.eyeGuideVisible; render(); });
+
+/* 슬라이더 한 번 끄는 동안(pointerdown → change)을 되돌리기 1단계로 묶는다 */
+function histSlider(el) {
+  el.addEventListener("pointerdown", beginEdit);
+  el.addEventListener("keydown", beginEdit);
+  el.addEventListener("change", commitEdit);
+  el.addEventListener("pointerup", commitEdit);
+  el.addEventListener("blur", commitEdit);
+}
+histSlider(posSliderV);
+histSlider(posSliderH);
 
 /* 세로 조절자 — 위아래로 움직이는 가로선(S.selUD) 전담 */
-posSliderV.addEventListener("input", (e) => { noteSel(S.selUD); applyPos(parseFloat(e.target.value), S.selUD); });
-$("posMinusV").onclick = () => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); };
-$("posPlusV").onclick  = () => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); };
+posSliderV.addEventListener("input", (e) => { beginEdit(); noteSel(S.selUD); applyPos(parseFloat(e.target.value), S.selUD); });
+$("posMinusV").onclick = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); });
+$("posPlusV").onclick  = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); });
 
 /* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
-posSliderH.addEventListener("input", (e) => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(e.target.value)); });
-$("posMinusH").onclick = () => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) - hConfig().step); };
-$("posPlusH").onclick  = () => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) + hConfig().step); };
+posSliderH.addEventListener("input", (e) => { beginEdit(); if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(e.target.value)); });
+$("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) - hConfig().step); });
+$("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) + hConfig().step); });
 
 /* 사진 보정 모드 버튼 — 누르면 아래 가로 바가 사진 조절로 전환된다.
    같은 버튼을 다시 누르면 선 조절로 되돌아간다. */

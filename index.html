@@ -149,13 +149,13 @@ body.rot90 #home.active{overflow-y:auto}
   opacity:0;transition:opacity .18s;pointer-events:none}
 .hud.show{opacity:1}
 
-/* 조절자 2개가 오른쪽·아래를 차지하므로 AI 안내는 왼쪽 아래로 */
-.aistatus{position:absolute;bottom:12px;left:12px;transform:none;z-index:22;max-width:46%}
-body:not(.land) .aistatus{bottom:124px;left:50%;transform:translateX(-50%);max-width:92%}
+/* 아래는 좌·우 도크가 모두 차지하므로 AI 안내는 왼쪽 위 (all line 바로 아래) */
+.aistatus{position:absolute;top:44px;left:8px;bottom:auto;transform:none;z-index:22;max-width:52%}
 
-/* ── 캔버스 오버레이 컨트롤 (v1.11.0) ────────────────────────────
-   오른쪽 도크 : [초기화] + 위아래 드래그 바   — 오른쪽 끝 · 세로 중앙
-   아래  도크 : 사진보정 4버튼 / 좌우 드래그 바 / 메뉴 5버튼 — 모두 오른쪽 정렬 */
+/* ── 캔버스 오버레이 컨트롤 (v1.12.0) ────────────────────────────
+   오른쪽 도크 `.rdock`  : [↶ 되돌리기(크게)] + 위아래 드래그 바 — 오른쪽 끝 · 세로 중앙
+   오른쪽아래 `.bdock`  : 사진보정 4버튼 / 좌우 드래그 바        — 오른쪽 끝 아래
+   왼쪽아래   `.ldock`  : 사진변경·프리셋·눈가이드·사진저장·사진잠금  …띄어서…  초기화 */
 .posctl{position:relative;z-index:30;display:flex;align-items:center;gap:6px;
   background:rgba(22,24,28,.60);border:1px solid rgba(255,255,255,.26);border-radius:13px;
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);touch-action:auto;padding:5px}
@@ -183,9 +183,14 @@ body:not(.land) .aistatus{bottom:124px;left:50%;transform:translateX(-50%);max-w
 .posctl.axis-v .pslot{flex:1;width:34px}
 .posctl.axis-v input[type=range]{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
 
-/* 아래 도크 */
+/* 오른쪽 아래 도크 — 사진보정 버튼 + 좌우 드래그 바 */
 .bdock{position:absolute;right:8px;bottom:calc(var(--safe-b) + 8px);z-index:30;
   display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 16px)}
+
+/* 왼쪽 아래 도크 — 메뉴 버튼 한 행 (v1.12.0) */
+.ldock{position:absolute;left:8px;bottom:calc(var(--safe-b) + 8px);z-index:30;display:flex;align-items:flex-end;max-width:calc(100% - 16px)}
+.menurow{flex-wrap:wrap}
+body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 .posctl.axis-h{flex-direction:row-reverse;width:min(46vw,430px);min-width:230px;height:46px}
 .posctl.axis-h .pslot{flex:1;height:34px}
 .posctl.axis-h input[type=range]{width:100%;height:34px}
@@ -197,6 +202,9 @@ body:not(.land) .aistatus{bottom:124px;left:50%;transform:translateX(-50%);max-w
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);flex:0 0 auto;padding:0 6px}
 .dockbtn i{font-style:normal;font-size:13px;line-height:1}
 .dockbtn:active{background:var(--primary);border-color:var(--primary)}
+/* 되돌리기 — 자주 쓰는 버튼이라 한 단계 크게 */
+.dockbtn.big{height:48px;min-width:56px;font-size:10.5px;border-radius:12px;gap:2px}
+.dockbtn.big i{font-size:19px}
 
 .menurow{display:flex;gap:5px}
 .menurow button{height:42px;min-width:58px;border-radius:10px;background:rgba(22,24,28,.62);
@@ -207,6 +215,7 @@ body:not(.land) .aistatus{bottom:124px;left:50%;transform:translateX(-50%);max-w
 .menurow button:active{background:var(--primary);border-color:var(--primary)}
 .menurow button.on{background:var(--danger);border-color:var(--danger)}
 .menurow button.eyeon{background:#ffffff;color:#111;border-color:#ffffff}
+.menurow .gap{flex:0 0 auto;width:22px}
 
 /* 사진 보정 모드 버튼 — 좌우 드래그 바 바로 위. 사진 잠금 시 반투명 + 잠김 */
 .modebtns{display:flex;gap:5px;margin:0}
@@ -282,6 +291,10 @@ body:not(.land) #railExtra{display:none}
   body.land.compact #editor .rdock{height:54%;min-height:124px;gap:6px}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
   body.land.compact #editor .menurow button{height:36px;min-width:50px;font-size:8.5px;padding:0 6px}
+  body.land.compact #editor .menurow .gap{width:14px}
+  body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
+  body.land.compact #editor .dockbtn.big i{font-size:16px}
+  body.land.compact #editor .ldock{bottom:calc(var(--safe-b) + 6px);left:6px}
   body.land.compact #editor .menurow button i{font-size:12px}
   body.land.compact #editor .modebtns button{height:26px;min-width:48px;font-size:10px;padding:0 7px}
   body.land.compact #editor .bdock{gap:5px;bottom:calc(var(--safe-b) + 6px)}
@@ -322,9 +335,9 @@ body:not(.land) #railExtra{display:none}
     <div class="linebar linebar-left" id="hButtons"></div>
     <div class="linebar linebar-right" id="vButtons"></div>
 
-    <!-- 오른쪽 도크 (v1.11.0) — 초기화 + 위아래 드래그 바. 오른쪽 끝 · 세로 중앙 -->
+    <!-- 오른쪽 도크 (v1.12.0) — 되돌리기(크게) + 위아래 드래그 바. 오른쪽 끝 · 세로 중앙 -->
     <div class="rdock" id="rightDock">
-      <button class="dockbtn" id="btnReset"><i>↺</i><em data-i18n="editor_reset">초기화</em></button>
+      <button class="dockbtn big" id="btnUndo"><i>↶</i><em data-i18n="editor_undo">되돌리기</em></button>
       <div class="posctl axis-v" id="posCtlV">
         <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
         <button class="pbtn" id="posPlusV">▲</button>
@@ -347,12 +360,18 @@ body:not(.land) #railExtra{display:none}
         <div class="pslot" id="pSlotH"><input type="range" id="posSliderH" min="0" max="1" step="0.0005" value="0.5" /></div>
         <button class="pbtn" id="posMinusH">◀</button>
       </div>
+    </div>
+
+    <!-- 왼쪽 아래 도크 (v1.12.0) — 메뉴 한 행. 초기화는 한 칸 띄어서 같은 행 -->
+    <div class="ldock" id="leftDock">
       <div class="menurow" id="menuRow">
         <button id="btnChange"><i>🖼</i><em data-i18n="editor_change_photo">사진변경</em></button>
         <button id="btnPresetLoad"><i>☆</i><em data-i18n="editor_preset">프리셋</em></button>
         <button id="btnEyeGuide"><i>👁</i><em data-i18n="editor_eyeguide">눈가이드</em></button>
         <button id="btnExport"><i>⬇</i><em data-i18n="editor_export">사진저장</em></button>
         <button id="btnLock"><i>🔒</i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
+        <span class="gap"></span>
+        <button id="btnReset"><i>↺</i><em data-i18n="editor_reset">초기화</em></button>
       </div>
     </div>
 
