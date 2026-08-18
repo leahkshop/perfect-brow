@@ -178,9 +178,9 @@ console.log("[세로 모드 · 기능]");
   await p.evaluate(([a, b]) => { window.PB.alignFromPupils(a, b); window.PB.render(); }, [A, B]);
   await p.waitForTimeout(200);
   const st = await p.evaluate(() => ({ ...window.PB.S.p, v1: window.PB.S.g.v1, h1: window.PB.S.g.h1 }));
-  check("6. 동공정렬 — 6° 기울기 보정 · 중앙은 왼쪽 15% (v1.13.0)",
-    near(st.rot, -6, 0.3) && near(st.v1, 0.35, 0.001) && near(st.h1, 0.5, 0.001),
-    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 0.350) h1=${st.h1.toFixed(3)}`);
+  check("6. 동공정렬 — 6° 기울기 보정 · 기준점 (0.40, 0.55) (v1.14.0)",
+    near(st.rot, -6, 0.3) && near(st.v1, 0.40, 0.001) && near(st.h1, 0.55, 0.001),
+    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 0.400) h1=${st.h1.toFixed(3)}(기대 0.550)`);
 
   // 44. 얼굴(동공 중점)이 실제로 캔버스 가로 35% 지점에 온다 — 오른쪽 컨트롤을 피하려고 왼쪽으로 15%
   const faceCenter = await p.evaluate(([px, py]) => {
@@ -188,10 +188,12 @@ console.log("[세로 모드 · 기능]");
     const vx = (px - S.iw / 2) * S.s0, vy = (py - S.ih / 2) * S.s0;
     const r = (p.rot * Math.PI) / 180;
     const cx = S.dim.W / 2 + p.ox * S.dim.W + p.zoom * (vx * Math.cos(r) - vy * Math.sin(r));
-    return cx / S.dim.W;
+    const cy = S.dim.H / 2 + p.oy * S.dim.H + p.zoom * (vx * Math.sin(r) + vy * Math.cos(r));
+    return { x: cx / S.dim.W, y: cy / S.dim.H };
   }, [(face.pupilL.x + face.pupilR.x) / 2, (face.pupilL.y + face.pupilR.y) / 2]);
-  check("44. 자동 정렬 — 얼굴이 캔버스 가로 35% 지점 (왼쪽 15% 치우침)",
-    near(faceCenter, 0.35, 0.01), `얼굴 중심 x = ${(faceCenter * 100).toFixed(1)}%`);
+  check("44. 자동 정렬 — 얼굴이 캔버스 (40%, 55%) 지점 (왼쪽 10% · 아래 5%)",
+    near(faceCenter.x, 0.40, 0.01) && near(faceCenter.y, 0.55, 0.01),
+    `얼굴 중심 = (${(faceCenter.x * 100).toFixed(1)}%, ${(faceCenter.y * 100).toFixed(1)}%)`);
 
   // 7. 슬라이더
   const sl = await p.evaluate(() => {
