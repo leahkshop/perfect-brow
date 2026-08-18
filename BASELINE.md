@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 기준 버전 | **v1.14.0** |
+| 기준 버전 | **v1.15.0** |
 | 확정일 | 2026-08-18 |
 | 라이브 주소 | https://leahkshop.github.io/perfect-brow/ |
 | 저장소 | https://github.com/leahkshop/perfect-brow |
@@ -164,6 +164,10 @@ body.rot90 .stage{ --redge: calc(5% + 8px + env(safe-area-inset-bottom,0px)) }
   그래서 `env(safe-area-inset-bottom)` 을 추가로 뺍니다 (회전 때문에 축이 바뀐다는 점 주의).
 - **가로 바의 값 라벨(`.plabel`)은 바 안쪽 왼쪽 끝**에 둡니다 (`position:static; order:1`).
   바 바깥 왼쪽에 두면 **왼쪽 아래 메뉴 행과 겹칩니다.**
+- **세로 바의 값 라벨은 바 오른쪽 여백(`--redge`) 안**에 세로로 쌓습니다 (v1.15.0):
+  `left:calc(100% + 6px); flex-direction:column; width:42px`(compact 34px).
+  왼쪽에 두면 눈썹 작업 영역을 가립니다. **`width` 를 빼고 `max-width` 만 주면 안 됩니다** —
+  절대 배치 요소라 shrink-to-fit 이 걸려 글자가 한 자씩 세로로 쪼개집니다.
 - 세로 조절자는 `.rdock` 안에 들어 있고, `.rdock` 은 `top:0; bottom:var(--bdock); height:46%; margin:auto 0`
   으로 **아래 도크를 뺀 영역의 세로 한가운데**에 놓입니다. `--bdock` 은 `syncDockSpace()` 가
   아래 도크의 실제 높이를 재서 넣습니다 — **이 변수를 지우면 두 도크가 겹칩니다** (회귀 테스트 10·32번).
@@ -195,6 +199,13 @@ body.rot90 .stage{ --redge: calc(5% + 8px + env(safe-area-inset-bottom,0px)) }
 - 회전 방향이 `-90deg` 인 이유: 값 1이 **위쪽**에 오고, 가로선은 `v = 1 - g[key]` 라 값 1 = 선이 맨 위.
   `+90deg` 로 바꾸면 **손과 선이 반대로 움직입니다.**
 - 조절자는 캔버스 위 오버레이이므로 그 영역에서는 선 드래그가 되지 않습니다 (정상).
+
+**세로선 라벨(Center·Inner·Outer)은 캔버스 맨 위 (v1.15.0)**
+
+- `V_LABEL_Y = 6` — 위에서 6px 갭을 두고 **맨 위 줄**에 붙입니다.
+- 가로로 겹치면 17px 씩 아래 줄로 내려갑니다(기존 규칙 유지).
+- **왼쪽 위 칩(`all line` · AI 안내)의 사각형을 피해서** 줄을 고릅니다.
+  칩 위치는 `offsetLeft/offsetTop` 으로 계산합니다 — `getBoundingClientRect` 는 회전 시 어긋납니다 (1-6 참고).
 - 아래를 좌·우 도크가 모두 차지하므로 **AI 안내 칩(`.aistatus`)은 왼쪽 위**(`all line` 바로 아래)에 둡니다.
 
 **선 선택 (탭)**
@@ -460,6 +471,8 @@ node regression-test.mjs
 | 42 | 드래그 1회 = 되돌리기 1단계 | 탭만 하면 기록되지 않음 |
 | 43 | 라인 버튼 1탭 선택 · 다시 탭 숨김 | 선택은 유지, 표시만 토글 |
 | 44 | **자동 정렬 = 캔버스 (40%, 55%) 지점** | 동공 중점이 왼쪽 10% · 아래 5% 로 배치됨 |
+| 45 | 세로 조절자 값 라벨 = 바 **오른쪽** · 캔버스 안 | 여백(`--redge`) 안에 들어옴 (가로 전용) |
+| 46 | 세로선 라벨 = 캔버스 맨 위(갭 6px) | `all line` 칩과 겹치지 않음 (가로 전용) |
 
 ---
 

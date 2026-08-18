@@ -7,7 +7,7 @@ PMU 아티스트용 눈썹 대칭·밸런스 가이드 도구.
 
 > 📌 **코드를 고치기 전에 반드시 [`BASELINE.md`](./BASELINE.md) 를 읽으세요.**
 > 지키지 않으면 조용히 깨지는 규칙(좌표계·대칭·프리셋 저장소)이 정리돼 있습니다.
-> 고친 뒤에는 `node regression-test.mjs` 로 **전 항목(49개)** 을 자동 검증하세요.
+> 고친 뒤에는 `node regression-test.mjs` 로 **전 항목(53개)** 을 자동 검증하세요.
 
 > **가로(landscape) 모드 · 양손 조작 기준으로 설계**되었습니다.
 >
@@ -149,7 +149,7 @@ perfect-brow/
 ├── icon-512.png
 ├── apple-touch-icon.png
 ├── BASELINE.md             🔒 잠금 사양 · 복구 방법  ← 작업 전 필독
-├── regression-test.mjs     ✅ 자동 회귀 테스트 (49항목)
+├── regression-test.mjs     ✅ 자동 회귀 테스트 (53항목)
 └── README.md               이 문서
 ```
 

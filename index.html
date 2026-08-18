@@ -188,6 +188,11 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
 .posctl.axis-v .pslot{flex:1;width:34px}
 .posctl.axis-v input[type=range]{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
+/* 값 라벨은 바 **오른쪽** 여백(--redge)에 세로로 쌓아 둔다 (v1.15.0)
+   왼쪽에 두면 사진(눈썹 작업 영역)을 가린다. 폭이 좁으므로 줄바꿈 허용. */
+.posctl.axis-v .plabel{left:calc(100% + 6px);right:auto;flex-direction:column;gap:0;
+  width:42px;padding:3px 4px;text-align:center;align-items:center;justify-content:center;
+  white-space:normal;line-height:1.2;overflow-wrap:anywhere;font-size:9.5px}
 
 /* 오른쪽 아래 도크 — 사진보정 버튼 + 좌우 드래그 바 */
 .bdock{position:absolute;right:var(--redge);bottom:calc(var(--safe-b) + 8px);z-index:30;
@@ -297,6 +302,7 @@ body:not(.land) #railExtra{display:none}
   body.land.compact #editor .posctl.axis-h{height:40px;width:min(50vw,360px);min-width:196px}
   body.land.compact #editor .posctl.axis-h .pslot{height:30px}
   body.land.compact #editor .posctl.axis-h .plabel{min-width:60px;font-size:9.5px}
+  body.land.compact #editor .posctl.axis-v .plabel{width:34px;font-size:8.5px;padding:2px 3px}
   body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
   body.land.compact #editor .rdock{height:54%;min-height:124px;gap:6px}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}

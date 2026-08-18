@@ -375,7 +375,7 @@ function renderGuides() {
   /* 가로선 라벨 배지는 표시하지 않는다 — 선 색상과 왼쪽 레일 버튼 색이 1:1 로 대응하므로
      화면을 가리지 않는 쪽이 시술 중에 훨씬 낫다. (2026-08-15 제거) */
   /* 상단 오버레이 칩(all line / V Center Pivot) 아래로 세로선 라벨 배치 */
-  const V_LABEL_Y = Math.round(clamp(H * 0.14, 44, 98));
+  const V_LABEL_Y = 6;   /* 세로선 라벨은 캔버스 맨 위에서 6px 갭 (v1.15.0) */
 
   /* 아몬드 눈 가이드 (Eye 라인 높이 · Inner 라인 기준) */
   if (g.eyeGuideVisible) {
@@ -421,12 +421,28 @@ function renderGuides() {
   {
     const ly = Math.min(V_LABEL_Y, Math.max(3, H - 40));
     const rowRight = [];
+    /* 왼쪽 위 오버레이 칩(all line · AI 안내)을 가리지 않도록 그 사각형을 피해 배치한다.
+       회전(rot90) 때문에 getBoundingClientRect 는 쓰지 않고 레이아웃 좌표로 계산한다. */
+    const blocks = [];
+    for (const el of [$("btnAllLine"), $("aiStatus")]) {
+      if (!el || !el.offsetWidth) continue;
+      const par = el.offsetParent;
+      const bx = (par && par !== stage ? par.offsetLeft : 0) + el.offsetLeft;
+      const by = (par && par !== stage ? par.offsetTop : 0) + el.offsetTop;
+      blocks.push({ x0: bx, x1: bx + el.offsetWidth, y0: by, y1: by + el.offsetHeight });
+    }
     vBadges.sort((a, b) => a.x - b.x);
     for (const bg of vBadges) {
-      const bw = badgeW(bg.label);
+      const bw = badgeW(bg.label), bl = bg.x - bw / 2, br = bg.x + bw / 2;
       let r = 0;
-      while (rowRight[r] !== undefined && bg.x - bw / 2 < rowRight[r] + 3) r++;
-      rowRight[r] = bg.x + bw / 2;
+      while (r < 7) {
+        const y0 = ly + r * 17, y1 = y0 + 14;
+        const hitRow = rowRight[r] !== undefined && bl < rowRight[r] + 3;
+        const hitChip = blocks.some((k) => bl < k.x1 + 3 && br > k.x0 - 3 && y0 < k.y1 && y1 > k.y0);
+        if (!hitRow && !hitChip) break;
+        r++;
+      }
+      rowRight[r] = br;
       drawBadge(frag, bg.label, bg.x, Math.min(ly + r * 17, H - 16), bg.color, "middle");
     }
   }

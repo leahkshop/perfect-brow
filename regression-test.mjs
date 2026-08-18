@@ -822,6 +822,37 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       noOverlap: n.right < h.left,
     };
   });
+  // 45·46. 라벨 배치 (가로 전용 — 세로 폴백은 폭이 좁아 규칙이 다름)
+  const lab = await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.g.v4Visible = true;
+    S.sel = "h1"; S.selUD = "h1"; window.PB.render();
+    const l = document.querySelector("#posCtlV .plabel").getBoundingClientRect();
+    const bar = document.getElementById("posCtlV").getBoundingClientRect();
+    const st = document.getElementById("stage").getBoundingClientRect();
+    const svg = document.getElementById("guides");
+    const rects = [...svg.querySelectorAll("rect")].map((r) => ({
+      x: +r.getAttribute("x"), y: +r.getAttribute("y"),
+      w: +r.getAttribute("width"), h: +r.getAttribute("height"),
+    })).filter((r) => r.h === 14);
+    const chip = document.getElementById("btnAllLine");
+    const par = chip.offsetParent;
+    const cx = (par ? par.offsetLeft : 0) + chip.offsetLeft;
+    const cy = (par ? par.offsetTop : 0) + chip.offsetTop;
+    const hitChip = rects.some((r) => r.x < cx + chip.offsetWidth && r.x + r.w > cx
+      && r.y < cy + chip.offsetHeight && r.y + r.h > cy);
+    return {
+      rightOfBar: l.left >= bar.right - 1, inside: l.right <= st.right + 1,
+      gap: Math.round(l.left - bar.right),
+      count: rects.length, top: Math.min(...rects.map((r) => r.y)), hitChip,
+    };
+  });
+  check(`45. ${dev.n} — 세로 조절자 값 라벨이 바 오른쪽 · 캔버스 안`,
+    lab.rightOfBar && lab.inside, `바 오른쪽=${lab.rightOfBar}(간격 ${lab.gap}px) 캔버스안=${lab.inside}`);
+  check(`46. ${dev.n} — 세로선 라벨이 캔버스 맨 위(갭 6px) · 칩과 겹침 없음`,
+    lab.count >= 3 && lab.top >= 4 && lab.top <= 10 && !lab.hitChip,
+    `개수=${lab.count} 맨위 y=${lab.top}px 칩겹침=${lab.hitChip}`);
+
   check(`40. ${dev.n} — 메뉴 행 왼쪽 아래 · 초기화 띄어서 같은 행`,
     menuPos.leftBottom && menuPos.sameRow && menuPos.spaced && menuPos.noOverlap
       && menuPos.ids === "btnChange,btnPresetLoad,btnEyeGuide,btnExport,btnLock,btnReset",
