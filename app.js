@@ -250,6 +250,9 @@ const OFFSET_MAX = 1.0;   // 사진 좌우/위아래 이동 한계 (캔버스 �
 const SLIDER_OFFSET = 0.5;// 좌우/위아래 슬라이더 범위 (드래그는 OFFSET_MAX 까지)
 const HIT_PX = 28;        // 화면에서 선을 탭/드래그로 잡는 인식 반경
 const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭 (클수록 얼굴이 크게 잡힘)
+/* 자동 정렬의 가로 기준점 (v1.13.0) — 정중앙 0.5 가 아니라 왼쪽으로 15%.
+   오른쪽에 위아래 드래그 바·버튼이 있어 얼굴이 가려지기 때문. */
+const CENTER_X = 0.35;
 /* 인체 계측 평균비 — 동공 간 거리 기준 (동공 오프셋 = 1.0) */
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
 const R_OUTER = 1.50;     // 눈꼬리(외안각)
@@ -1039,10 +1042,10 @@ function alignFromPupils(a, b) {
 
   S.p = {
     zoom, rot,
-    ox: clamp(-nx / W, -OFFSET_MAX, OFFSET_MAX),
+    ox: clamp(-nx / W + (CENTER_X - 0.5), -OFFSET_MAX, OFFSET_MAX),
     oy: clamp(-ny / H, -OFFSET_MAX, OFFSET_MAX),
   };
-  placeLinesFromEyes(0.5, 0.5, EYE_FRAC / 2);
+  placeLinesFromEyes(CENTER_X, 0.5, EYE_FRAC / 2);
 }
 
 function autoAlign(lm) {
@@ -1077,12 +1080,12 @@ function autoAlign(lm) {
   const r = (rot * Math.PI) / 180;
   const rx = vx * Math.cos(r) - vy * Math.sin(r);
   const ry = vx * Math.sin(r) + vy * Math.cos(r);
-  const tr = { zoom, rot, ox: clamp(-(rx * zoom) / W, -OFFSET_MAX, OFFSET_MAX), oy: clamp(-(ry * zoom) / H, -OFFSET_MAX, OFFSET_MAX) };
+  const tr = { zoom, rot, ox: clamp(-(rx * zoom) / W + (CENTER_X - 0.5), -OFFSET_MAX, OFFSET_MAX), oy: clamp(-(ry * zoom) / H, -OFFSET_MAX, OFFSET_MAX) };
   S.p = tr;
 
   /* 라인 자동 배치 */
   const g = S.g;
-  g.v1 = 0.5;
+  g.v1 = CENTER_X;
   g.h1 = clamp(imgToCanvas(mx, my, tr).y / H, 0.02, 0.98);
 
   const cIn = imgToCanvas(innerL.x, innerL.y, tr);

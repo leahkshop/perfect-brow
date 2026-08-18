@@ -119,7 +119,13 @@ body.rot90 .screen.active{
 }
 body.rot90 #home.active{overflow-y:auto}
 /* Stage */
-.stage{position:relative;min-height:0;min-width:0;background:var(--stage);overflow:hidden;touch-action:none}
+/* --redge : 오른쪽 컨트롤이 화면 오른쪽 끝에서 떨어지는 거리 (v1.13.0)
+   아이폰은 화면 맨 오른쪽 가장자리가 시스템 스와이프 영역이라 컨트롤이 눌리지 않는다.
+   강제 가로(rot90)에서는 앱의 오른쪽 끝 = 기기의 아래쪽 = 홈 인디케이터 자리이므로
+   safe-area-inset-bottom 을 더 빼 준다. */
+.stage{position:relative;min-height:0;min-width:0;background:var(--stage);overflow:hidden;touch-action:none;
+  --redge:calc(5% + 8px)}
+body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
 #photo{position:absolute;inset:0;margin:auto;transform-origin:50% 50%;will-change:transform;pointer-events:none;
   image-rendering:auto;display:block}
 #guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -177,14 +183,14 @@ body.rot90 #home.active{overflow-y:auto}
 .posctl:not(.active){opacity:.86}
 
 /* 오른쪽 도크 — 아래 도크 높이(--bdock)를 뺀 영역의 세로 한가운데 */
-.rdock{position:absolute;right:8px;top:0;bottom:var(--bdock,152px);height:46%;min-height:180px;
+.rdock{position:absolute;right:var(--redge);top:0;bottom:var(--bdock,152px);height:46%;min-height:180px;
   margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
 .posctl.axis-v .pslot{flex:1;width:34px}
 .posctl.axis-v input[type=range]{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
 
 /* 오른쪽 아래 도크 — 사진보정 버튼 + 좌우 드래그 바 */
-.bdock{position:absolute;right:8px;bottom:calc(var(--safe-b) + 8px);z-index:30;
+.bdock{position:absolute;right:var(--redge);bottom:calc(var(--safe-b) + 8px);z-index:30;
   display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 16px)}
 
 /* 왼쪽 아래 도크 — 메뉴 버튼 한 행 (v1.12.0) */
@@ -192,8 +198,11 @@ body.rot90 #home.active{overflow-y:auto}
 .menurow{flex-wrap:wrap}
 body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 .posctl.axis-h{flex-direction:row-reverse;width:min(46vw,430px);min-width:230px;height:46px}
-.posctl.axis-h .pslot{flex:1;height:34px}
+.posctl.axis-h .pslot{flex:1;height:34px;min-width:0}
 .posctl.axis-h input[type=range]{width:100%;height:34px}
+/* 가로 바의 라벨은 바 안쪽 왼쪽 끝에 둔다 — 바깥에 두면 왼쪽 아래 메뉴 행과 겹친다 (v1.13.0) */
+.posctl.axis-h .plabel{position:static;transform:none;right:auto;top:auto;order:1;flex:0 0 auto;
+  min-width:72px;justify-content:center;background:transparent;border:none;padding:0 4px}
 
 /* 도크 버튼 공통 */
 .dockbtn{height:34px;min-width:46px;border-radius:10px;background:rgba(22,24,28,.62);
@@ -287,6 +296,7 @@ body:not(.land) #railExtra{display:none}
   body.land.compact #editor .posctl.axis-v .pslot{width:30px}
   body.land.compact #editor .posctl.axis-h{height:40px;width:min(50vw,360px);min-width:196px}
   body.land.compact #editor .posctl.axis-h .pslot{height:30px}
+  body.land.compact #editor .posctl.axis-h .plabel{min-width:60px;font-size:9.5px}
   body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
   body.land.compact #editor .rdock{height:54%;min-height:124px;gap:6px}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}

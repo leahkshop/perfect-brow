@@ -178,8 +178,20 @@ console.log("[세로 모드 · 기능]");
   await p.evaluate(([a, b]) => { window.PB.alignFromPupils(a, b); window.PB.render(); }, [A, B]);
   await p.waitForTimeout(200);
   const st = await p.evaluate(() => ({ ...window.PB.S.p, v1: window.PB.S.g.v1, h1: window.PB.S.g.h1 }));
-  check("6. 동공정렬 — 6° 기울기 보정", near(st.rot, -6, 0.3) && near(st.v1, 0.5, 0.001) && near(st.h1, 0.5, 0.001),
-    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)} h1=${st.h1.toFixed(3)}`);
+  check("6. 동공정렬 — 6° 기울기 보정 · 중앙은 왼쪽 15% (v1.13.0)",
+    near(st.rot, -6, 0.3) && near(st.v1, 0.35, 0.001) && near(st.h1, 0.5, 0.001),
+    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 0.350) h1=${st.h1.toFixed(3)}`);
+
+  // 44. 얼굴(동공 중점)이 실제로 캔버스 가로 35% 지점에 온다 — 오른쪽 컨트롤을 피하려고 왼쪽으로 15%
+  const faceCenter = await p.evaluate(([px, py]) => {
+    const S = window.PB.S, p = S.p;
+    const vx = (px - S.iw / 2) * S.s0, vy = (py - S.ih / 2) * S.s0;
+    const r = (p.rot * Math.PI) / 180;
+    const cx = S.dim.W / 2 + p.ox * S.dim.W + p.zoom * (vx * Math.cos(r) - vy * Math.sin(r));
+    return cx / S.dim.W;
+  }, [(face.pupilL.x + face.pupilR.x) / 2, (face.pupilL.y + face.pupilR.y) / 2]);
+  check("44. 자동 정렬 — 얼굴이 캔버스 가로 35% 지점 (왼쪽 15% 치우침)",
+    near(faceCenter, 0.35, 0.01), `얼굴 중심 x = ${(faceCenter * 100).toFixed(1)}%`);
 
   // 7. 슬라이더
   const sl = await p.evaluate(() => {
@@ -360,7 +372,8 @@ console.log("[세로 모드 · 기능]");
     near((a23.p.ox - b23.p.ox) * box2.width, 50, 6) && a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2,
     `Δox=${((a23.p.ox - b23.p.ox) * box2.width).toFixed(1)}px, 선 불변=${a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2}`);
 
-  // 24. 세로 조절자 = 오른쪽 끝 · 세로 중앙, ▲ 위 / ▼ 아래 (v1.11.0)
+  const st0W = await p.evaluate(() => window.PB.S.dim.W);
+  // 24. 세로 조절자 = 오른쪽(스와이프 여백 확보) · 세로 중앙, ▲ 위 / ▼ 아래
   const ctlV = await p.evaluate(() => {
     window.PB.S.sel = "h1"; window.PB.render();
     const c = document.getElementById("posCtlV").getBoundingClientRect();
@@ -375,7 +388,7 @@ console.log("[세로 모드 · 기능]");
              glyph: document.getElementById("posPlusV").textContent + document.getElementById("posMinusV").textContent };
   });
   check("24. 세로 조절자 — 오른쪽 끝 · 세로 중앙 (▲위/▼아래)",
-    ctlV.vert && ctlV.rightEdge >= 0 && ctlV.rightEdge < 30 && ctlV.centered && ctlV.upAbove && ctlV.glyph === "▲▼",
+    ctlV.vert && ctlV.rightEdge > st0W * 0.04 && ctlV.rightEdge < st0W * 0.10 && ctlV.centered && ctlV.upAbove && ctlV.glyph === "▲▼",
     `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 세로중앙=${ctlV.centered} 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
 
   // 25. 가로 조절자 = 아래 · 오른쪽 정렬, ◀ 왼쪽 / ▶ 오른쪽
@@ -390,7 +403,7 @@ console.log("[세로 모드 · 기능]");
              glyph: document.getElementById("posMinusH").textContent + document.getElementById("posPlusH").textContent };
   });
   check("25. 가로 조절자 — 아래·오른쪽 정렬 (◀왼쪽/▶오른쪽)",
-    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 120 && ctlH.rightEdge >= 0 && ctlH.rightEdge < 30
+    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 120 && ctlH.rightEdge > st0W * 0.04 && ctlH.rightEdge < st0W * 0.10
       && ctlH.rightOfLeft && ctlH.glyph === "◀▶",
     `가로=${ctlH.horiz} 하단여백=${ctlH.bottomEdge.toFixed(0)}px 우측여백=${ctlH.rightEdge.toFixed(0)}px 오른쪽화살표오른쪽=${ctlH.rightOfLeft} ${ctlH.glyph}`);
 
@@ -525,11 +538,12 @@ console.log("[세로 모드 · 기능]");
     const m = r("photoModes"), h = r("posCtlH"), st = r("stage");
     return {
       order: m.bottom <= h.top + 1,
-      rightEnd: st.right - h.right < 20 && Math.abs(m.right - h.right) < 2,
+      rightEnd: st.right - h.right > st.width * 0.04 && st.right - h.right < st.width * 0.10
+                && Math.abs(m.right - h.right) < 2,
       bottomEnd: st.bottom - h.bottom < 20,
     };
   });
-  check("38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 드래그 바가 오른쪽 끝 아래",
+  check("38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 바가 오른쪽에서 5% 떨어져 맨 아래",
     dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd,
     `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd}`);
 
