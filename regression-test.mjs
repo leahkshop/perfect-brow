@@ -678,7 +678,7 @@ console.log("[세로 모드 · 기능]");
   const emph = await p.evaluate(() => {
     const S = window.PB.S;
     const read = () => [...document.getElementById("guides").querySelectorAll("line")]
-      .filter((l) => l.getAttribute("stroke") === "#0066FF")
+      .filter((l) => l.getAttribute("stroke") === window.PB.LINE_COLORS.arch)
       .map((l) => +l.getAttribute("stroke-width"));
     S.selSet = []; S.multi = false; S.sel = "h1"; window.PB.render();
     const plain = Math.max(...read());
@@ -898,6 +898,70 @@ console.log("[세로 모드 · 기능]");
   check("61. 기본값 — 눈 0.60 · V 피봇 위 10% · V 앵글 아래 45°",
     near(defs.h1, 0.60, 1e-6) && near(defs.inner, 0.10, 1e-6) && near(vDeg, -45, 0.2),
     `눈=${defs.h1} 피봇=${defs.inner} 앵글=${vDeg.toFixed(1)}°`);
+
+  /* ── v1.20.0 디자인 시스템 ─────────────────────────────
+     한 줄 규칙: 그라데이션·글로우는 "지금 켜져 있는 모드"에만.
+     왼쪽 레일(목록)과 사진 위 가이드 선은 절대 발광하지 않는다. */
+
+  // 62. 아이콘은 SVG 선 아이콘 — 이모지가 남아 있으면 안 된다 (기기마다 모양이 달라짐)
+  const icons = await p.evaluate(() => {
+    const ids = ["btnChange","btnPresetLoad","btnEyeGuide","btnExport","btnLock","btnReset","btnUndo","btnRedo"];
+    const bad = [], ok = [];
+    for (const id of ids) {
+      const i = document.getElementById(id).querySelector("i");
+      const txt = (i.textContent || "").trim();
+      if (i.querySelector("svg") && txt === "") ok.push(id); else bad.push(id + ":" + txt);
+    }
+    return { ok: ok.length, bad };
+  });
+  check("62. 아이콘 — 이모지 없음 · 전부 SVG 선 아이콘",
+    icons.bad.length === 0 && icons.ok === 8, `SVG ${icons.ok}/8, 문제 [${icons.bad}]`);
+
+  // 63. 왼쪽 레일은 담백 — 발광(box-shadow)·그라데이션 금지
+  const railFlat = await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; window.PB.render();
+    const els = [...document.querySelectorAll(".lbtn, #railExtra .chip, #railLang button")];
+    const glowy = [], grad = [];
+    for (const el of els) {
+      const c = getComputedStyle(el);
+      if (c.boxShadow && c.boxShadow !== "none") glowy.push(el.dataset.key || el.id || el.textContent.trim());
+      if (/gradient/.test(c.backgroundImage)) grad.push(el.dataset.key || el.id || el.textContent.trim());
+    }
+    return { n: els.length, glowy, grad };
+  });
+  check("63. 왼쪽 레일 담백 — 발광·그라데이션 없음",
+    railFlat.n > 10 && railFlat.glowy.length === 0 && railFlat.grad.length === 0,
+    `${railFlat.n}개 검사 · 발광 [${railFlat.glowy}] · 그라데이션 [${railFlat.grad}]`);
+
+  // 64. 라인 버튼: 왼쪽 색 띠 = 선 색 / 버튼 배경은 선 색이 아니다
+  const stripe = await p.evaluate(() => {
+    const b = document.querySelector('.lbtn[data-key="h1"]');
+    const bg = getComputedStyle(b).backgroundColor;
+    const dot = b.style.getPropertyValue("--dot").trim();
+    const before = getComputedStyle(b, "::before").backgroundColor;
+    return { dot, bg, before, sel: b.classList.contains("sel") };
+  });
+  check("64. 라인 버튼 — 색 띠가 선 색 · 버튼 전체를 선 색으로 칠하지 않음",
+    stripe.dot.toUpperCase() === "#FF3B4E"
+      && stripe.before === "rgb(255, 59, 78)"
+      && !/255, 59, 78/.test(stripe.bg),
+    `띠=${stripe.dot}(${stripe.before}) 배경=${stripe.bg}`);
+
+  // 65. 잠금 아이콘은 상태에 따라 모양이 바뀐다 (색만으로 구분하지 않는다)
+  const lockShape = await p.evaluate(() => {
+    const svg = () => document.querySelector("#lockIcon svg").innerHTML;
+    const S = window.PB.S;
+    S.locked = false; window.PB.render();
+    const open = svg();
+    S.locked = true; window.PB.render();
+    const shut = svg();
+    S.locked = false; window.PB.render();
+    return { open, shut, differ: open !== shut };
+  });
+  check("65. 잠금 아이콘 — 잠김/열림 모양이 다르다",
+    lockShape.differ && lockShape.shut.includes("M8 10.5V7.8a4 4 0 0 1 8 0v2.7"),
+    `모양다름=${lockShape.differ}`);
 
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {

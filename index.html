@@ -18,20 +18,34 @@
    Perfect Brow — styles
    ───────────────────────────────────────────── */
 :root{
-  --bg:#ffffff;
-  --surface:#f6f7f9;
-  --surface-2:#eceef2;
-  --fg:#16181d;
-  --muted:#6b7280;
-  --faint:#9099a6;
-  --border:#dfe3e9;
-  --primary:#5B7FD8;
-  --primary-d:#4A6BC4;
-  --accent:#7A6FD8;
-  --danger:#e0433f;
-  --btn-off:#4A4A4A;
-  --stage:#1f2228;      /* 사진 캔버스 배경 — 피부톤이 정확히 읽히는 중성 다크 */
-  --chrome:#fbfbfc;     /* 도구 영역 배경 */
+  /* ── v1.20.0 디자인 시스템 ─────────────────────────────────
+     규칙 하나: **그라데이션과 글로우는 "지금 켜져 있는 모드"에만.**
+     사진 위 가이드 선은 절대 발광하지 않는다 → 같은 파란 계열이어도 안 헷갈린다.
+     왼쪽 레일(목록)은 담백하게, 오른쪽(조작 중인 것)만 켜진다. */
+  --bg:#0A0C12;
+  --surface:#11141C;
+  --surface-2:#1A1F2A;
+  --fg:#E8EDF7;
+  --muted:#8B94A6;
+  --faint:#5D6577;
+  --border:rgba(255,255,255,.10);
+  --hair:rgba(255,255,255,.10);      /* 유리 컨트롤 테두리 */
+  --glass:rgba(255,255,255,.035);    /* 유리 컨트롤 바탕 */
+  --a1:#22D3EE;                      /* 액센트 — 켜짐 */
+  --a2:#67E8F9;                      /* 액센트 — 글자/아이콘 */
+  --a2b:rgba(34,211,238,.42);        /* 액센트 — 흐린 테두리 */
+  --grad:linear-gradient(135deg,#22D3EE 0%,#7C8CF8 55%,#A78BFA 100%);
+  --glow:rgba(90,180,255,.42);
+  --primary:#22D3EE;
+  --primary-d:#0EA5C4;
+  --accent:#7C8CF8;
+  --danger:#FF6B7A;
+  --danger-b:rgba(255,107,122,.38);
+  --btn-off:rgba(255,255,255,.03);
+  --stage:#0A0C12;      /* 사진 캔버스 배경 — 피부톤이 정확히 읽히는 중성 다크 */
+  --chrome:#0D1018;     /* 도구 영역 배경 — 흰색으로 되돌리지 마세요 (사진이 주인공) */
+  --scrim:rgba(6,8,13,.96);
+  --scrim-m:rgba(6,8,13,.62);
   --panel-h:0px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
@@ -132,33 +146,44 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
    불투명 띠로 만들면 사진 영역을 영구히 잃으므로 가장자리만 진한 그라데이션으로 처리. */
 .scrim{position:absolute;pointer-events:none;z-index:1}
 .scrim-b{left:0;right:0;bottom:0;height:calc(var(--bdock,120px) + 30px);
-  background:linear-gradient(to top,rgba(16,18,22,.94) 0%,rgba(16,18,22,.90) 45%,rgba(16,18,22,.52) 74%,rgba(16,18,22,0) 100%)}
+  background:linear-gradient(to top,var(--scrim) 0%,var(--scrim) 45%,var(--scrim-m) 74%,rgba(6,8,13,0) 100%)}
 .scrim-r{top:0;bottom:0;right:0;width:calc(var(--redge) + 62px);
-  background:linear-gradient(to left,rgba(16,18,22,.90) 0%,rgba(16,18,22,.72) 55%,rgba(16,18,22,0) 100%)}
+  background:linear-gradient(to left,var(--scrim) 0%,var(--scrim-m) 55%,rgba(6,8,13,0) 100%)}
 #guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 #touch{position:absolute;inset:0;touch-action:none;z-index:3}
 
 .ov{position:absolute;z-index:20}
 .ov-tl{top:8px;left:8px;display:flex;gap:6px;align-items:center}
 .ov-tr{top:8px;right:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
-.chip{background:rgba(54,59,69,.80);color:#fff;border:1px solid rgba(255,255,255,.30);
-  border-radius:8px;padding:6px 10px;font-size:10.5px;font-weight:700;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}
-.chip.on{background:var(--primary);border-color:var(--primary)}
-.chip.warn{background:rgba(224,67,63,.85)}
+.chip{background:var(--glass);color:rgba(255,255,255,.82);border:1px solid var(--hair);
+  border-radius:11px;padding:6px 10px;font-size:10.5px;font-weight:700;
+  backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);
+  box-shadow:0 4px 18px rgba(0,0,0,.35);white-space:nowrap}
+.chip.on{background:var(--grad);border-color:var(--a1);color:#fff;box-shadow:0 0 18px var(--glow)}
+.chip.warn{background:rgba(255,107,122,.16);border-color:var(--danger-b);color:var(--danger)}
 
-.linebar{position:absolute;bottom:8px;z-index:20;display:flex;gap:4px;background:rgba(30,30,34,.62);
+.linebar{position:absolute;bottom:8px;z-index:20;display:flex;gap:4px;background:rgba(13,16,24,.62);
   padding:4px;border-radius:11px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);flex-wrap:wrap}
 .linebar-left{left:6px;max-width:58%}
 .linebar-right{right:6px;max-width:39%}
-.lbtn{width:32px;height:32px;border-radius:8px;background:var(--btn-off);color:#fff;font-size:9px;font-weight:800;
-  display:flex;align-items:center;justify-content:center;border:2px solid transparent;line-height:1.05;text-align:center;padding:0}
-.lbtn.hidden-line{opacity:.42}
-.lbtn.sel{border-color:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+/* ── 라인 버튼 (v1.20.0) — 왼쪽 레일은 "목록"이라 담백하게. 발광·그라데이션 금지 ──
+   왼쪽 색 띠 = 그 선의 실제 색 (어느 선인지) / 채움+굵은 글씨 = 선택됨 (지금 움직일 것)
+   두 정보가 서로 다른 자리에 있어 충돌하지 않는다. 버튼 전체를 선 색으로 칠하지 마세요. */
+.lbtn{position:relative;overflow:hidden;width:32px;height:32px;border-radius:9px;
+  background:rgba(255,255,255,.03);color:rgba(255,255,255,.62);font-size:9px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.07);
+  line-height:1.05;text-align:center;padding:0 0 0 9px}
+.lbtn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3.5px;
+  background:var(--dot,#8B94A6);opacity:.75}
+.lbtn.hidden-line{background:transparent;color:rgba(255,255,255,.34)}
+.lbtn.hidden-line::before{opacity:.22}
+.lbtn.sel{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.30);
+  color:#fff;font-weight:750}
+.lbtn.sel::before{width:5px;opacity:1}
 
 .hud{position:absolute;top:44%;left:50%;transform:translate(-50%,-50%);z-index:40;background:rgba(20,20,24,.88);
-  color:#fff;padding:12px 18px;border-radius:13px;font-size:13px;font-weight:700;text-align:center;line-height:1.65;
-  max-width:82%;border:1px solid rgba(255,255,255,.2);
+  color:#fff;padding:12px 18px;border-radius:14px;font-size:13px;font-weight:700;text-align:center;line-height:1.65;
+  max-width:82%;border:1px solid var(--hair);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   opacity:0;transition:opacity .18s;pointer-events:none}
 .hud.show{opacity:1}
 
@@ -170,23 +195,25 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
    오른쪽아래 `.bdock`  : 사진보정 4버튼 / 좌우 드래그 바        — 오른쪽 끝 아래
    왼쪽아래   `.ldock`  : 사진변경·프리셋·눈가이드·사진저장·사진잠금  …띄어서…  초기화 */
 .posctl{position:relative;z-index:30;display:flex;align-items:center;gap:6px;
-  background:rgba(54,59,69,.90);border:1px solid rgba(255,255,255,.26);border-radius:13px;
-  touch-action:auto;padding:5px}
-.posctl .pbtn{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.16);
-  color:#fff;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;
-  border:1px solid rgba(255,255,255,.22)}
+  background:var(--glass);border:1px solid var(--hair);border-radius:16px;
+  backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
+  box-shadow:0 8px 30px rgba(0,0,0,.45);touch-action:auto;padding:5px}
+.posctl .pbtn{flex:0 0 auto;width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.06);
+  color:var(--a2);font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--hair)}
 .posctl .pbtn:active{background:var(--primary);border-color:var(--primary)}
 .posctl .plabel{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;
-  background:rgba(22,24,28,.78);border:1px solid rgba(255,255,255,.24);border-radius:8px;
+  background:transparent;border:none;border-radius:8px;
   padding:3px 8px;font-size:10.5px;font-weight:800;color:#fff;letter-spacing:.3px;
   right:calc(100% + 6px);top:50%;transform:translateY(-50%)}
-.posctl .plabel b{color:#9ec2ff;font-variant-numeric:tabular-nums}
+.posctl .plabel b{color:var(--a2);font-variant-numeric:tabular-nums}
 .posctl .pslot{position:relative;display:flex;align-items:center;justify-content:center}
 .posctl input[type=range]{margin:0}
 .posctl input[type=range]::-webkit-slider-runnable-track{background:rgba(255,255,255,.28)}
 .posctl input[type=range]::-moz-range-track{background:rgba(255,255,255,.28)}
 /* 지금 조작 대상인 쪽을 테두리로 표시 — 숨기지는 않는다 */
-.posctl.active{border-color:rgba(120,165,255,.85);box-shadow:0 0 0 1px rgba(120,165,255,.35)}
+/* 지금 조작 중인 조절자만 켜진다 — 글로우는 여기와 사진잠금에만 (디자인 규칙) */
+.posctl.active{border-color:var(--a1);box-shadow:0 0 0 1px var(--a1) inset,0 8px 34px var(--glow)}
 .posctl:not(.active){opacity:.86}
 
 /* 오른쪽 도크 — 아래 도크 높이(--bdock)를 뺀 영역의 세로 한가운데 */
@@ -217,40 +244,53 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
   min-width:72px;justify-content:center;background:transparent;border:none;padding:0 4px}
 
 /* 도크 버튼 공통 */
-.dockbtn{height:34px;min-width:46px;border-radius:10px;background:rgba(54,59,69,.92);
-  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:9.5px;font-weight:800;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+.dockbtn{height:34px;min-width:46px;border-radius:13px;background:var(--glass);
+  border:1px solid var(--hair);color:rgba(255,255,255,.80);font-size:9.5px;font-weight:700;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 4px 18px rgba(0,0,0,.35);
   flex:0 0 auto;padding:0 6px}
-.dockbtn i{font-style:normal;font-size:13px;line-height:1}
-.dockbtn:active{background:var(--primary);border-color:var(--primary)}
+.dockbtn:active{background:rgba(255,255,255,.10)}
+/* 되돌리기·다시실행은 쓸 수 있을 때만 액센트로 살아난다 */
+#btnUndo:not(:disabled), #btnRedo:not(:disabled){color:var(--a2);border-color:var(--a2b)}
 /* 되돌리기 — 자주 쓰는 버튼이라 한 단계 크게 */
-.dockbtn.big{height:48px;min-width:56px;font-size:10.5px;border-radius:12px;gap:2px}
-.dockbtn.big i{font-size:19px}
+.dockbtn.big{height:48px;min-width:56px;font-size:10.5px;border-radius:14px;gap:3px}
 
 .menurow{display:flex;gap:5px}
-.menurow button{height:50px;min-width:68px;border-radius:12px;background:rgba(54,59,69,.92);
-  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:9.5px;font-weight:800;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+.menurow button{height:50px;min-width:68px;border-radius:13px;background:var(--glass);
+  border:1px solid var(--hair);color:rgba(255,255,255,.80);font-size:9.5px;font-weight:700;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 4px 18px rgba(0,0,0,.35);
   padding:0 8px}
-.menurow button i{font-style:normal;font-size:17px;line-height:1}
-.menurow button:active{background:var(--primary);border-color:var(--primary)}
-.menurow button.on{background:var(--danger);border-color:var(--danger)}
-.menurow button.eyeon{background:#ffffff;color:#111;border-color:#ffffff}
+.menurow button:active{background:rgba(255,255,255,.10)}
+/* ── 버튼 위계 (v1.20.0) — 다 똑같이 생기면 아무것도 안 중요해 보인다 ──
+   주요 : 사진잠금(모드 스위치·제일 자주 씀) · 사진저장(결과물)
+   보조 : 나머지 (위 기본형)
+   위험 : 초기화 — 붉은 톤으로 분리해 실수로 누르는 걸 막는다 */
+#btnLock{border-color:var(--a2b);color:var(--a2)}
+#btnLock.on{border-color:var(--a1);color:#fff;background:var(--grad);
+  box-shadow:0 0 0 1px var(--a1) inset,0 6px 22px var(--glow)}
+#btnExport{border-color:var(--a2);color:var(--a2)}
+#btnReset{color:var(--danger);border-color:var(--danger-b);background:rgba(255,255,255,.02)}
+.menurow button.eyeon{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.34);color:#fff}
 .menurow .gap{flex:0 0 auto;width:44px}
 
 /* 사진 보정 모드 버튼 — 좌우 드래그 바 바로 위. 사진 잠금 시 반투명 + 잠김 */
 .modebtns{display:flex;gap:5px;margin:0}
-.modebtns button{height:30px;min-width:58px;border-radius:9px;background:rgba(54,59,69,.92);
-  border:1px solid rgba(255,255,255,.28);color:#fff;font-size:11px;font-weight:700;padding:0 10px}
-.modebtns button.on{background:var(--accent);border-color:#9a92f0;color:#fff}
+.modebtns button{height:30px;min-width:58px;border-radius:11px;background:var(--glass);
+  border:1px solid var(--hair);color:rgba(255,255,255,.72);font-size:11px;font-weight:700;padding:0 10px;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.modebtns button.on{background:var(--grad);border-color:var(--a1);color:#fff;
+  box-shadow:0 0 16px var(--glow)}
 .modebtns button:disabled{opacity:.30}
 
 input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:40px;background:transparent}
-input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:3px;background:var(--surface-2)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--primary);
-  border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.28);margin-top:-11px}
-input[type=range]::-moz-range-track{height:5px;border-radius:3px;background:var(--surface-2)}
-input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--primary);border:3px solid #fff}
+input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:3px;background:rgba(255,255,255,.16)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--a1);
+  border:none;box-shadow:0 0 14px var(--glow),0 1px 5px rgba(0,0,0,.4);margin-top:-11px}
+input[type=range]::-moz-range-track{height:5px;border-radius:3px;background:rgba(255,255,255,.16)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--a1);border:none}
 input[type=range]:disabled{opacity:.4}
 
 button:disabled{opacity:.38;pointer-events:none}
@@ -264,19 +304,24 @@ button:disabled{opacity:.38;pointer-events:none}
   backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:0}
 #lineRail .lbtn{width:52px;height:29px;font-size:9.5px;border-radius:7px}
 #lineRail #hButtons{position:relative;padding-bottom:12px}
-#lineRail #hButtons::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--border)}
+#lineRail #hButtons::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--hair)}
 /* V 기본구조 버튼은 라인 버튼 아래에 (v1.11.0) */
 #railExtra{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:11px;width:100%}
-#railExtra::before{content:"";position:absolute;left:6px;right:6px;top:4px;height:1px;background:var(--border)}
+#railExtra::before{content:"";position:absolute;left:6px;right:6px;top:4px;height:1px;background:var(--hair)}
 #railExtra .chip{width:52px;padding:5px 3px;font-size:8.5px;line-height:1.15;white-space:normal;text-align:center}
+/* 레일 안(목록)은 담백하게 — 그라데이션·글로우를 쓰지 마세요 (디자인 규칙) */
+#lineRail .chip{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.07);
+  color:rgba(255,255,255,.62);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+#lineRail .chip.on{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.30);
+  color:#fff;box-shadow:none}
 body:not(.land) #railExtra{display:none}
 /* 한/영 (v1.19.0) — 왼쪽 버튼들 맨 위. 현재 언어만 색이 켜진다 */
 #railLang{position:relative;display:flex;gap:4px;width:100%;justify-content:center;padding-bottom:11px}
-#railLang::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--border)}
-#railLang button{width:24px;height:24px;border-radius:7px;font-size:11px;font-weight:700;
-  background:rgba(54,59,69,.92);border:1px solid var(--border);color:var(--text);
+#railLang::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--hair)}
+#railLang button{width:24px;height:24px;border-radius:8px;font-size:11px;font-weight:700;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.45);
   display:flex;align-items:center;justify-content:center;padding:0}
-#railLang button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+#railLang button.on{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.30);color:#fff}
 body:not(.land) #railLang{display:none}
 
 /* Modal */
@@ -323,11 +368,12 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .menurow button{height:46px;min-width:52px;font-size:9px;padding:0 6px}
   body.land.compact #editor .menurow .gap{width:22px}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
-  body.land.compact #editor .dockbtn.big i{font-size:16px}
   body.land.compact #editor .ldock{bottom:calc(var(--safe-b) + 6px);left:6px}
   body.land.compact #editor .scrim-b{height:calc(var(--bdock,110px) + 22px)}
   body.land.compact #editor .scrim-r{width:calc(var(--redge) + 50px)}
-  body.land.compact #editor .menurow button i{font-size:14px}
+  body.land.compact #editor .menurow button i, body.land.compact #editor .menurow button i svg{width:17px;height:17px}
+  body.land.compact #editor .dockbtn i, body.land.compact #editor .dockbtn i svg{width:16px;height:16px}
+  body.land.compact #editor .dockbtn.big i, body.land.compact #editor .dockbtn.big i svg{width:19px;height:19px}
   body.land.compact #editor .modebtns button{height:26px;min-width:48px;font-size:10px;padding:0 7px}
   body.land.compact #editor .bdock{gap:5px;bottom:calc(var(--safe-b) + 6px)}
 }
@@ -375,8 +421,8 @@ body:not(.land) #railLang{display:none}
 
     <!-- 오른쪽 도크 (v1.12.0) — 되돌리기(크게) + 위아래 드래그 바. 오른쪽 끝 · 세로 중앙 -->
     <div class="rdock" id="rightDock">
-      <button class="dockbtn big" id="btnRedo"><i>↷</i><em data-i18n="editor_redo">다시 실행</em></button>
-      <button class="dockbtn big" id="btnUndo"><i>↶</i><em data-i18n="editor_undo">되돌리기</em></button>
+      <button class="dockbtn big" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
+      <button class="dockbtn big" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
       <div class="posctl axis-v" id="posCtlV">
         <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
         <button class="pbtn" id="posPlusV">▲</button>
@@ -404,13 +450,13 @@ body:not(.land) #railLang{display:none}
     <!-- 왼쪽 아래 도크 (v1.12.0) — 메뉴 한 행. 초기화는 한 칸 띄어서 같은 행 -->
     <div class="ldock" id="leftDock">
       <div class="menurow" id="menuRow">
-        <button id="btnChange"><i>🖼</i><em data-i18n="editor_change_photo">사진변경</em></button>
-        <button id="btnPresetLoad"><i>☆</i><em data-i18n="editor_preset">프리셋</em></button>
-        <button id="btnEyeGuide"><i>👁</i><em data-i18n="editor_eyeguide">눈가이드</em></button>
-        <button id="btnExport"><i>⬇</i><em data-i18n="editor_export">사진저장</em></button>
-        <button id="btnLock"><i>🔒</i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
+        <button id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
+        <button id="btnPresetLoad"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"/></svg></i><em data-i18n="editor_preset">프리셋</em></button>
+        <button id="btnEyeGuide"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3.2"/></svg></i><em data-i18n="editor_eyeguide">눈가이드</em></button>
+        <button id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
+        <button id="btnLock"><i id="lockIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/></svg></i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
         <span class="gap"></span>
-        <button id="btnReset"><i>↺</i><em data-i18n="editor_reset">초기화</em></button>
+        <button id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
       </div>
     </div>
 

@@ -244,18 +244,18 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 /* 색상/기본위치는 원본 editor.tsx + BASELINE_CONFIG.md 를 그대로 계승 */
 
 const H_SPECS = [
-  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#FF0000", w: 2.6, op: 1,   segs: [[0, 1]] },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#111111", w: 2, op: 0.9, segs: [[0.30, 0.70]] },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#111111", w: 2, op: 0.9, segs: [[0.36, 0.64]] },
-  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#0066FF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#0066FF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#7B2CBF", w: 2, op: 0.95, segs: [[0, 0.20], [0.80, 1]] },
+  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#FF3B4E", dot: "#FF3B4E", w: 2.6, op: 1,   segs: [[0, 1]] },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.30, 0.70]] },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.36, 0.64]] },
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, segs: [[0, 0.20], [0.80, 1]] },
 ];
 
 const V_SPECS = [
-  { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#111111", w: 1.8, op: 1,   mirror: null },
-  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#111111", w: 1.6, op: 0.6, mirror: "v3" },
-  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#0066FF", w: 1.6, op: 1,   mirror: "v5" },
+  { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.8, op: 1,   mirror: null },
+  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#14161B", dot: "#C9D1E0", w: 1.6, op: 0.6, mirror: "v3" },
+  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.6, op: 1,   mirror: "v5" },
 ];
 
 const ALL_VIS = [
@@ -524,8 +524,8 @@ function renderGuides() {
     const tn = Math.tan((deg * Math.PI) / 180);
     const selA = isSelected("outerAngle"), selP = isSelected("innerAngle");
     const w = selA ? 3.4 : 2.2;
-    drawLine(frag, px, py, 0, py - tn * px, "#111111", w, 0.85);
-    drawLine(frag, px, py, WR, py - tn * (WR - px), "#111111", w, 0.85);
+    drawLine(frag, px, py, 0, py - tn * px, "#14161B", w, 0.85);
+    drawLine(frag, px, py, WR, py - tn * (WR - px), "#14161B", w, 0.85);
     frag.appendChild(mk("circle", { cx: px, cy: py, r: selP ? 9 : 6.5, fill: "#FF3B30", stroke: "#ffffff", "stroke-width": 2 }));
   }
 
@@ -951,7 +951,9 @@ function updateButtons() {
   document.querySelectorAll(".lbtn").forEach((b) => {
     const spec = [...H_SPECS, ...V_SPECS].find((s) => s.key === b.dataset.key);
     const vis = S.g[b.dataset.vis];
-    b.style.background = vis ? spec.color : "var(--btn-off)";
+    /* v1.20.0 — 버튼 전체를 선 색으로 칠하지 않는다 (가이드 선과 색이 싸움).
+       왼쪽 색 띠 = 어느 선인지 / 채움 = 선택됨. BASELINE 1-13 참고. */
+    b.style.setProperty("--dot", spec.dot || spec.color);
     b.classList.toggle("hidden-line", !vis);
     b.classList.toggle("sel", isSelected(spec.key));
   });
@@ -964,10 +966,25 @@ function updateButtons() {
   $("btnPivot").classList.toggle("on", isSelected("innerAngle") && S.g.baseStructureVisible);
   $("btnVAngle").classList.toggle("on", isSelected("outerAngle") && S.g.baseStructureVisible);
   $("btnAllLine").classList.toggle("on", !!S.hiddenSnapshot);
+  setLockIcon(S.locked);
   $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
   $("btnLock").classList.toggle("on", S.locked);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
   updateUndoBtn();
+}
+
+/* 잠금 아이콘은 상태에 따라 **모양**이 바뀐다 (v1.20.0)
+   색만으로 구분하면 역광·화면 기울임에서 안 읽힌다. 자물쇠가 닫혔나 열렸나로 판단하게 한다. */
+const LOCK_SVG = {
+  on:  '<rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/>',
+  off: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 7.6-1.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/>',
+};
+let lockIconState = null;
+function setLockIcon(locked) {
+  if (lockIconState === locked) return;          // 매 프레임 innerHTML 을 새로 쓰지 않는다
+  lockIconState = locked;
+  const svg = $("lockIcon") && $("lockIcon").querySelector("svg");
+  if (svg) svg.innerHTML = locked ? LOCK_SVG.on : LOCK_SVG.off;
 }
 
 /* ── 위치 조절 패널 ── */
@@ -1691,4 +1708,6 @@ if ("serviceWorker" in navigator) {
 }
 
 /* 개발/디버깅용 */
-window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, render, runFaceAI, loadPhoto, alignFromPupils };
+window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX,
+  LINE_COLORS: { eye: "#FF3B4E", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
+  render, runFaceAI, loadPhoto, alignFromPupils };
