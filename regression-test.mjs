@@ -963,6 +963,68 @@ console.log("[세로 모드 · 기능]");
     lockShape.differ && lockShape.shut.includes("M8 10.5V7.8a4 4 0 0 1 8 0v2.7"),
     `모양다름=${lockShape.differ}`);
 
+  /* ── v1.20.1 · 읽히는가 (대비) ─────────────────────────
+     v1.20.0 에서 :root 토큰을 다크로 뒤집으면서 모달만 `background:#fff` 로 남아
+     밝은 글자 + 흰 바탕 = 아무것도 안 보이는 사고가 났다. 그걸 막는 테스트다. */
+  const contrast = (a, b) => {
+    const lum = (c) => {
+      const [r, g, bl] = c.match(/[\d.]+/g).slice(0, 3).map((v) => {
+        v = +v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+    };
+    const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (l1 + 0.05) / (l2 + 0.05);
+  };
+
+  // 66. 모달은 다크 · 글자가 읽힌다
+  const modalC = await p.evaluate(() => {
+    document.getElementById("mLoad").classList.add("on");
+    const m = document.querySelector("#mLoad .modal");
+    const h = m.querySelector("h3");
+    const bg = getComputedStyle(m).backgroundColor;
+    const fg = getComputedStyle(h).color;
+    document.getElementById("mLoad").classList.remove("on");
+    return { bg, fg };
+  });
+  check("66. 모달 대비 — 다크 바탕에 밝은 글자 (흰 바탕 금지)",
+    contrast(modalC.bg, modalC.fg) >= 7,
+    `배경 ${modalC.bg} / 글자 ${modalC.fg} · 대비 ${contrast(modalC.bg, modalC.fg).toFixed(1)}:1`);
+
+  // 67. 시안 채움 버튼 위 글자는 어두워야 한다 (흰 글자는 대비 2:1 도 안 나온다)
+  const priC = await p.evaluate(() => {
+    document.getElementById("mLoad").classList.add("on");
+    const b = document.querySelector("#mLoad .modal-row button.pri");
+    const r = { bg: getComputedStyle(b).backgroundColor, fg: getComputedStyle(b).color };
+    document.getElementById("mLoad").classList.remove("on");
+    return r;
+  });
+  check("67. 액센트 채움 버튼 — 글자 대비 충분 (흰 글자 금지)",
+    contrast(priC.bg, priC.fg) >= 7,
+    `배경 ${priC.bg} / 글자 ${priC.fg} · 대비 ${contrast(priC.bg, priC.fg).toFixed(1)}:1`);
+
+  // 68. 한 모달에 "채운" 버튼은 하나만 — 여러 개면 화면이 시끄럽고 뭐가 주 동작인지 모른다
+  const filled = await p.evaluate(() => {
+    localStorage.setItem("pb_presets_v1", JSON.stringify(
+      [{ id: "t1", name: "테스트A", state: {} }, { id: "t2", name: "테스트B", state: {} }]));
+    document.getElementById("btnPresetLoad").click();
+    const m = document.querySelector("#mLoad .modal");
+    const opaque = [...m.querySelectorAll("button")].filter((b) => {
+      const c = getComputedStyle(b).backgroundColor.match(/[\d.]+/g);
+      return c && (c.length < 4 || +c[3] > 0.5) && !(c[0] === "0" && c[1] === "0" && c[2] === "0" && (c[3] || 1) < 0.5);
+    }).filter((b) => {
+      const c = getComputedStyle(b).backgroundColor.match(/[\d.]+/g);
+      return +c[0] + +c[1] + +c[2] > 120 && (c.length < 4 || +c[3] > 0.5);
+    });
+    const rows = m.querySelectorAll(".pitem").length;
+    const labels = opaque.map((b) => b.textContent.trim());
+    document.getElementById("mLoad").classList.remove("on");
+    return { n: opaque.length, labels, rows };
+  });
+  check("68. 모달 — 채운 버튼은 주 동작 하나뿐",
+    filled.rows >= 5 && filled.n === 1,
+    `${filled.rows}줄 · 채운 버튼 ${filled.n}개 [${filled.labels}]`);
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;
@@ -1173,22 +1235,41 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       count: rects.length, top: Math.min(...rects.map((r) => r.y)), hitChip,
     };
   });
-  // 48. 가로 가이드 선이 오른쪽 위아래 드래그 바를 넘지 않는다 (v1.17.0)
+  /* 48. 가로 자의 길이 = **눈썹 구간**(이너~아우터) (v1.21.0)
+     · 오른쪽 드래그 바를 넘지 않는다 (v1.17.0 규칙 유지)
+     · 이너·아우터를 좁히면 가로 자도 같이 짧아진다 — 캔버스 폭을 따라가면 안 된다 */
   const hLine = await p.evaluate(() => {
-    const S = window.PB.S;
+    const S = window.PB.S, W = S.dim.W;
+    const span = () => {
+      const lines = [...document.getElementById("guides").querySelectorAll("line")]
+        .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+                       y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+                       o: +(l.getAttribute("stroke-opacity") || 1) }))
+        .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.x1 - l.x2) > 1 && l.o > 0.2);
+      return { n: lines.length,
+        minX: Math.min(...lines.map((l) => Math.min(l.x1, l.x2))),
+        maxX: Math.max(...lines.map((l) => Math.max(l.x1, l.x2))) };
+    };
     S.g = { ...window.PB.DEFAULT_GUIDE };
     S.g.h2Visible = true; S.g.h3Visible = true; S.g.archThicknessVisible = true;
+    /* 넓은 눈썹 */
+    S.g.v1 = 0.5; S.g.v2 = 0.34; S.g.v3 = 0.66; S.g.v4 = 0.16; S.g.v5 = 0.84;
     window.PB.render();
-    const lines = [...document.getElementById("guides").querySelectorAll("line")]
-      .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
-                     y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2") }))
-      .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.x1 - l.x2) > 1);
-    const dockL = document.getElementById("rightDock").offsetLeft;
-    return { n: lines.length, maxX: Math.max(...lines.map((l) => Math.max(l.x1, l.x2))), dockL, W: S.dim.W };
+    const wide = span();
+    /* 좁은 눈썹 — 아우터를 중앙 쪽으로 */
+    S.g.v4 = 0.30; S.g.v5 = 0.70;
+    window.PB.render();
+    const narrow = span();
+    S.g = { ...window.PB.DEFAULT_GUIDE }; window.PB.render();
+    return { wide, narrow, dockL: document.getElementById("rightDock").offsetLeft, W };
   });
-  check(`48. ${dev.n} — 가로선이 오른쪽 드래그 바를 넘지 않음`,
-    hLine.n >= 4 && hLine.maxX <= hLine.dockL + 1 && hLine.maxX > hLine.dockL - 30,
-    `가로선 ${hLine.n}개, 오른쪽 끝 ${Math.round(hLine.maxX)}px / 바 왼쪽 ${hLine.dockL}px (캔버스 ${hLine.W}px)`);
+  const wideLen = hLine.wide.maxX - hLine.wide.minX;
+  const narrowLen = hLine.narrow.maxX - hLine.narrow.minX;
+  check(`48. ${dev.n} — 가로 자 길이 = 눈썹 구간 (바를 넘지 않음)`,
+    hLine.wide.n >= 4 && hLine.wide.maxX <= hLine.dockL + 1
+      && narrowLen < wideLen * 0.85                       // 눈썹을 좁히면 자도 짧아진다
+      && narrowLen > wideLen * 0.4,
+    `넓은눈썹 ${Math.round(wideLen)}px → 좁은눈썹 ${Math.round(narrowLen)}px (캔버스 ${hLine.W}px, 바 ${hLine.dockL}px)`);
 
   // 47. 컨트롤 영역 스크림 — 터치를 막지 않고, 가이드 선보다 아래에 깔린다 (v1.16.0)
   const scrim = await p.evaluate(() => {

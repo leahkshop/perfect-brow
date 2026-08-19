@@ -35,7 +35,10 @@
   --a2:#67E8F9;                      /* 액센트 — 글자/아이콘 */
   --a2b:rgba(34,211,238,.42);        /* 액센트 — 흐린 테두리 */
   --grad:linear-gradient(135deg,#22D3EE 0%,#7C8CF8 55%,#A78BFA 100%);
+  /* 밝은 그라데이션 위에는 어두운 글자(--on-accent). 흰 글자를 쓰고 싶으면 --grad-deep 을 쓰세요 */
+  --grad-deep:linear-gradient(135deg,#0EA5C4 0%,#5566E0 55%,#8B5CF6 100%);
   --glow:rgba(90,180,255,.42);
+  --on-accent:#04141B;                /* 시안 채움 위 글자 — 흰색은 대비가 안 나옵니다 */
   --primary:#22D3EE;
   --primary-d:#0EA5C4;
   --accent:#7C8CF8;
@@ -66,21 +69,21 @@ input,textarea{font:inherit}
 /* ── Home ───────────────────────────────── */
 #home{padding:calc(var(--safe-t) + 8px) 20px calc(var(--safe-b) + 20px);overflow-y:auto;align-items:center}
 .lang-switch{display:flex;gap:6px;justify-content:center;padding:8px 0 4px;width:100%}
-.lang-switch button{padding:7px 18px;border-radius:8px;font-size:13px;font-weight:600;background:var(--surface);color:var(--muted);border:1px solid var(--border)}
-.lang-switch button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.lang-switch button{padding:7px 18px;border-radius:10px;font-size:13px;font-weight:600;background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--hair)}
+.lang-switch button.on{background:var(--a1);color:var(--on-accent);border-color:var(--a1);font-weight:700}
 .home-inner{display:flex;flex-direction:column;align-items:center;text-align:center;max-width:420px;margin:auto;width:100%;padding:12px 0 8px}
-.hero{width:132px;height:132px;border-radius:32px;object-fit:cover;box-shadow:0 12px 34px rgba(91,127,216,.22);margin-bottom:22px}
+.hero{width:132px;height:132px;border-radius:32px;object-fit:cover;box-shadow:0 12px 40px var(--glow);margin-bottom:22px}
 .home-title{font-size:34px;font-weight:800;letter-spacing:-.6px;margin:0 0 6px}
 .home-sub{font-size:11.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin:0}
-.home-div{width:48px;height:2px;background:var(--border);margin:20px 0}
+.home-div{width:48px;height:2px;background:var(--hair);margin:20px 0}
 .home-desc{font-size:14.5px;line-height:1.65;color:var(--muted);margin:0 0 26px;white-space:pre-line}
-.cta{width:100%;max-width:300px;height:54px;border-radius:14px;font-size:16.5px;font-weight:700;color:#fff;
-  background:linear-gradient(135deg,#5B8DEE 0%,#6B5FD8 55%,#8B5FD8 100%);
-  box-shadow:0 8px 22px rgba(107,95,216,.32);display:flex;align-items:center;justify-content:center;gap:8px}
+.cta{width:100%;max-width:300px;height:54px;border-radius:16px;font-size:16.5px;font-weight:800;color:#fff;
+  background:var(--grad-deep);
+  box-shadow:0 10px 30px var(--glow);display:flex;align-items:center;justify-content:center;gap:8px}
 .cta:active{transform:translateY(1px);filter:brightness(.96)}
-.cta.secondary{background:var(--surface);color:var(--fg);box-shadow:none;border:1px solid var(--border);height:46px;font-size:15px;margin-top:10px}
+.cta.secondary{background:rgba(255,255,255,.05);color:var(--fg);box-shadow:none;border:1px solid var(--hair);height:46px;font-size:15px;margin-top:10px}
 .home-foot{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:26px}
-.install-tip{margin-top:22px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--muted);text-align:left;width:100%}
+.install-tip{margin-top:22px;background:rgba(255,255,255,.04);border:1px solid var(--hair);border-radius:14px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--muted);text-align:left;width:100%}
 .install-tip b{color:var(--fg)}
 /* 가로 화면 홈 압축 */
 @media all{ /* 짧은 가로 화면 홈 압축 */
@@ -159,7 +162,7 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
   border-radius:11px;padding:6px 10px;font-size:10.5px;font-weight:700;
   backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);
   box-shadow:0 4px 18px rgba(0,0,0,.35);white-space:nowrap}
-.chip.on{background:var(--grad);border-color:var(--a1);color:#fff;box-shadow:0 0 18px var(--glow)}
+.chip.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800;box-shadow:0 0 18px var(--glow)}
 .chip.warn{background:rgba(255,107,122,.16);border-color:var(--danger-b);color:var(--danger)}
 
 .linebar{position:absolute;bottom:8px;z-index:20;display:flex;gap:4px;background:rgba(13,16,24,.62);
@@ -269,7 +272,7 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
    보조 : 나머지 (위 기본형)
    위험 : 초기화 — 붉은 톤으로 분리해 실수로 누르는 걸 막는다 */
 #btnLock{border-color:var(--a2b);color:var(--a2)}
-#btnLock.on{border-color:var(--a1);color:#fff;background:var(--grad);
+#btnLock.on{border-color:var(--a1);color:var(--on-accent);background:var(--grad);
   box-shadow:0 0 0 1px var(--a1) inset,0 6px 22px var(--glow)}
 #btnExport{border-color:var(--a2);color:var(--a2)}
 #btnReset{color:var(--danger);border-color:var(--danger-b);background:rgba(255,255,255,.02)}
@@ -281,7 +284,7 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 .modebtns button{height:30px;min-width:58px;border-radius:11px;background:var(--glass);
   border:1px solid var(--hair);color:rgba(255,255,255,.72);font-size:11px;font-weight:700;padding:0 10px;
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
-.modebtns button.on{background:var(--grad);border-color:var(--a1);color:#fff;
+.modebtns button.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800;
   box-shadow:0 0 16px var(--glow)}
 .modebtns button:disabled{opacity:.30}
 
@@ -296,7 +299,7 @@ input[type=range]:disabled{opacity:.4}
 button:disabled{opacity:.38;pointer-events:none}
 
 /* 가로 모드: 라인 선택 버튼 = 왼쪽 세로 레일 (왼손 전용) */
-#lineRail{grid-area:lines;background:var(--chrome);border-right:1px solid var(--border);
+#lineRail{grid-area:lines;background:var(--chrome);border-right:1px solid var(--hair);
   flex-direction:column;align-items:center;justify-content:center;gap:12px;
   padding:calc(var(--safe-t) + 8px) 3px calc(var(--safe-b) + 8px);overflow-y:auto;min-height:0}
 #lineRail .linebar{position:static;flex-direction:column;flex-wrap:nowrap;gap:3px;
@@ -325,25 +328,45 @@ body:not(.land) #railExtra{display:none}
 body:not(.land) #railLang{display:none}
 
 /* Modal */
-.mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+/* ── Modal (v1.20.1) ─ 앱 전체가 다크이므로 모달도 다크. `background:#fff` 로 되돌리지 마세요
+   — 글자색이 --fg(밝은색)라 흰 바탕에서 아예 안 보입니다.
+   한 모달에 **채운 버튼은 하나만** (주 동작). 나머지는 테두리/유리로 두어야 조화롭습니다. */
+.mask{position:fixed;inset:0;background:rgba(4,6,10,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
 .mask.on{display:flex}
-.modal{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:380px;max-height:80dvh;display:flex;flex-direction:column}
-.modal h3{margin:0 0 12px;font-size:16px;font-weight:800}
-.modal input[type=text]{width:100%;height:44px;border:1px solid var(--border);border-radius:10px;padding:0 12px;font-size:15px;margin-bottom:12px;background:var(--surface);-webkit-user-select:text;user-select:text}
+.modal{background:var(--surface);color:var(--fg);border:1px solid var(--hair);
+  border-radius:18px;padding:18px;width:100%;max-width:380px;max-height:80dvh;display:flex;flex-direction:column;
+  box-shadow:0 24px 60px rgba(0,0,0,.65)}
+.modal h3{margin:0 0 14px;font-size:16px;font-weight:800;color:var(--fg)}
+.modal input[type=text]{width:100%;height:46px;border:1px solid var(--hair);border-radius:12px;padding:0 12px;
+  font-size:15px;margin-bottom:12px;background:rgba(255,255,255,.05);color:var(--fg);
+  -webkit-user-select:text;user-select:text}
+.modal input[type=text]:focus{outline:none;border-color:var(--a1);box-shadow:0 0 0 1px var(--a1) inset}
+.modal input[type=text]::placeholder{color:var(--faint)}
 .modal-row{display:flex;gap:8px}
-.modal-row button{flex:1;height:44px;border-radius:10px;font-size:14px;font-weight:700;background:var(--surface);border:1px solid var(--border)}
-.modal-row button.pri{background:var(--primary);color:#fff;border-color:var(--primary)}
+/* 보조 = 유리 */
+.modal-row button{flex:1;height:46px;border-radius:12px;font-size:14px;font-weight:700;
+  background:rgba(255,255,255,.05);color:var(--fg);border:1px solid var(--hair)}
+/* 주 동작 = 이 모달에서 딱 하나. 시안 채움 위에는 **어두운 글자** (흰 글자는 대비 부족) */
+.modal-row button.pri{background:var(--a1);color:var(--on-accent);border-color:var(--a1);font-weight:800}
+.modal-row button:active{background:rgba(255,255,255,.11)}
+.modal-row button.pri:active{filter:brightness(.92)}
 .plist{overflow-y:auto;margin-bottom:12px;-webkit-overflow-scrolling:touch}
-.pitem{display:flex;align-items:center;gap:6px;padding:9px 0;border-bottom:1px solid var(--border)}
-.pitem .nm{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pitem button{padding:7px 10px;border-radius:8px;font-size:11.5px;font-weight:700;background:var(--surface);border:1px solid var(--border)}
-.pitem button.pri{background:var(--primary);color:#fff;border-color:var(--primary)}
-.pitem button.del{color:var(--danger)}
-.pitem .badge{font-size:9.5px;font-weight:700;color:var(--muted);background:var(--surface-2);padding:3px 6px;border-radius:5px}
+.pitem{display:flex;align-items:center;gap:6px;padding:10px 0;border-bottom:1px solid var(--hair)}
+.pitem .nm{flex:1;font-size:14px;font-weight:600;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 목록 안 버튼은 전부 테두리형 — 줄마다 채운 버튼이 있으면 화면이 시끄러워집니다 */
+.pitem button{padding:8px 11px;border-radius:9px;font-size:11.5px;font-weight:700;
+  background:transparent;color:var(--muted);border:1px solid var(--hair)}
+.pitem button.pri{background:transparent;color:var(--a2);border-color:var(--a2b)}
+.pitem button.del{background:transparent;color:var(--danger);border-color:var(--danger-b)}
+.pitem button:active{background:rgba(255,255,255,.08)}
+.pitem .badge{font-size:9.5px;font-weight:700;color:var(--faint);background:rgba(255,255,255,.06);
+  border:1px solid var(--hair);padding:3px 7px;border-radius:6px}
 .empty{color:var(--muted);font-size:13.5px;text-align:center;padding:24px 0}
 
 #toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 28px);transform:translateX(-50%) translateY(14px);
-  background:rgba(20,20,24,.92);color:#fff;padding:11px 18px;border-radius:11px;font-size:13px;font-weight:600;
+  background:rgba(13,16,24,.94);border:1px solid var(--hair);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  color:#fff;padding:11px 18px;border-radius:13px;font-size:13px;font-weight:600;
   z-index:200;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:88vw;text-align:center}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -369,6 +392,12 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .menurow .gap{width:22px}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
   body.land.compact #editor .ldock{bottom:calc(var(--safe-b) + 6px);left:6px}
+  /* 가로 화면은 세로가 짧아 모달이 잘린다 — 더 넓고 촘촘하게 (v1.20.1) */
+  body.land.compact .modal{max-width:560px;max-height:88dvh;padding:14px;border-radius:16px}
+  body.land.compact .modal h3{margin-bottom:10px;font-size:15px}
+  body.land.compact .modal .pitem{padding:7px 0}
+  body.land.compact .modal input[type=text]{height:42px;margin-bottom:10px}
+  body.land.compact .modal-row button{height:42px}
   body.land.compact #editor .scrim-b{height:calc(var(--bdock,110px) + 22px)}
   body.land.compact #editor .scrim-r{width:calc(var(--redge) + 50px)}
   body.land.compact #editor .menurow button i, body.land.compact #editor .menurow button i svg{width:17px;height:17px}

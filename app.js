@@ -435,6 +435,40 @@ function drawBadge(frag, text, x, y, color, anchor) {
   frag.appendChild(tx);
 }
 
+/* ═══ 눈썹 구간 좌표계 (v1.21.0) ═══════════════════════════════
+   가로 자의 길이를 **캔버스 폭**이 아니라 **이너·아우터 세로선 사이**에서 뽑는다.
+   확대해도 자가 눈썹을 넘어 관자놀이·코까지 뻗지 않아 시술 중 화면이 깔끔하다.
+   frac 0 = 왼쪽 아우터 바깥 / 0.4 = 왼쪽 이너 / 0.6 = 오른쪽 이너 / 1 = 오른쪽 아우터 바깥
+   → H_SPECS 의 segs 는 그대로 두고 좌표계만 바꾸므로 각 선의 "모양"은 유지된다. */
+const BROW_PAD = 0.022;          // 양 끝 여유 (0~1 정규화)
+const VPAD = 0.045;              // 세로선이 위아래로 더 나가는 여유
+
+function browEdges() {
+  const g = S.g;
+  const v3 = 2 * g.v1 - g.v2, v5 = 2 * g.v1 - g.v4;
+  const lo = Math.min(g.v2, g.v4), li = Math.max(g.v2, g.v4);   // 왼쪽: 아우터 → 이너
+  const ri = Math.min(v3, v5), ro = Math.max(v3, v5);           // 오른쪽: 이너 → 아우터
+  return { L0: lo - BROW_PAD, L1: li + BROW_PAD, R0: ri - BROW_PAD, R1: ro + BROW_PAD };
+}
+
+/* frac(0~1) → 캔버스 x(px). 작업 영역(workRight) 밖으로는 나가지 않는다. */
+function browX(frac) {
+  const { L0, L1, R0, R1 } = browEdges(), W = S.dim.W;
+  let n;
+  if (frac <= 0.4) n = L0 + (frac / 0.4) * (L1 - L0);
+  else if (frac <= 0.6) n = L1 + ((frac - 0.4) / 0.2) * (R0 - L1);
+  else n = R0 + ((frac - 0.6) / 0.4) * (R1 - R0);
+  return clamp(n, 0, workRight()) * W;
+}
+
+/* 세로선이 실제로 진하게 보이는 구간 — 가장 위 가로선 위쪽부터 눈 기준선 아래까지.
+   표시 여부와 무관하게 모든 가로선 값을 쓰므로 선을 껐다 켜도 길이가 흔들리지 않는다. */
+function browBandY() {
+  const g = S.g;
+  const ys = H_SPECS.map((sp) => g[sp.key]);
+  return { y0: clamp(Math.min(...ys) - VPAD, 0, 1), y1: clamp(Math.max(...ys) + VPAD, 0, 1) };
+}
+
 function renderGuides() {
   const { W, H } = S.dim, g = S.g;
   const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
@@ -469,22 +503,39 @@ function renderGuides() {
     const y = g[sp.key] * H;
     const sel = isSelected(sp.key);
     for (const [a, b] of sp.segs) {
-      drawLine(frag, a * WR, y, b * WR, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
+      const xa = browX(a), xb = browX(b);
+      if (xb - xa < 2) continue;                       // 이너·아우터가 겹치면 그리지 않는다
+      drawLine(frag, xa, y, xb, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
     }
   }
 
   /* 세로 라인 (+ 대칭선) */
-  for (const sp of V_SPECS) {
-    if (!g[sp.vis]) continue;
-    const sel = isSelected(sp.key);
-    const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : sp.op;
-    const x = g[sp.key] * W;
-    drawLine(frag, x, 0, x, H, sp.color, w, op);
-    vBadges.push({ label: t(sp.i18n), color: sp.color, x });
-    if (sp.mirror) {
-      const xm = (2 * g.v1 - g[sp.key]) * W;
-      drawLine(frag, xm, 0, xm, H, sp.color, w, op);
-      vBadges.push({ label: t(sp.i18n), color: sp.color, x: xm });
+  {
+    const band = browBandY(), by0 = band.y0 * H, by1 = band.y1 * H;
+    /* Center(v1) 는 얼굴 중심축이라 위아래 전체 길이 그대로 (BASELINE 1-7).
+       Inner/Outer 는 **눈썹 구간만** 진하게 긋고, 라벨(캔버스 맨 위)까지는
+       아주 옅은 연결선만 남겨 라벨이 허공에 뜨지 않게 한다. */
+    for (const sp of V_SPECS) {
+      if (!g[sp.vis]) continue;
+      const sel = isSelected(sp.key);
+      const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : sp.op;
+      const full = sp.key === "v1";
+      const draw = (x) => {
+        if (full) { drawLine(frag, x, 0, x, H, sp.color, w, op); return; }
+        frag.appendChild(mk("line", {                       // 라벨 ↔ 선 연결 (헤일로 없음)
+          x1: x, y1: 0, x2: x, y2: H, stroke: sp.color,
+          "stroke-width": 1, "stroke-opacity": 0.16,
+        }));
+        drawLine(frag, x, by0, x, by1, sp.color, w, op);    // 실제로 읽는 구간
+      };
+      const x = g[sp.key] * W;
+      draw(x);
+      vBadges.push({ label: t(sp.i18n), color: sp.color, x });
+      if (sp.mirror) {
+        const xm = (2 * g.v1 - g[sp.key]) * W;
+        draw(xm);
+        vBadges.push({ label: t(sp.i18n), color: sp.color, x: xm });
+      }
     }
   }
   /* 세로선 라벨 — 가로로 겹치면 아래 줄로 내려서 배치 */
@@ -625,8 +676,8 @@ function hitTest(x, y) {
   for (const L of linePixels()) {
     let d;
     if (L.type === "h") {
-      const WRh = (S.wr || W);
-      const inSeg = L.segs.some(([a, b]) => x >= a * WRh - 12 && x <= b * WRh + 12);
+      /* 그리는 범위와 잡는 범위는 반드시 같아야 한다 (BASELINE 1-11) — 둘 다 browX */
+      const inSeg = L.segs.some(([a, b]) => x >= browX(a) - 12 && x <= browX(b) + 12);
       if (!inSeg) continue;
       d = Math.abs(y - L.y);
     } else {
