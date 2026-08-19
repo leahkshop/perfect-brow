@@ -59,8 +59,8 @@ const I18N = {
     pick_cancel: "정렬을 취소했습니다",
     picker_rot: "사진 선택 창은 <b>기기 방향</b>을 따릅니다<br>폰을 세로로 세워서 고른 뒤 다시 눕히세요<br><br>제어센터에서 <b>화면 회전 잠금</b>을 풀면<br>이 창도 함께 가로로 돌아갑니다",
     rot_auto_off: "기기 회전이 되는 환경입니다 · 강제 가로를 껐습니다",
-    editor_inner_angle: "V Center Pivot",
-    editor_outer_angle: "V Angle",
+    editor_inner_angle: "V 센터 피봇",
+    editor_outer_angle: "V 앵글",
     editor_photo_adjustment: "사진 보정",
     editor_zoom: "줌",
     editor_vertical: "위아래",
@@ -101,6 +101,20 @@ const I18N = {
     sel_line: "선택",
     line_hidden: "숨김",
     line_shown: "표시",
+    /* 라인 이름 (v1.19.0) — 왼쪽 레일 버튼 · 캔버스 라벨 · 조절자 이름이 모두 이걸 쓴다 */
+    line_eye: "눈",
+    line_front: "앞머리",
+    line_ft: "앞두께",
+    line_arch: "아치",
+    line_at: "아치두께",
+    line_tail: "꼬리",
+    line_center: "센터",
+    line_inner: "이너",
+    line_outer: "아우터",
+    editor_redo: "다시 실행",
+    redo_done: "다시 실행했습니다",
+    redo_none: "다시 실행할 작업이 없습니다",
+    editor_all_lines: "전체라인",
     pan_hint: "사진 이동은 두 손가락 드래그",
     unlocked_msg: "사진 잠금 해제",
     saved_img: "이미지를 저장했습니다",
@@ -194,6 +208,19 @@ const I18N = {
     sel_line: "selected",
     line_hidden: "hidden",
     line_shown: "shown",
+    line_eye: "Eye",
+    line_front: "Front",
+    line_ft: "F.T",
+    line_arch: "Arch",
+    line_at: "A.T",
+    line_tail: "Tail",
+    line_center: "Center",
+    line_inner: "Inner",
+    line_outer: "Outer",
+    editor_redo: "Redo",
+    redo_done: "Redone",
+    redo_none: "Nothing to redo",
+    editor_all_lines: "All lines",
     pan_hint: "Pan the photo with two fingers",
     unlocked_msg: "Photo unlocked",
     saved_img: "Image saved",
@@ -217,18 +244,18 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 /* 색상/기본위치는 원본 editor.tsx + BASELINE_CONFIG.md 를 그대로 계승 */
 
 const H_SPECS = [
-  { key: "h1", vis: "h1Visible", label: "Eye",   color: "#FF0000", w: 2.6, op: 1,   segs: [[0, 1]] },
-  { key: "front", vis: "frontVisible", label: "Front", color: "#111111", w: 2, op: 0.9, segs: [[0.30, 0.70]] },
-  { key: "frontThickness", vis: "frontThicknessVisible", label: "F.T", color: "#111111", w: 2, op: 0.9, segs: [[0.36, 0.64]] },
-  { key: "h2", vis: "h2Visible", label: "Arch",  color: "#0066FF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
-  { key: "archThickness", vis: "archThicknessVisible", label: "A.T", color: "#0066FF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
-  { key: "h3", vis: "h3Visible", label: "Tail",  color: "#7B2CBF", w: 2, op: 0.95, segs: [[0, 0.20], [0.80, 1]] },
+  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#FF0000", w: 2.6, op: 1,   segs: [[0, 1]] },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#111111", w: 2, op: 0.9, segs: [[0.30, 0.70]] },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#111111", w: 2, op: 0.9, segs: [[0.36, 0.64]] },
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#0066FF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#0066FF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#7B2CBF", w: 2, op: 0.95, segs: [[0, 0.20], [0.80, 1]] },
 ];
 
 const V_SPECS = [
-  { key: "v1", vis: "v1Visible", label: "Center", color: "#111111", w: 1.8, op: 1,   mirror: null },
-  { key: "v2", vis: "v2Visible", label: "Inner",  color: "#111111", w: 1.6, op: 0.6, mirror: "v3" },
-  { key: "v4", vis: "v4Visible", label: "Outer",  color: "#0066FF", w: 1.6, op: 1,   mirror: "v5" },
+  { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#111111", w: 1.8, op: 1,   mirror: null },
+  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#111111", w: 1.6, op: 0.6, mirror: "v3" },
+  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#0066FF", w: 1.6, op: 1,   mirror: "v5" },
 ];
 
 const ALL_VIS = [
@@ -246,15 +273,17 @@ function visKeyOf(k) {
   const sp = specOf(k);
   return sp ? sp.vis : null;
 }
+/* 라인 이름은 언어에 따라 바뀐다 (v1.19.0) — 하드코딩된 영문 label 을 되살리지 마세요.
+   버튼·라벨·HUD·조절자 이름이 모두 이 함수 하나를 씁니다. */
 function labelOf(k) {
-  if (k === "innerAngle") return "V Center Pivot";
-  if (k === "outerAngle") return "V Angle";
+  if (k === "innerAngle") return t("editor_inner_angle");
+  if (k === "outerAngle") return t("editor_outer_angle");
   const sp = specOf(k);
-  return sp ? sp.label : k;
+  return sp ? t(sp.i18n) : k;
 }
 
 const DEFAULT_GUIDE = Object.freeze({
-  h1: 0.5,   h1Visible: true,
+  h1: 0.60,  h1Visible: true,   // v1.19.0 — 눈 기준선을 5% 아래로 (위에 V 사선 공간 확보)
   h2: 0.34,  h2Visible: false,
   h3: 0.43,  h3Visible: false,
   archThickness: 0.38, archThicknessVisible: false,
@@ -266,13 +295,13 @@ const DEFAULT_GUIDE = Object.freeze({
   v4: 0.15,  v4Visible: false,
   v5: 0.85,
   eyeGuideVisible: false,   // 아몬드 눈 가이드 — 자동 줌이 충분하므로 기본 꺼짐
-  innerAngle: 0.40,      // Pivot Point Y (0=위, 1=아래)
-  outerAngle: 0.50,      // V 벌어짐 (0.5 = 수평)
+  innerAngle: 0.10,      // Pivot Point Y (0=위, 1=아래) — v1.19.0: 위 10% 지점에서 시작
+  outerAngle: 0.125,     // V 벌어짐 (0.5 = 수평) — v1.19.0: 아래 45° 에서 시작
   baseStructureVisible: false,
 });
 const DEFAULT_PHOTO = Object.freeze({ zoom: 1, ox: 0, oy: 0, rot: 0 });
 
-const V_ANGLE_MAX = 40;   // V Angle 최대 각도(도)
+const V_ANGLE_MAX = 60;   // V Angle 최대 각도(도) — v1.19.0: ±45° 를 담으려고 40 → 60
 const ROT_MAX = 30;       // 밸런스(회전) 최대 각도(도)
 const ZOOM_MIN = 0.5, ZOOM_MAX = 8;
 const OFFSET_MAX = 1.0;   // 사진 좌우/위아래 이동 한계 (캔버스 비율)
@@ -285,7 +314,7 @@ const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭
    · 사진 자동 배치와 라인 배치도 이 영역의 **한가운데**를 기준으로 한다
    세로는 위쪽에 눈썹을 그릴 여유를 두려고 55% (CENTER_Y). */
 const WORK_GAP = 8;              // 드래그 바 왼쪽에서 띄우는 여유
-const CENTER_Y = 0.55;
+const CENTER_Y = 0.60;
 function workRight() {           // 0~1 정규화. 도크가 아직 없으면 1(전체)
   const d = $("rightDock"), W = S.dim.W;
   if (!d || !d.offsetWidth || !W) return 1;
@@ -309,6 +338,7 @@ const S = {
      "line"  = S.selLR 세로선 좌우 이동  /  "photo" = 사진 보정(줌·위아래·좌우·밸런스) */
   hMode: "line",
   hist: [],              // 되돌리기 스택 (v1.12.0) — 한 번에 한 작업씩
+  redo: [],              // 다시 실행 스택 (v1.19.0) — 되돌린 작업을 앞으로 되감는다
   multi: false,          // 여러라인 모드 (v1.18.0)
   selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
   photoMode: "zoom",
@@ -450,11 +480,11 @@ function renderGuides() {
     const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : sp.op;
     const x = g[sp.key] * W;
     drawLine(frag, x, 0, x, H, sp.color, w, op);
-    vBadges.push({ label: sp.label, color: sp.color, x });
+    vBadges.push({ label: t(sp.i18n), color: sp.color, x });
     if (sp.mirror) {
       const xm = (2 * g.v1 - g[sp.key]) * W;
       drawLine(frag, xm, 0, xm, H, sp.color, w, op);
-      vBadges.push({ label: sp.label, color: sp.color, x: xm });
+      vBadges.push({ label: t(sp.i18n), color: sp.color, x: xm });
     }
   }
   /* 세로선 라벨 — 가로로 겹치면 아래 줄로 내려서 배치 */
@@ -815,22 +845,38 @@ function commitEdit() {
   if (sameState(before, snapState())) return;          // 값이 그대로면 기록하지 않는다
   S.hist.push(before);
   if (S.hist.length > HIST_MAX) S.hist.shift();
+  S.redo = [];                                        // 새 작업을 하면 다시 실행 갈래는 버린다
   updateUndoBtn();
 }
-function clearHist() { S.hist = []; editSnap = null; updateUndoBtn(); }
+function clearHist() { S.hist = []; S.redo = []; editSnap = null; updateUndoBtn(); }
 function updateUndoBtn() {
-  const b = $("btnUndo");
-  if (b) b.disabled = S.hist.length === 0;
+  const u = $("btnUndo"), r = $("btnRedo");
+  if (u) u.disabled = S.hist.length === 0;
+  if (r) r.disabled = S.redo.length === 0;
+}
+/* 되돌리기 ↔ 다시 실행 — 서로의 스택에 현재 상태를 넘겨주며 한 단계씩 오간다 (v1.19.0) */
+function applySnap(sn) {
+  S.g = { ...sn.g };
+  S.p = { ...sn.p };
+  S.hiddenSnapshot = sn.hs ? { ...sn.hs } : null;
+  render();
+  updateUndoBtn();
 }
 function undo() {
   const prev = S.hist.pop();
   if (!prev) { toast(t("undo_none")); return; }
-  S.g = { ...prev.g };
-  S.p = { ...prev.p };
-  S.hiddenSnapshot = prev.hs ? { ...prev.hs } : null;
-  render();
-  updateUndoBtn();
+  S.redo.push(snapState());                           // 지금 상태를 다시 실행 쪽으로
+  if (S.redo.length > HIST_MAX) S.redo.shift();
+  applySnap(prev);
   toast(t("undo_done"));
+}
+function redo() {
+  const next = S.redo.pop();
+  if (!next) { toast(t("redo_none")); return; }
+  S.hist.push(snapState());                           // 지금 상태를 되돌리기 쪽으로
+  if (S.hist.length > HIST_MAX) S.hist.shift();
+  applySnap(next);
+  toast(t("redo_done"));
 }
 /* 한 번의 클릭으로 끝나는 작업을 감싸는 helper */
 function step(fn) { beginEdit(); fn(); commitEdit(); }
@@ -877,7 +923,7 @@ function buildLineButtons() {
     b.className = "lbtn";
     b.dataset.key = spec.key;
     b.dataset.vis = spec.vis;
-    b.textContent = spec.label;
+    b.textContent = t(spec.i18n);
     b.addEventListener("click", () => {
       /* 여러라인 모드 : 누를 때마다 선택에 추가 / 다시 누르면 해제 (숨기지 않음)
          한 줄 모드   : 1번 탭 = 선택(움직임), 같은 버튼 다시 탭 = 숨김/표시
@@ -910,6 +956,11 @@ function updateButtons() {
     b.classList.toggle("sel", isSelected(spec.key));
   });
   $("btnMulti").classList.toggle("on", S.multi);
+  /* 전체라인 = 여러라인의 후속 버튼 — 여러라인이 꺼져 있으면 아예 보이지 않는다 (v1.19.0) */
+  const allSel = $("btnAllSel");
+  allSel.hidden = !S.multi;
+  const vk = visibleLineKeys();
+  allSel.classList.toggle("on", S.multi && vk.length > 0 && vk.every((k) => S.selSet.includes(k)));
   $("btnPivot").classList.toggle("on", isSelected("innerAngle") && S.g.baseStructureVisible);
   $("btnVAngle").classList.toggle("on", isSelected("outerAngle") && S.g.baseStructureVisible);
   $("btnAllLine").classList.toggle("on", !!S.hiddenSnapshot);
@@ -938,10 +989,10 @@ function posConfig(key) {
   }
   if (H_KEYS.has(k)) {
     const sp = H_SPECS.find((s) => s.key === k);
-    return { name: sp.label, v: 1 - g[k], disp: Math.round((1 - g[k]) * 100), hint: t("hint_updown"), step: 0.003, invert: true, axis: "v" };
+    return { name: t(sp.i18n), v: 1 - g[k], disp: Math.round((1 - g[k]) * 100), hint: t("hint_updown"), step: 0.003, invert: true, axis: "v" };
   }
   const sp = V_SPECS.find((s) => s.key === k);
-  return { name: sp.label, v: g[k], disp: Math.round(g[k] * 100), hint: t("hint_leftright"), step: 0.003, invert: false, axis: "h" };
+  return { name: t(sp.i18n), v: g[k], disp: Math.round(g[k] * 100), hint: t("hint_leftright"), step: 0.003, invert: false, axis: "h" };
 }
 
 function applyPos(v, key) {
@@ -1029,7 +1080,7 @@ const PKEY = "pb_presets_v1";
 const BUILTINS = () => [
   { id: "b:natural", name: t("p_natural"), builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.36, h2Visible: true, archThickness: 0.40, archThicknessVisible: true, h3: 0.45, h3Visible: true, v2: 0.38, v2Visible: true } },
   { id: "b:bold",    name: t("p_bold"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.30, h2Visible: true, archThickness: 0.375, archThicknessVisible: true, h3: 0.41, h3Visible: true, v2: 0.33, v4: 0.12, v4Visible: true, front: 0.38, frontVisible: true } },
-  { id: "b:arch",    name: t("p_arch"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.28, h2Visible: true, archThickness: 0.345, archThicknessVisible: true, h3: 0.44, h3Visible: true, v2: 0.36, v4: 0.17, v4Visible: true, baseStructureVisible: true, innerAngle: 0.44, outerAngle: 0.62 } },
+  { id: "b:arch",    name: t("p_arch"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.28, h2Visible: true, archThickness: 0.345, archThicknessVisible: true, h3: 0.44, h3Visible: true, v2: 0.36, v4: 0.17, v4Visible: true, baseStructureVisible: true, innerAngle: 0.44, outerAngle: 0.58 } },
 ];
 
 function userPresets() {
@@ -1362,6 +1413,14 @@ function applyI18n() {
   });
   $("langKo").classList.toggle("on", LANG === "ko");
   $("langEn").classList.toggle("on", LANG === "en");
+  /* 편집 화면 한/영 칩 (v1.19.0) — 현재 언어만 색이 켜진다 */
+  document.querySelectorAll("#railLang button").forEach((b) =>
+    b.classList.toggle("on", b.dataset.lang === LANG));
+  /* 라인 버튼 이름은 i18n 키로 만들어지므로 언어가 바뀌면 다시 그린다 */
+  document.querySelectorAll(".lbtn").forEach((b) => {
+    const sp = specOf(b.dataset.key);
+    if (sp) b.textContent = t(sp.i18n);
+  });
   $("saveName").placeholder = t("preset_enter_name");
   $("renameName").placeholder = t("preset_enter_name");
   const ua = navigator.userAgent;
@@ -1380,6 +1439,8 @@ function setLang(l) {
 /* ═══════════ 이벤트 배선 ═══════════ */
 $("langKo").onclick = () => setLang("ko");
 $("langEn").onclick = () => setLang("en");
+document.querySelectorAll("#railLang button").forEach((b) =>
+  b.addEventListener("click", () => { setLang(b.dataset.lang); render(); }));
 
 function openPicker() {
   /* iOS 의 사진 선택 시트는 웹페이지 바깥에서 그려지므로 앱이 회전시킬 수 없다.
@@ -1410,6 +1471,7 @@ $("btnReset").onclick = () => {
 };
 
 $("btnUndo").onclick = undo;
+$("btnRedo").onclick = redo;
 
 function toggleLock() {
   S.locked = !S.locked;
@@ -1446,13 +1508,34 @@ $("btnVAngle").onclick = () => step(() => {
 });
 $("btnEyeGuide").onclick = () => step(() => { S.g.eyeGuideVisible = !S.g.eyeGuideVisible; render(); });
 
-/* 여러라인 — 켜면 선을 누를 때마다 선택에 쌓이고, 선택된 선들이 함께 움직인다 (v1.18.0) */
+/* 여러라인 — 켜면 선을 누를 때마다 선택에 쌓이고, 선택된 선들이 함께 움직인다 (v1.18.0)
+   `전체라인` 은 여러라인의 **후속 버튼**이라 여러라인이 꺼져 있으면 화면에 없다 (v1.19.0). */
 $("btnMulti").onclick = () => {
   S.multi = !S.multi;
   S.selSet = S.multi && S.sel ? [S.sel] : [];
   render();
   showHud(S.multi ? t("multi_on") : t("multi_off"), 2600);
   toast(S.multi ? t("editor_multi") : t("multi_off"));
+};
+
+/* 지금 화면에 보이는 선들의 키 — 숨긴 선은 함께 움직일 수 없으므로 제외한다 */
+function visibleLineKeys() {
+  const out = [...H_SPECS, ...V_SPECS].filter((sp) => S.g[sp.vis]).map((sp) => sp.key);
+  /* V 피봇은 "위치"라 함께 옮길 수 있지만 V 앵글은 "각도"라서 같이 끌면 V 모양이 일그러진다.
+     그래서 전체 선택에는 넣지 않는다 (v1.19.0). */
+  if (S.g.baseStructureVisible) out.push("innerAngle");
+  return out;
+}
+
+/* 전체라인 — 화면의 모든 선을 한 번에 선택해서 통째로 옮긴다. 다시 누르면 전체 해제. */
+$("btnAllSel").onclick = () => {
+  if (!S.multi) return;
+  const all = visibleLineKeys();
+  const already = all.length > 0 && all.every((k) => S.selSet.includes(k));
+  S.selSet = already ? [] : all;
+  if (S.selSet.length) noteSel(S.selSet[0]);
+  render();
+  showHud(S.selSet.length ? `${S.selSet.length}${t("sel_count")}` : t("multi_on"));
 };
 
 /* 슬라이더 한 번 끄는 동안(pointerdown → change)을 되돌리기 1단계로 묶는다 */
@@ -1530,10 +1613,10 @@ if (localStorage.getItem("pb_orient_v") !== "2") {
 }
 
 function placeLineBars() {
-  const L = $("hButtons"), R = $("vButtons"), X = $("railExtra");
+  const G = $("railLang"), L = $("hButtons"), R = $("vButtons"), X = $("railExtra");
   /* 가로 = 왼쪽 세로 레일(왼손 선택) / 세로 = 캔버스 위 오버레이.
-     V 기본구조 버튼(railExtra)은 항상 라인 버튼 아래에 온다. */
-  if (document.body.classList.contains("land")) $("lineRail").append(L, R, X);
+     순서는 위에서부터 한/영 → 가로선 → 세로선 → V 기본구조 (v1.19.0). */
+  if (document.body.classList.contains("land")) $("lineRail").append(G, L, R, X);
   else stage.append(L, R);
 }
 
@@ -1608,4 +1691,4 @@ if ("serviceWorker" in navigator) {
 }
 
 /* 개발/디버깅용 */
-window.PB = { S, DEFAULT_GUIDE, render, runFaceAI, loadPhoto, alignFromPupils };
+window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, render, runFaceAI, loadPhoto, alignFromPupils };

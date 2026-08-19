@@ -118,10 +118,12 @@ console.log("[세로 모드 · 기능]");
   const box = await p.locator("#stage").boundingBox();
 
   // 2. 라인 드래그
+  /* x = 0.20 — 세로선(v1 0.5 / v2 0.35)에서 충분히 떨어진 지점이라야 가로선이 잡힌다.
+     선이 교차하는 곳을 찍으면 "가장 가까운 선"이 세로선이 될 수 있다 (HIT_PX 28px). */
   const y0 = await p.evaluate(() => window.PB.S.g.h1);
-  await p.mouse.move(box.x + box.width * 0.5, box.y + box.height * y0);
+  await p.mouse.move(box.x + box.width * 0.20, box.y + box.height * y0);
   await p.mouse.down();
-  await p.mouse.move(box.x + box.width * 0.5, box.y + box.height * y0 + 60, { steps: 12 });
+  await p.mouse.move(box.x + box.width * 0.20, box.y + box.height * y0 + 60, { steps: 12 });
   await p.mouse.up();
   const y1 = await p.evaluate(() => window.PB.S.g.h1);
   const moved = (y1 - y0) * box.height;
@@ -183,8 +185,8 @@ console.log("[세로 모드 · 기능]");
     const d = document.getElementById("rightDock");
     return (d.offsetLeft - 8) / window.PB.S.dim.W / 2;
   });
-  check("6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 0.55",
-    near(st.rot, -6, 0.3) && near(st.v1, cxExp, 0.003) && near(st.h1, 0.55, 0.001),
+  check("6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 0.60",
+    near(st.rot, -6, 0.3) && near(st.v1, cxExp, 0.003) && near(st.h1, 0.60, 0.001),
     `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 ${cxExp.toFixed(3)}) h1=${st.h1.toFixed(3)}`);
 
   // 44. 얼굴(동공 중점)이 실제로 캔버스 가로 35% 지점에 온다 — 오른쪽 컨트롤을 피하려고 왼쪽으로 15%
@@ -196,8 +198,8 @@ console.log("[세로 모드 · 기능]");
     const cy = S.dim.H / 2 + p.oy * S.dim.H + p.zoom * (vx * Math.sin(r) + vy * Math.cos(r));
     return { x: cx / S.dim.W, y: cy / S.dim.H };
   }, [(face.pupilL.x + face.pupilR.x) / 2, (face.pupilL.y + face.pupilR.y) / 2]);
-  check("44. 자동 정렬 — 얼굴이 작업 영역 가로 한가운데 · 세로 55%",
-    near(faceCenter.x, cxExp, 0.01) && near(faceCenter.y, 0.55, 0.01),
+  check("44. 자동 정렬 — 얼굴이 작업 영역 가로 한가운데 · 세로 60%",
+    near(faceCenter.x, cxExp, 0.01) && near(faceCenter.y, 0.60, 0.01),
     `얼굴 중심 = (${(faceCenter.x * 100).toFixed(1)}%, ${(faceCenter.y * 100).toFixed(1)}%) / 기대 x ${(cxExp * 100).toFixed(1)}%`);
 
   // 7. 슬라이더
@@ -262,10 +264,10 @@ console.log("[세로 모드 · 기능]");
   await p.evaluate(() => { const s = window.PB.S; s.sel = "h1"; window.PB.render(); });
   const hb = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1 }));
   const hy = box.y + box.height * hb.h1;
-  await p.mouse.move(box.x + box.width * 0.5, hy);
+  await p.mouse.move(box.x + box.width * 0.20, hy);
   await p.mouse.down();
   // 대각선으로 끌어도 가로바는 세로 성분만 따라야 한다
-  await p.mouse.move(box.x + box.width * 0.5 + 80, hy + 40, { steps: 12 });
+  await p.mouse.move(box.x + box.width * 0.20 + 80, hy + 40, { steps: 12 });
   await p.mouse.up();
   const ha = await p.evaluate(() => ({ h1: window.PB.S.g.h1, v1: window.PB.S.g.v1 }));
   check("17. 잠금 중에도 선 조절 가능 · 가로바는 위아래로만",
@@ -607,12 +609,12 @@ console.log("[세로 모드 · 기능]");
   });
   await p.waitForTimeout(120);
   const gy = await p.evaluate(() => window.PB.S.g.h1);
-  await p.mouse.click(box2.x + box2.width * 0.5, box2.y + box2.height * gy);   // 탭만
+  await p.mouse.click(box2.x + box2.width * 0.20, box2.y + box2.height * gy);   // 탭만
   await p.waitForTimeout(120);
   const afterTap = await p.evaluate(() => window.PB.S.hist.length);
-  await p.mouse.move(box2.x + box2.width * 0.5, box2.y + box2.height * gy);
+  await p.mouse.move(box2.x + box2.width * 0.20, box2.y + box2.height * gy);
   await p.mouse.down();
-  await p.mouse.move(box2.x + box2.width * 0.5, box2.y + box2.height * gy + 50, { steps: 12 });
+  await p.mouse.move(box2.x + box2.width * 0.20, box2.y + box2.height * gy + 50, { steps: 12 });
   await p.mouse.up();
   await p.waitForTimeout(120);
   const dragRes = await p.evaluate(() => {
@@ -789,6 +791,113 @@ console.log("[세로 모드 · 기능]");
     S.multi = false; S.selSet = []; S.locked = false; S.hist = [];
     S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; window.PB.render();
   });
+
+  /* ── v1.19.0 ─────────────────────────────────────────── */
+
+  // 57. 다시 실행 — 되돌린 작업을 앞으로 되감는다
+  const rd = await p.evaluate(() => {
+    const S = window.PB.S, PBx = window.PB;
+    S.g = { ...PBx.DEFAULT_GUIDE }; S.hist = []; S.redo = []; S.multi = false; S.selSet = [];
+    S.sel = "h1"; S.selUD = "h1"; S.hMode = "line";
+    PBx.render();
+    const v0 = S.g.h1;
+    document.getElementById("posPlusV").click();
+    const v1 = S.g.h1;
+    document.getElementById("posPlusV").click();
+    const v2 = S.g.h1;
+    const redoLockedAtStart = document.getElementById("btnRedo").disabled;
+    document.getElementById("btnUndo").click();            // → v1
+    const afterUndo = S.g.h1;
+    document.getElementById("btnRedo").click();            // → v2 로 복귀
+    const afterRedo = S.g.h1;
+    document.getElementById("btnUndo").click();
+    document.getElementById("btnUndo").click();            // → v0
+    const back = S.g.h1;
+    document.getElementById("posMinusV").click();          // 새 작업 → redo 갈래 폐기
+    const redoCleared = document.getElementById("btnRedo").disabled;
+    return { v0, v1, v2, afterUndo, afterRedo, back, redoLockedAtStart, redoCleared };
+  });
+  check("57. 다시 실행 — 되돌린 작업을 다시 앞으로 (새 작업 시 갈래 폐기)",
+    rd.redoLockedAtStart === true && rd.v1 !== rd.v0 && rd.v2 !== rd.v1     /* 실제로 값이 바뀌었어야 의미 있는 검증 */
+      && Math.abs(rd.afterUndo - rd.v1) < 1e-9
+      && Math.abs(rd.afterRedo - rd.v2) < 1e-9 && Math.abs(rd.back - rd.v0) < 1e-9
+      && rd.redoCleared === true,
+    `${rd.v0.toFixed(4)}→${rd.v1.toFixed(4)}→${rd.v2.toFixed(4)} ⇠${rd.afterUndo.toFixed(4)} ⇢${rd.afterRedo.toFixed(4)} ⇠⇠${rd.back.toFixed(4)}, 새작업후잠김=${rd.redoCleared}`);
+
+  // 58. 전체라인 — 여러라인의 후속 버튼 (여러라인 OFF 면 화면에 없다)
+  const allSel = await p.evaluate(() => {
+    const S = window.PB.S, PBx = window.PB;
+    S.g = { ...PBx.DEFAULT_GUIDE }; S.multi = false; S.selSet = []; S.sel = "h1";
+    PBx.render();
+    const hiddenWhenOff = document.getElementById("btnAllSel").hidden;
+    document.getElementById("btnMulti").click();           // 여러라인 ON
+    const shownWhenOn = !document.getElementById("btnAllSel").hidden;
+    document.getElementById("btnAllSel").click();          // 전체 선택
+    const picked = [...S.selSet].sort();
+    document.getElementById("btnAllSel").click();          // 다시 → 전체 해제
+    const cleared = S.selSet.length;
+    document.getElementById("btnMulti").click();           // 여러라인 OFF
+    return { hiddenWhenOff, shownWhenOn, picked, cleared, hiddenAgain: document.getElementById("btnAllSel").hidden };
+  });
+  /* 기본 표시 선 = Eye · Center · Inner (V 기본구조는 꺼져 있음) */
+  check("58. 전체라인 — 여러라인 후속 버튼 · 보이는 선 전부 선택/해제",
+    allSel.hiddenWhenOff === true && allSel.shownWhenOn === true
+      && allSel.picked.join() === "h1,v1,v2" && allSel.cleared === 0 && allSel.hiddenAgain === true,
+    `OFF숨김=${allSel.hiddenWhenOff} ON표시=${allSel.shownWhenOn} 선택=[${allSel.picked}] 해제=${allSel.cleared}개`);
+
+  // 59. 전체라인으로 고른 선들이 한 번에 움직인다
+  await p.evaluate(() => {
+    const S = window.PB.S, PBx = window.PB;
+    S.g = { ...PBx.DEFAULT_GUIDE }; S.g.h2Visible = true; S.g.h3Visible = true;
+    S.multi = false; S.selSet = []; S.sel = "h1"; S.locked = true;
+    document.getElementById("btnMulti").click();
+    document.getElementById("btnAllSel").click();
+    PBx.render();
+  });
+  await p.waitForTimeout(120);
+  const b59 = await p.evaluate(() => ({ ...window.PB.S.g }));
+  await p.mouse.move(box2.x + box2.width * 0.20, box2.y + box2.height * 0.30);
+  await p.mouse.down();
+  await p.mouse.move(box2.x + box2.width * 0.20, box2.y + box2.height * 0.30 + 40, { steps: 12 });
+  await p.mouse.up();
+  await p.waitForTimeout(120);
+  const a59 = await p.evaluate(() => ({ ...window.PB.S.g }));
+  const d59 = (k) => (a59[k] - b59[k]) * box2.height;
+  check("59. 전체라인 — 화면의 모든 가로선이 한 번에 이동",
+    near(d59("h1"), 40, 3) && near(d59("h2"), 40, 3) && near(d59("h3"), 40, 3),
+    `Δ Eye=${d59("h1").toFixed(1)} Arch=${d59("h2").toFixed(1)} Tail=${d59("h3").toFixed(1)}`);
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.multi = false; S.selSet = []; S.locked = false; S.hist = []; S.redo = [];
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; window.PB.render();
+  });
+
+  // 60. 한/영 — 왼쪽 라인 버튼 이름이 언어를 따라간다
+  const lang = await p.evaluate(() => {
+    const btn = (k) => document.querySelector(`.lbtn[data-key="${k}"]`).textContent.trim();
+    const on = (id) => document.getElementById(id).classList.contains("on");
+    document.getElementById("langKoR").click();
+    const ko = { eye: btn("h1"), center: btn("v1"), pivot: document.getElementById("btnPivot").textContent.trim(), koOn: on("langKoR"), enOn: on("langEnR") };
+    document.getElementById("langEnR").click();
+    const en = { eye: btn("h1"), center: btn("v1"), koOn: on("langKoR"), enOn: on("langEnR") };
+    document.getElementById("langKoR").click();
+    return { ko, en };
+  });
+  check("60. 한/영 전환 — 라인 버튼 이름 · 현재 언어만 색 켜짐",
+    lang.ko.eye === "눈" && lang.ko.center === "센터" && lang.ko.pivot === "V 센터 피봇"
+      && lang.ko.koOn && !lang.ko.enOn
+      && lang.en.eye === "Eye" && lang.en.center === "Center" && lang.en.enOn && !lang.en.koOn,
+    `한=[${lang.ko.eye}/${lang.ko.center}/${lang.ko.pivot}] 영=[${lang.en.eye}/${lang.en.center}]`);
+
+  // 61. 기본값 — 눈 기준선 0.60 · V 피봇 위 10% · V 앵글 아래 45°
+  const defs = await p.evaluate(() => {
+    const D = window.PB.DEFAULT_GUIDE;
+    return { h1: D.h1, inner: D.innerAngle, outer: D.outerAngle, max: window.PB.V_ANGLE_MAX };
+  });
+  const vDeg = (defs.outer - 0.5) * 2 * defs.max;
+  check("61. 기본값 — 눈 0.60 · V 피봇 위 10% · V 앵글 아래 45°",
+    near(defs.h1, 0.60, 1e-6) && near(defs.inner, 0.10, 1e-6) && near(vDeg, -45, 0.2),
+    `눈=${defs.h1} 피봇=${defs.inner} 앵글=${vDeg.toFixed(1)}°`);
 
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {

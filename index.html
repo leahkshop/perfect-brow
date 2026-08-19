@@ -228,15 +228,15 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 .dockbtn.big i{font-size:19px}
 
 .menurow{display:flex;gap:5px}
-.menurow button{height:42px;min-width:58px;border-radius:10px;background:rgba(54,59,69,.92);
+.menurow button{height:50px;min-width:68px;border-radius:12px;background:rgba(54,59,69,.92);
   border:1px solid rgba(255,255,255,.28);color:#fff;font-size:9.5px;font-weight:800;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
   padding:0 8px}
-.menurow button i{font-style:normal;font-size:14px;line-height:1}
+.menurow button i{font-style:normal;font-size:17px;line-height:1}
 .menurow button:active{background:var(--primary);border-color:var(--primary)}
 .menurow button.on{background:var(--danger);border-color:var(--danger)}
 .menurow button.eyeon{background:#ffffff;color:#111;border-color:#ffffff}
-.menurow .gap{flex:0 0 auto;width:22px}
+.menurow .gap{flex:0 0 auto;width:44px}
 
 /* 사진 보정 모드 버튼 — 좌우 드래그 바 바로 위. 사진 잠금 시 반투명 + 잠김 */
 .modebtns{display:flex;gap:5px;margin:0}
@@ -270,6 +270,14 @@ button:disabled{opacity:.38;pointer-events:none}
 #railExtra::before{content:"";position:absolute;left:6px;right:6px;top:4px;height:1px;background:var(--border)}
 #railExtra .chip{width:52px;padding:5px 3px;font-size:8.5px;line-height:1.15;white-space:normal;text-align:center}
 body:not(.land) #railExtra{display:none}
+/* 한/영 (v1.19.0) — 왼쪽 버튼들 맨 위. 현재 언어만 색이 켜진다 */
+#railLang{position:relative;display:flex;gap:4px;width:100%;justify-content:center;padding-bottom:11px}
+#railLang::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--border)}
+#railLang button{width:24px;height:24px;border-radius:7px;font-size:11px;font-weight:700;
+  background:rgba(54,59,69,.92);border:1px solid var(--border);color:var(--text);
+  display:flex;align-items:center;justify-content:center;padding:0}
+#railLang button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+body:not(.land) #railLang{display:none}
 
 /* Modal */
 .mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
@@ -312,14 +320,14 @@ body:not(.land) #railExtra{display:none}
   body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
   body.land.compact #editor .rdock{height:54%;min-height:124px;gap:6px}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
-  body.land.compact #editor .menurow button{height:36px;min-width:50px;font-size:8.5px;padding:0 6px}
-  body.land.compact #editor .menurow .gap{width:14px}
+  body.land.compact #editor .menurow button{height:46px;min-width:52px;font-size:9px;padding:0 6px}
+  body.land.compact #editor .menurow .gap{width:22px}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
   body.land.compact #editor .dockbtn.big i{font-size:16px}
   body.land.compact #editor .ldock{bottom:calc(var(--safe-b) + 6px);left:6px}
   body.land.compact #editor .scrim-b{height:calc(var(--bdock,110px) + 22px)}
   body.land.compact #editor .scrim-r{width:calc(var(--redge) + 50px)}
-  body.land.compact #editor .menurow button i{font-size:12px}
+  body.land.compact #editor .menurow button i{font-size:14px}
   body.land.compact #editor .modebtns button{height:26px;min-width:48px;font-size:10px;padding:0 7px}
   body.land.compact #editor .bdock{gap:5px;bottom:calc(var(--safe-b) + 6px)}
 }
@@ -358,6 +366,8 @@ body:not(.land) #railExtra{display:none}
     <div class="ov ov-tl">
       <button class="chip" id="btnAllLine" data-i18n="editor_all_hide">모든 라인 숨김</button>
       <button class="chip" id="btnMulti" data-i18n="editor_multi">여러라인</button>
+      <!-- 여러라인의 후속 버튼 (v1.19.0) — 여러라인이 꺼져 있으면 hidden -->
+      <button class="chip" id="btnAllSel" data-i18n="editor_all_lines" hidden>전체라인</button>
     </div>
 
     <div class="linebar linebar-left" id="hButtons"></div>
@@ -365,6 +375,7 @@ body:not(.land) #railExtra{display:none}
 
     <!-- 오른쪽 도크 (v1.12.0) — 되돌리기(크게) + 위아래 드래그 바. 오른쪽 끝 · 세로 중앙 -->
     <div class="rdock" id="rightDock">
+      <button class="dockbtn big" id="btnRedo"><i>↷</i><em data-i18n="editor_redo">다시 실행</em></button>
       <button class="dockbtn big" id="btnUndo"><i>↶</i><em data-i18n="editor_undo">되돌리기</em></button>
       <div class="posctl axis-v" id="posCtlV">
         <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
@@ -408,6 +419,11 @@ body:not(.land) #railExtra{display:none}
   </div>
 
   <aside id="lineRail">
+    <!-- 한/영 (v1.19.0) — 왼쪽 버튼들 맨 위. 다른 언어를 추가할 때도 이 줄에 칩을 더합니다 -->
+    <div id="railLang">
+      <button id="langKoR" data-lang="ko">한</button>
+      <button id="langEnR" data-lang="en">영</button>
+    </div>
     <div id="railExtra">
       <button class="chip" id="btnPivot" data-i18n="editor_inner_angle">V Center Pivot</button>
       <button class="chip" id="btnVAngle" data-i18n="editor_outer_angle">V Angle</button>
