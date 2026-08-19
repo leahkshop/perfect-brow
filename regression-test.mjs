@@ -624,6 +624,95 @@ console.log("[세로 모드 · 기능]");
     afterTap === 0 && dragRes.depth === 1 && Math.abs(dragRes.back - gy) < 1e-9,
     `탭후=${afterTap}단계, 드래그후=${dragRes.depth}단계, 복원=${Math.abs(dragRes.back - gy) < 1e-9}`);
 
+  /* ── 여러라인 (v1.18.0) ─────────────────────────────── */
+
+  // 49. 여러라인 ON → 누를 때마다 선택 누적, 같은 버튼 다시 누르면 해제 (숨기지 않음)
+  const multiSel = await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.multi = false; S.selSet = []; S.sel = "h1";
+    window.PB.render();
+    document.getElementById("btnMulti").click();          // 여러라인 ON → 현재 선택 seed
+    const seeded = [...S.selSet];
+    const tap = (k) => document.querySelector(`.lbtn[data-key="${k}"]`).click();
+    tap("h2"); tap("h3");
+    const added = [...S.selSet];
+    tap("h3");                                            // 다시 → 해제
+    const removed = [...S.selSet];
+    const stillVisible = S.g.h3Visible;                   // 해제해도 숨겨지지 않아야 함
+    return { seeded, added, removed, stillVisible, btnOn: document.getElementById("btnMulti").classList.contains("on") };
+  });
+  check("49. 여러라인 — 누를 때마다 선택 누적 · 다시 누르면 해제(숨김 아님)",
+    multiSel.btnOn && multiSel.seeded.join() === "h1"
+      && multiSel.added.join() === "h1,h2,h3" && multiSel.removed.join() === "h1,h2"
+      && multiSel.stillVisible === true,
+    `seed=[${multiSel.seeded}] → [${multiSel.added}] → [${multiSel.removed}], 표시유지=${multiSel.stillVisible}`);
+
+  // 50. 선택된 라인들이 함께 움직인다 (비선택 라인은 불변)
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.g.h2Visible = true; S.g.archThicknessVisible = true; S.g.h3Visible = true;
+    S.multi = true; S.selSet = ["h2", "archThickness"]; S.sel = "h2"; S.selUD = "h2";
+    S.locked = true;                                      // 빈 곳 드래그 = 선 조절
+    window.PB.render();
+  });
+  await p.waitForTimeout(120);
+  const b50 = await p.evaluate(() => ({ ...window.PB.S.g }));
+  await p.mouse.move(box2.x + box2.width * 0.5, box2.y + box2.height * 0.72);
+  await p.mouse.down();
+  await p.mouse.move(box2.x + box2.width * 0.5, box2.y + box2.height * 0.72 + 55, { steps: 12 });
+  await p.mouse.up();
+  await p.waitForTimeout(120);
+  const a50 = await p.evaluate(() => ({ ...window.PB.S.g }));
+  const d50 = (k) => (a50[k] - b50[k]) * box2.height;
+  check("50. 여러라인 — 선택된 선들이 함께 이동 · 비선택은 불변",
+    near(d50("h2"), 55, 3) && near(d50("archThickness"), 55, 3)
+      && Math.abs(d50("h1")) < 0.5 && Math.abs(d50("h3")) < 0.5,
+    `Δ Arch=${d50("h2").toFixed(1)} A.T=${d50("archThickness").toFixed(1)} / Eye=${d50("h1").toFixed(1)} Tail=${d50("h3").toFixed(1)}`);
+
+  // 51. 선택된 라인은 모두 굵고 선명하게 그려진다
+  const emph = await p.evaluate(() => {
+    const S = window.PB.S;
+    const read = () => [...document.getElementById("guides").querySelectorAll("line")]
+      .filter((l) => l.getAttribute("stroke") === "#0066FF")
+      .map((l) => +l.getAttribute("stroke-width"));
+    S.selSet = []; S.multi = false; S.sel = "h1"; window.PB.render();
+    const plain = Math.max(...read());
+    S.multi = true; S.selSet = ["h2", "archThickness"]; window.PB.render();
+    const bold = Math.max(...read());
+    return { plain, bold };
+  });
+  check("51. 선택된 라인 강조 — 굵기 증가",
+    emph.bold > emph.plain + 1, `기본 ${emph.plain} → 선택 ${emph.bold}`);
+
+  // 52. 여러라인 OFF → 한 개만 선택
+  const single = await p.evaluate(() => {
+    const S = window.PB.S;
+    document.getElementById("btnMulti").click();          // OFF
+    const off = { multi: S.multi, set: [...S.selSet] };
+    document.querySelector('.lbtn[data-key="h3"]').click();
+    return { off, sel: S.sel, set: [...S.selSet] };
+  });
+  check("52. 여러라인 해제 → 한 개만 선택",
+    single.off.multi === false && single.off.set.length === 0 && single.sel === "h3" && single.set.length === 0,
+    `모드=${single.off.multi} 선택=${single.sel} 세트=${single.set.length}개`);
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.multi = false; S.selSet = []; S.locked = false;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; window.PB.render();
+  });
+
+  // 53. `모든 라인 숨김` 버튼 이름 · 여러라인 버튼 존재
+  const btns = await p.evaluate(() => ({
+    allHide: document.getElementById("btnAllLine").textContent.trim(),
+    multi: document.getElementById("btnMulti").textContent.trim(),
+    sideBySide: Math.abs(document.getElementById("btnAllLine").getBoundingClientRect().top
+      - document.getElementById("btnMulti").getBoundingClientRect().top) < 3,
+  }));
+  check("53. 버튼 이름 — `모든 라인 숨김` + 옆에 `여러라인`",
+    btns.allHide === "모든 라인 숨김" && btns.multi === "여러라인" && btns.sideBySide,
+    `[${btns.allHide}] [${btns.multi}] 같은 줄=${btns.sideBySide}`);
+
   // 43. 라인 버튼 — 1탭 = 선택(표시 유지) / 같은 버튼 다시 탭 = 숨김
   const lineBtn = await p.evaluate(() => {
     const S = window.PB.S;

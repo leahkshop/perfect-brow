@@ -32,6 +32,11 @@ const I18N = {
     select_photo: "사진 선택",
     editor_reset: "초기화",
     editor_undo: "되돌리기",
+    editor_all_hide: "모든 라인 숨김",
+    editor_multi: "여러라인",
+    multi_on: "여러라인 — 선을 눌러 추가 · 다시 누르면 해제",
+    multi_off: "한 줄 선택으로 돌아왔습니다",
+    sel_count: "개 선택됨 · 함께 움직입니다",
     undo_done: "한 단계 되돌렸습니다",
     undo_none: "되돌릴 작업이 없습니다",
     editor_align: "동공정렬",
@@ -118,6 +123,11 @@ const I18N = {
     select_photo: "Select Photo",
     editor_reset: "Reset",
     editor_undo: "Undo",
+    editor_all_hide: "Hide all lines",
+    editor_multi: "Multi",
+    multi_on: "Multi-select — tap a line to add, tap again to remove",
+    multi_off: "Back to single select",
+    sel_count: " selected · they move together",
     undo_done: "Undone one step",
     undo_none: "Nothing to undo",
     editor_align: "Pupil Align",
@@ -280,6 +290,8 @@ const S = {
      "line"  = S.selLR 세로선 좌우 이동  /  "photo" = 사진 보정(줌·위아래·좌우·밸런스) */
   hMode: "line",
   hist: [],              // 되돌리기 스택 (v1.12.0) — 한 번에 한 작업씩
+  multi: false,          // 여러라인 모드 (v1.18.0)
+  selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
   photoMode: "zoom",
   locked: false,
   dim: { W: 0, H: 0 },
@@ -406,7 +418,7 @@ function renderGuides() {
   for (const sp of H_SPECS) {
     if (!g[sp.vis]) continue;
     const y = g[sp.key] * H;
-    const sel = S.sel === sp.key;
+    const sel = isSelected(sp.key);
     for (const [a, b] of sp.segs) {
       drawLine(frag, a * WR, y, b * WR, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
     }
@@ -415,7 +427,7 @@ function renderGuides() {
   /* 세로 라인 (+ 대칭선) */
   for (const sp of V_SPECS) {
     if (!g[sp.vis]) continue;
-    const sel = S.sel === sp.key;
+    const sel = isSelected(sp.key);
     const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : sp.op;
     const x = g[sp.key] * W;
     drawLine(frag, x, 0, x, H, sp.color, w, op);
@@ -461,7 +473,7 @@ function renderGuides() {
     const px = g.v1 * W, py = g.innerAngle * H;
     const deg = (g.outerAngle - 0.5) * 2 * V_ANGLE_MAX;
     const tn = Math.tan((deg * Math.PI) / 180);
-    const selA = S.sel === "outerAngle", selP = S.sel === "innerAngle";
+    const selA = isSelected("outerAngle"), selP = isSelected("innerAngle");
     const w = selA ? 3.4 : 2.2;
     drawLine(frag, px, py, 0, py - tn * px, "#111111", w, 0.85);
     drawLine(frag, px, py, WR, py - tn * (WR - px), "#111111", w, 0.85);
@@ -638,12 +650,14 @@ touch.addEventListener("pointerdown", (e) => {
          · 빈 곳 + 사진 잠금     → 이미 선택된 선을 끈다 (미세조정 모드)
        두 손가락은 항상 줌·회전·이동. */
     const hit = hitTest(sp.x, sp.y);
-    let key, mirrored = false;
+    let key, mirrored = false, tapKey = null;
     if (hit) {
       if (hit.type === "pivot") key = "innerAngle";
       else if (hit.type === "arm") key = "outerAngle";
       else { key = hit.key; mirrored = !!hit.mirrored; }
-      setSel(key);
+      tapKey = key;
+      if (S.multi) noteSel(key);      /* 탭/해제는 손을 뗄 때 판정 (데드존) */
+      else setSel(key);
     } else if (!S.locked) {
       gMode = "pan";
       gDrag = { ox: S.p.ox, oy: S.p.oy, x0: sp.x, y0: sp.y };
@@ -651,8 +665,12 @@ touch.addEventListener("pointerdown", (e) => {
     } else {
       key = S.sel;
     }
+    /* 여러라인 모드에서 아직 선택되지 않은 선을 잡으면, 끌기 시작할 때 선택에 합류시킨다 */
+    const keys = S.multi
+      ? (S.selSet.includes(key) ? S.selSet.slice() : S.selSet.concat(key))
+      : [key];
     gMode = "line";
-    gDrag = { key, mirrored, base: S.g[key], x0: sp.x, y0: sp.y };
+    gDrag = { key, mirrored, tapKey, keys, baseAll: { ...S.g }, base: S.g[key], x0: sp.x, y0: sp.y };
     render();
     const c0 = posConfig();
     showHud(`${c0.name} ${t("sel_line")}<br>${c0.axis === "v" ? "▲▼" : "◀▶"} ${c0.disp}`);
@@ -681,11 +699,20 @@ touch.addEventListener("pointermove", (e) => {
     if (!gDrag.moved) {
       if (Math.hypot(sp.x - gDrag.x0, sp.y - gDrag.y0) < 3) return;
       gDrag.moved = true;
+      /* 끌기 시작 = 잡은 선을 선택에 합류 (여러라인 모드) */
+      if (S.multi && gDrag.tapKey && !S.selSet.includes(gDrag.tapKey)) S.selSet.push(gDrag.tapKey);
     }
-    dragLineBy(gDrag.key, gDrag.base, (sp.x - gDrag.x0) / W, (sp.y - gDrag.y0) / H, gDrag.mirrored);
+    const dxN = (sp.x - gDrag.x0) / W, dyN = (sp.y - gDrag.y0) / H;
+    if (S.multi && gDrag.keys.length > 1) {
+      dragManyBy(gDrag.keys, gDrag.baseAll, dxN, dyN, gDrag.mirrored ? gDrag.key : null);
+    } else {
+      dragLineBy(gDrag.key, gDrag.base, dxN, dyN, gDrag.mirrored);
+    }
     render();
     const cd = posConfig();
-    showHud(`${cd.name}<br>${cd.axis === "v" ? "▲▼" : "◀▶"} ${cd.disp}`);
+    showHud(S.multi && gDrag.keys.length > 1
+      ? `${gDrag.keys.length}${t("sel_count")}`
+      : `${cd.name}<br>${cd.axis === "v" ? "▲▼" : "◀▶"} ${cd.disp}`);
   } else if (gMode === "pan" && gDrag) {
     /* 손가락 이동량을 1:1 로 따라간다. 확대할수록 더 멀리 밀 수 있어야 하므로
        한계도 배율에 비례시킨다 (panLimit). */
@@ -710,6 +737,12 @@ touch.addEventListener("pointermove", (e) => {
 
 function endPointer(e) {
   pts.delete(e.pointerId);
+  /* 여러라인 모드에서 "탭만" 했으면 선택에 추가 / 이미 있으면 해제 (3px 데드존 기준) */
+  if (pts.size === 0 && gMode === "line" && gDrag && !gDrag.moved && S.multi && gDrag.tapKey) {
+    toggleSel(gDrag.tapKey);
+    render();
+    showHud(S.selSet.length ? `${S.selSet.length}${t("sel_count")}` : t("multi_on"));
+  }
   if (pts.size < 2) { gMode = pts.size === 1 ? null : null; gDrag = null; }
   if (pts.size === 0) commitEdit();   /* 손을 다 떼면 한 작업으로 확정 */
 }
@@ -771,6 +804,28 @@ function step(fn) { beginEdit(); fn(); commitEdit(); }
 
 /* ═══════════ 6. 버튼 · 패널 ═══════════ */
 
+/* ── 선택 판정 (v1.18.0) ──────────────────────────────
+   여러라인 모드에서는 selSet 에 든 선이 모두 "선택됨"(굵고 선명하게)이고 함께 움직인다.
+   selSet 이 비면 단일 선택(S.sel)으로 폴백한다. */
+const isSelected = (k) => (S.multi && S.selSet.length ? S.selSet.includes(k) : S.sel === k);
+const activeKeys = () => (S.multi && S.selSet.length ? S.selSet.slice() : [S.sel]);
+function toggleSel(k) {
+  const i = S.selSet.indexOf(k);
+  if (i >= 0) S.selSet.splice(i, 1);
+  else S.selSet.push(k);
+  noteSel(k);
+}
+
+/* 여러 선을 손가락 이동량만큼 **동시에** 움직인다 (기준값 + 델타 · BASELINE 1-4).
+   Center(v1) 가 포함되면 v1 만 움직여도 나머지 세로선이 따라오므로(1-2) 중복 이동을 막는다. */
+function dragManyBy(keys, baseAll, dxN, dyN, mirroredKey) {
+  const ud = keys.filter((k) => axisOf(k) === "v");
+  let lr = keys.filter((k) => axisOf(k) === "h");
+  if (lr.includes("v1")) lr = ["v1"];
+  for (const k of ud) dragLineBy(k, baseAll[k], 0, dyN, false);
+  for (const k of lr) dragLineBy(k, baseAll[k], dxN, 0, k === mirroredKey);
+}
+
 /* 선택 기록 — S.sel(드래그 대상) 과 축별 조절자 대상을 함께 갱신 */
 function noteSel(key) {
   S.sel = key;
@@ -791,13 +846,20 @@ function buildLineButtons() {
     b.dataset.vis = spec.vis;
     b.textContent = spec.label;
     b.addEventListener("click", () => {
-      /* 1번 탭 = 선택(움직일 수 있음), 같은 버튼 다시 탭 = 숨김/표시.
+      /* 여러라인 모드 : 누를 때마다 선택에 추가 / 다시 누르면 해제 (숨기지 않음)
+         한 줄 모드   : 1번 탭 = 선택(움직임), 같은 버튼 다시 탭 = 숨김/표시
          사진 보정 중이었다면 첫 탭은 선 조절로 되돌리는 역할만 한다. */
-      step(() => {
-        if (S.sel === spec.key && S.hMode === "line") S.g[spec.vis] = !S.g[spec.vis];
-        else S.g[spec.vis] = true;
-      });
-      noteSel(spec.key);
+      if (S.multi) {
+        step(() => { S.g[spec.vis] = true; });
+        toggleSel(spec.key);
+        showHud(S.selSet.length ? `${S.selSet.length}${t("sel_count")}` : t("multi_on"));
+      } else {
+        step(() => {
+          if (S.sel === spec.key && S.hMode === "line") S.g[spec.vis] = !S.g[spec.vis];
+          else S.g[spec.vis] = true;
+        });
+        noteSel(spec.key);
+      }
       render();
     });
     return b;
@@ -812,10 +874,11 @@ function updateButtons() {
     const vis = S.g[b.dataset.vis];
     b.style.background = vis ? spec.color : "var(--btn-off)";
     b.classList.toggle("hidden-line", !vis);
-    b.classList.toggle("sel", S.sel === spec.key);
+    b.classList.toggle("sel", isSelected(spec.key));
   });
-  $("btnPivot").classList.toggle("on", S.sel === "innerAngle" && S.g.baseStructureVisible);
-  $("btnVAngle").classList.toggle("on", S.sel === "outerAngle" && S.g.baseStructureVisible);
+  $("btnMulti").classList.toggle("on", S.multi);
+  $("btnPivot").classList.toggle("on", isSelected("innerAngle") && S.g.baseStructureVisible);
+  $("btnVAngle").classList.toggle("on", isSelected("outerAngle") && S.g.baseStructureVisible);
   $("btnAllLine").classList.toggle("on", !!S.hiddenSnapshot);
   $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
   $("btnLock").classList.toggle("on", S.locked);
@@ -1236,7 +1299,7 @@ function loadPhoto(file) {
     S.p = { ...DEFAULT_PHOTO };
     S.locked = false;
     S.hiddenSnapshot = null;
-    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
+    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
     S.pick = [];
     clearHist();                 /* 새 사진 = 되돌리기 기록 초기화 */
@@ -1304,7 +1367,7 @@ $("btnReset").onclick = () => {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
     S.hiddenSnapshot = null;
-    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
+    S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
     S.pick = [];
     if (S.landmarks) autoAlign(S.landmarks);
@@ -1349,6 +1412,15 @@ $("btnVAngle").onclick = () => step(() => {
   render();
 });
 $("btnEyeGuide").onclick = () => step(() => { S.g.eyeGuideVisible = !S.g.eyeGuideVisible; render(); });
+
+/* 여러라인 — 켜면 선을 누를 때마다 선택에 쌓이고, 선택된 선들이 함께 움직인다 (v1.18.0) */
+$("btnMulti").onclick = () => {
+  S.multi = !S.multi;
+  S.selSet = S.multi && S.sel ? [S.sel] : [];
+  render();
+  showHud(S.multi ? t("multi_on") : t("multi_off"), 2600);
+  toast(S.multi ? t("editor_multi") : t("multi_off"));
+};
 
 /* 슬라이더 한 번 끄는 동안(pointerdown → change)을 되돌리기 1단계로 묶는다 */
 function histSlider(el) {

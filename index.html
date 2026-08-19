@@ -139,7 +139,7 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
 #touch{position:absolute;inset:0;touch-action:none;z-index:3}
 
 .ov{position:absolute;z-index:20}
-.ov-tl{top:8px;left:8px}
+.ov-tl{top:8px;left:8px;display:flex;gap:6px;align-items:center}
 .ov-tr{top:8px;right:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .chip{background:rgba(54,59,69,.80);color:#fff;border:1px solid rgba(255,255,255,.30);
   border-radius:8px;padding:6px 10px;font-size:10.5px;font-weight:700;
@@ -356,7 +356,8 @@ body:not(.land) #railExtra{display:none}
     <div id="touch"></div>
 
     <div class="ov ov-tl">
-      <button class="chip" id="btnAllLine">all line</button>
+      <button class="chip" id="btnAllLine" data-i18n="editor_all_hide">모든 라인 숨김</button>
+      <button class="chip" id="btnMulti" data-i18n="editor_multi">여러라인</button>
     </div>
 
     <div class="linebar linebar-left" id="hButtons"></div>
