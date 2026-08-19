@@ -99,6 +99,8 @@ const I18N = {
     lock_short: "사진잠금",
     unlock_short: "잠금해제",
     sel_line: "선택",
+    line_hidden: "숨김",
+    line_shown: "표시",
     pan_hint: "사진 이동은 두 손가락 드래그",
     unlocked_msg: "사진 잠금 해제",
     saved_img: "이미지를 저장했습니다",
@@ -190,6 +192,8 @@ const I18N = {
     lock_short: "Lock photo",
     unlock_short: "Unlock",
     sel_line: "selected",
+    line_hidden: "hidden",
+    line_shown: "shown",
     pan_hint: "Pan the photo with two fingers",
     unlocked_msg: "Photo unlocked",
     saved_img: "Image saved",
@@ -233,6 +237,21 @@ const ALL_VIS = [
   "v1Visible", "v2Visible", "v4Visible",
   "baseStructureVisible", "eyeGuideVisible",
 ];
+
+/* 선 키 → 표시 여부 키 / 라벨 (v1.18.1)
+   Pivot·V Angle 은 Base Structure 하나로 묶여 있으므로 baseStructureVisible 을 쓴다. */
+function specOf(k) { return [...H_SPECS, ...V_SPECS].find((s) => s.key === k) || null; }
+function visKeyOf(k) {
+  if (k === "innerAngle" || k === "outerAngle") return "baseStructureVisible";
+  const sp = specOf(k);
+  return sp ? sp.vis : null;
+}
+function labelOf(k) {
+  if (k === "innerAngle") return "V Center Pivot";
+  if (k === "outerAngle") return "V Angle";
+  const sp = specOf(k);
+  return sp ? sp.label : k;
+}
 
 const DEFAULT_GUIDE = Object.freeze({
   h1: 0.5,   h1Visible: true,
@@ -650,12 +669,15 @@ touch.addEventListener("pointerdown", (e) => {
          · 빈 곳 + 사진 잠금     → 이미 선택된 선을 끈다 (미세조정 모드)
        두 손가락은 항상 줌·회전·이동. */
     const hit = hitTest(sp.x, sp.y);
-    let key, mirrored = false, tapKey = null;
+    let key, mirrored = false, tapKey = null, wasSel = false;
     if (hit) {
       if (hit.type === "pivot") key = "innerAngle";
       else if (hit.type === "arm") key = "outerAngle";
       else { key = hit.key; mirrored = !!hit.mirrored; }
       tapKey = key;
+      /* 한 줄 모드에서 "이미 선택돼 있던 선"을 다시 탭하면 손을 뗄 때 숨김/표시로 판정한다
+         (레일 버튼과 같은 규칙 · BASELINE 1-7). 판정 기준은 setSel 이 S.sel 을 덮어쓰기 전 값. */
+      wasSel = !S.multi && S.sel === key && S.hMode === "line";
       if (S.multi) noteSel(key);      /* 탭/해제는 손을 뗄 때 판정 (데드존) */
       else setSel(key);
     } else if (!S.locked) {
@@ -670,7 +692,7 @@ touch.addEventListener("pointerdown", (e) => {
       ? (S.selSet.includes(key) ? S.selSet.slice() : S.selSet.concat(key))
       : [key];
     gMode = "line";
-    gDrag = { key, mirrored, tapKey, keys, baseAll: { ...S.g }, base: S.g[key], x0: sp.x, y0: sp.y };
+    gDrag = { key, mirrored, tapKey, wasSel, keys, baseAll: { ...S.g }, base: S.g[key], x0: sp.x, y0: sp.y };
     render();
     const c0 = posConfig();
     showHud(`${c0.name} ${t("sel_line")}<br>${c0.axis === "v" ? "▲▼" : "◀▶"} ${c0.disp}`);
@@ -737,11 +759,22 @@ touch.addEventListener("pointermove", (e) => {
 
 function endPointer(e) {
   pts.delete(e.pointerId);
-  /* 여러라인 모드에서 "탭만" 했으면 선택에 추가 / 이미 있으면 해제 (3px 데드존 기준) */
-  if (pts.size === 0 && gMode === "line" && gDrag && !gDrag.moved && S.multi && gDrag.tapKey) {
-    toggleSel(gDrag.tapKey);
-    render();
-    showHud(S.selSet.length ? `${S.selSet.length}${t("sel_count")}` : t("multi_on"));
+  /* "탭만" 했을 때(3px 데드존을 넘지 않음)의 판정 — 여러라인 / 한 줄 모드가 다르다 (BASELINE 1-7)
+       · 여러라인 : 선택에 추가 / 이미 있으면 선택 해제 (숨기지 않음)
+       · 한 줄    : 새 선이면 선택만, 이미 선택돼 있던 선을 다시 탭하면 숨김/표시 */
+  if (pts.size === 0 && gMode === "line" && gDrag && !gDrag.moved && gDrag.tapKey) {
+    if (S.multi) {
+      toggleSel(gDrag.tapKey);
+      render();
+      showHud(S.selSet.length ? `${S.selSet.length}${t("sel_count")}` : t("multi_on"));
+    } else if (gDrag.wasSel) {
+      const vk = visKeyOf(gDrag.tapKey);
+      if (vk) {
+        step(() => { S.g[vk] = !S.g[vk]; });
+        render();
+        showHud(`${labelOf(gDrag.tapKey)} ${S.g[vk] ? t("line_shown") : t("line_hidden")}`);
+      }
+    }
   }
   if (pts.size < 2) { gMode = pts.size === 1 ? null : null; gDrag = null; }
   if (pts.size === 0) commitEdit();   /* 손을 다 떼면 한 작업으로 확정 */

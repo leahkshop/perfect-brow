@@ -597,10 +597,12 @@ console.log("[세로 모드 · 기능]");
       && undoTest.emptyDisabled,
     `단계=${undoTest.depth} ${undoTest.v0.toFixed(3)}→${undoTest.v1.toFixed(3)}→${undoTest.v2.toFixed(3)} ⇢ ${undoTest.u1.toFixed(3)} ⇢ ${undoTest.u2.toFixed(3)}, 빈스택잠김=${undoTest.emptyDisabled}`);
 
-  // 42. 드래그 제스처 1회 = 되돌리기 1단계 (탭만 하면 기록 안 됨)
+  /* 42. 드래그 제스처 1회 = 되돌리기 1단계.
+     "선택만 하는 탭"(아직 선택돼 있지 않던 선을 처음 탭)은 기록하지 않는다.
+     ⚠️ 이미 선택된 선을 다시 탭하면 숨김이므로 그건 정상적으로 1단계로 기록된다 (v1.18.1, 55번). */
   await p.evaluate(() => {
     const S = window.PB.S;
-    S.g = { ...window.PB.DEFAULT_GUIDE }; S.locked = true; S.sel = "h1"; S.hist = [];
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.locked = true; S.sel = "v1"; S.hist = [];
     window.PB.render();
   });
   await p.waitForTimeout(120);
@@ -620,7 +622,7 @@ console.log("[세로 모드 · 기능]");
     document.getElementById("btnUndo").click();
     return { moved, depth, back: S.g.h1 };
   });
-  check("42. 드래그 1회 = 되돌리기 1단계 (탭만 하면 기록 안 됨)",
+  check("42. 드래그 1회 = 되돌리기 1단계 (선택만 하는 탭은 기록 안 됨)",
     afterTap === 0 && dragRes.depth === 1 && Math.abs(dragRes.back - gy) < 1e-9,
     `탭후=${afterTap}단계, 드래그후=${dragRes.depth}단계, 복원=${Math.abs(dragRes.back - gy) < 1e-9}`);
 
@@ -730,6 +732,63 @@ console.log("[세로 모드 · 기능]");
       && lineBtn.second.sel === "h2" && lineBtn.second.vis === false && lineBtn.third === true,
     `1탭=${lineBtn.first.sel}/표시${lineBtn.first.vis} → 2탭 표시${lineBtn.second.vis} → 3탭 표시${lineBtn.third}`);
   await p.evaluate(() => { window.PB.S.locked = false; window.PB.S.hist = []; window.PB.render(); });
+
+  /* 54~56. 화면의 선을 직접 탭했을 때 (v1.18.1)
+     레일 버튼과 같은 규칙이어야 한다 — 한 줄 모드 1탭 = 선택 / 같은 선 다시 탭 = 숨김.
+     v1.18.0 에서는 캔버스 탭이 선택만 하고 숨기지 않는 버그가 있었다. */
+  const tapAt = async (key) => {
+    const pt = await p.evaluate((k) => {
+      const S = window.PB.S, { W, H } = S.dim;
+      const H_KEYS = ["h1", "h2", "h3", "front", "frontThickness", "archThickness"];
+      return H_KEYS.includes(k)
+        ? { x: Math.round((S.wr || W) * 0.4), y: Math.round(S.g[k] * H) }
+        : { x: Math.round(S.g[k] * W), y: Math.round(H * 0.5) };
+    }, key);
+    await p.mouse.click(box2.x + pt.x, box2.y + pt.y);
+    await p.waitForTimeout(120);
+  };
+
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.g.h2Visible = true;
+    S.multi = false; S.selSet = []; S.sel = "v1"; S.hMode = "line";
+    S.locked = true;                    /* 빈 곳 탭이 사진 팬으로 새지 않도록 */
+    window.PB.render();
+  });
+  await tapAt("h2");
+  const canvas1 = await p.evaluate(() => ({ sel: window.PB.S.sel, vis: window.PB.S.g.h2Visible }));
+  check("54. 화면 탭 — 1탭 = 선택(숨기지 않음)",
+    canvas1.sel === "h2" && canvas1.vis === true,
+    `선택=${canvas1.sel} 표시=${canvas1.vis}`);
+
+  await tapAt("h2");
+  const canvas2 = await p.evaluate(() => ({ sel: window.PB.S.sel, vis: window.PB.S.g.h2Visible }));
+  check("55. 화면 탭 — 같은 선 다시 탭 = 숨김",
+    canvas2.vis === false, `표시=${canvas2.vis} (선택=${canvas2.sel})`);
+
+  /* 되돌리기로 복원되는지 (숨김도 한 작업) */
+  await p.evaluate(() => { document.getElementById("btnUndo").click(); });
+  await p.waitForTimeout(120);
+  const canvasUndo = await p.evaluate(() => window.PB.S.g.h2Visible);
+
+  /* 여러라인 모드에서는 탭해도 숨기면 안 된다 */
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.g.h2Visible = true;
+    S.multi = true; S.selSet = ["h2"]; S.sel = "h2"; S.hMode = "line"; S.locked = true;
+    window.PB.render();
+  });
+  await tapAt("h2");
+  const canvas3 = await p.evaluate(() => ({ set: [...window.PB.S.selSet], vis: window.PB.S.g.h2Visible }));
+  check("56. 화면 탭 — 여러라인 모드는 선택 해제만, 숨기지 않음 · 숨김은 되돌리기 대상",
+    canvas3.vis === true && canvas3.set.length === 0 && canvasUndo === true,
+    `표시=${canvas3.vis} 세트=${canvas3.set.length}개 되돌리기복원=${canvasUndo}`);
+
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.multi = false; S.selSet = []; S.locked = false; S.hist = [];
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; window.PB.render();
+  });
 
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
