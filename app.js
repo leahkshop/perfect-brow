@@ -1721,8 +1721,19 @@ const DRAW_PAD_UP = 0.95;     // 위 여유 (눈썹 높이 비율)
 const DRAW_PAD_DN = 0.70;     // 아래 여유
 const DRAW_EYE_GAP = 0.55;    // 눈(동공)까지 이만큼은 남긴다 — 눈꺼풀을 읽지 않기 위해
 const DRAW_MAX_FILL = 0.72;   // 열의 이만큼을 넘게 어두우면 머리카락·그림자로 보고 버린다
-const DRAW_JOIN = 0.26;       // 이만큼 가까운 덩어리는 한 덩어리 — **윤곽선으로 그린 드로잉** 대응
-const DRAW_JOIN_DENS = 0.6;   // 씨앗의 이만큼은 진해야 이어 붙인다 (옅은 그림자 방지)
+/* ⚠️ 테두리 판정 (v1.31.2) — **열마다 따로 붙이면 안 됩니다.**
+   v1.31.1 은 한 열 안에서 가까운 덩어리를 그냥 이어 붙였습니다. 그 결과 맨 눈썹 사진에서
+   **쌍꺼풀 선·눈꺼풀 주름이 눈썹에 딸려 붙어** 앞두께가 눈썹 아래 피부까지 내려갔습니다
+   (원장님 스크린샷 2026-08-20). 이제 **사진 전체를 보고 한 번만** 판정합니다 —
+   "잉크가 비슷한 두 줄 + 그 사이가 비어 있음" 이 과반의 열에서 보여야 테두리 드로잉입니다.
+   눈썹 털은 한 덩어리라 이 조건을 못 넘고, 주름은 잉크가 훨씬 옅어 짝이 되지 못합니다. */
+const DRAW_PAIR_INK = 0.5;      // 짝이 되려면 씨앗 잉크의 이만큼은 되어야 한다
+const DRAW_PAIR_FILL = 0.7;     // 두 줄의 두께 합이 전체 폭의 이만큼 이하 = 사이가 비어 있다
+const DRAW_OUTLINE_RATIO = 0.5; // 이 비율 이상의 열이 짝을 이뤄야 "테두리로 그린 드로잉"
+
+/* 읽어낸 두께가 랜드마크 눈썹 높이의 이 범위를 벗어나면 **잘못 읽은 것**으로 보고 버린다.
+   드로잉은 털보다 도톰하게 그리므로 위쪽은 넉넉히, 아래쪽은 얇은 오독을 막습니다. */
+const DRAW_THICK_MAX = 1.9, DRAW_THICK_MIN = 0.3;
 
 /* 랜드마크 → 지금 화면 좌표의 **눈썹 탐색 상자** 2개(화면 왼쪽/오른쪽).
    랜드마크가 없으면 null → 아래 fallbackBox() 로 넘어간다. */
@@ -1746,7 +1757,7 @@ function browBoxes() {
     return {
       x0: Math.min(...xs) - DRAW_PAD_X * wd, x1: Math.max(...xs) + DRAW_PAD_X * wd,
       y0: yU - DRAW_PAD_UP * h, y1: Math.max(y1, yL + 0.15 * h),
-      cy: (yU + yL) / 2,
+      cy: (yU + yL) / 2, h,          // h = 랜드마크 눈썹 높이 — 두께 상식 검사에 쓴다
     };
   };
   const a = box(BROW_UP_A, BROW_LO_A), b = box(BROW_UP_B, BROW_LO_B);
@@ -1760,15 +1771,18 @@ function fallbackBox(side) {
   const { W, H } = S.dim;
   const cx = S.g.v1 * W, wr = workRight() * W;
   return side === "L"
-    ? { x0: 0, x1: cx - 4, y0: 0, y1: S.g.h1 * H, cy: null }
-    : { x0: cx + 4, x1: wr, y0: 0, y1: S.g.h1 * H, cy: null };
+    ? { x0: 0, x1: cx - 4, y0: 0, y1: S.g.h1 * H, cy: null, h: null }
+    : { x0: cx + 4, x1: wr, y0: 0, y1: S.g.h1 * H, cy: null, h: null };
 }
 
 /* 한 열에서 "그린 선" 한 덩어리를 찾는다.
    밝은 쪽 40% 평균을 피부로 보고, 그보다 DRAW_CONTRAST 어두운 픽셀만 선으로 센다.
    후보가 여럿이면 **잉크량(어두운 정도 × 두께)** 이 가장 많은 덩어리 —
    눈썹 털 한 올이나 속눈썹에 끌려가지 않게 하려는 것. */
-function inkRunAt(img, x, y0, y1, cy) {
+/* 한 열의 어두운 덩어리를 **전부** 모으고, 그중 씨앗(잉크가 가장 많은 것)을 고른다.
+   ⚠️ 여기서 덩어리를 합치지 마세요. 합칠지 말지는 `readDrawing` 이 **사진 전체를 보고**
+   한 번만 정합니다 — 열마다 따로 합쳤다가 눈꺼풀 주름이 딸려 왔습니다 (v1.31.1 의 실패). */
+function columnRuns(img, x, y0, y1, cy) {
   const { W } = S.dim;
   const v = [];
   for (let y = y0; y <= y1; y++) v.push(lumaAt(img, W, x, y));
@@ -1779,7 +1793,6 @@ function inkRunAt(img, x, y0, y1, cy) {
   for (let i = k; i < N; i++) sum += s[i];
   const cut = sum / Math.max(1, N - k) - DRAW_CONTRAST;
 
-  /* ① 이 열의 어두운 덩어리를 **전부** 모은다 */
   const runs = [];
   let t = -1, ink = 0;
   for (let i = 0; i < N; i++) {
@@ -1787,36 +1800,40 @@ function inkRunAt(img, x, y0, y1, cy) {
     if (dark) { if (t < 0) { t = i; ink = 0; } ink += cut - v[i]; }
     if ((!dark || i === N - 1) && t >= 0) {
       const b = dark ? i : i - 1, len = b - t + 1;
-      if (len >= 2) runs.push({ t, b, ink, dens: ink / len });
+      if (len >= 2 && len <= DRAW_MAX_FILL * N) runs.push({ top: y0 + t, bot: y0 + b, ink, len });
       t = -1;
     }
   }
   if (!runs.length) return null;
 
-  /* ② 씨앗 = 잉크가 가장 많은 덩어리. 비슷하면 눈썹 중앙에 가까운 쪽 */
+  /* 씨앗 = 잉크(어두운 정도 × 두께)가 가장 많은 덩어리. 비슷하면 눈썹 중앙에 가까운 쪽 */
   let si = 0;
-  const midY = (r) => y0 + (r.t + r.b) / 2;
+  const mid = (r) => (r.top + r.bot) / 2;
   for (let i = 1; i < runs.length; i++) {
     const a = runs[i], b = runs[si];
-    const closer = cy !== null && Math.abs(midY(a) - cy) < Math.abs(midY(b) - cy);
+    const closer = cy !== null && Math.abs(mid(a) - cy) < Math.abs(mid(b) - cy);
     if (a.ink > b.ink * 1.15 || (a.ink > b.ink * 0.85 && closer)) si = i;
   }
+  return { x, runs, si, N };
+}
 
-  /* ③ ⚠️ **윤곽선으로 그린 드로잉** — 위선·아래선이 따로 잡힙니다 (v1.31.1).
-     원장님은 속을 꽉 채우기도 하고 테두리만 그리기도 하십니다. 테두리만 그리면
-     ②에서 한 줄만 잡혀 **두께가 통째로 틀립니다.** 가까이 붙은 진한 덩어리는
-     한 덩어리로 봅니다 — 위선의 위 = 눈썹 위, 아래선의 아래 = 눈썹 아래. */
-  const join = DRAW_JOIN * N, maxLen = DRAW_MAX_FILL * N, dens0 = runs[si].dens;
-  let lo = si, hi = si, top = runs[si].t, bot = runs[si].b;
-  for (let pass = 0; pass < runs.length; pass++) {
-    const up = lo > 0 ? runs[lo - 1] : null, dn = hi < runs.length - 1 ? runs[hi + 1] : null;
-    let moved = false;
-    if (up && top - up.b <= join && up.dens >= dens0 * DRAW_JOIN_DENS && bot - up.t + 1 <= maxLen) { top = up.t; lo--; moved = true; }
-    if (dn && dn.t - bot <= join && dn.dens >= dens0 * DRAW_JOIN_DENS && dn.b - top + 1 <= maxLen) { bot = dn.b; hi++; moved = true; }
-    if (!moved) break;
+/* 이 열이 **테두리로 그린 두 줄**처럼 보이는가 — 그렇다면 합친 {top,bot}, 아니면 null.
+   조건 ① 두 줄의 잉크가 비슷하다 (테두리는 위·아래를 같은 힘으로 그립니다)
+        ② 두 줄 사이가 **비어 있다** (꽉 찬 덩어리는 여기서 걸러집니다)
+   눈꺼풀 주름은 ①에서, 꽉 채워 그린 드로잉은 ②에서 떨어집니다. */
+function outlinePair(c) {
+  const s = c.runs[c.si];
+  let best = null;
+  for (let i = 0; i < c.runs.length; i++) {
+    if (i === c.si) continue;
+    const r = c.runs[i];
+    if (r.ink < s.ink * DRAW_PAIR_INK) continue;
+    const top = Math.min(s.top, r.top), bot = Math.max(s.bot, r.bot), span = bot - top + 1;
+    if (span > DRAW_MAX_FILL * c.N) continue;
+    if (s.len + r.len > span * DRAW_PAIR_FILL) continue;
+    if (!best || span < best.span) best = { top, bot, span };
   }
-  if (bot - top + 1 > maxLen) return null;
-  return { top: y0 + top, bot: y0 + bot };
+  return best;
 }
 
 /* 찾은 덩어리들 중 **한 줄기로 이어지는 것**만 남긴다.
@@ -1850,15 +1867,28 @@ function readDrawing(img) {
   const x0 = Math.max(0, Math.round(b.x0)), x1 = Math.min(W - 1, Math.round(b.x1));
   const y0 = Math.max(0, Math.round(b.y0)), y1 = Math.min(H - 1, Math.round(b.y1));
   if (x1 - x0 < 16 || y1 - y0 < 8) return null;
-  const pts = [];
+  const cols = [];
   for (let i = 0; i < DRAW_COLS; i++) {
     const x = Math.round(x0 + ((x1 - x0) * (i + 0.5)) / DRAW_COLS);
     if (x < 0 || x >= W) continue;
-    const r = inkRunAt(img, x, y0, y1, b.cy);
-    if (r) pts.push({ x, top: r.top, bot: r.bot });
+    const c = columnRuns(img, x, y0, y1, b.cy);
+    if (c) cols.push(c);
   }
+  if (cols.length < DRAW_MIN_HITS) return null;
+
+  /* **한 번만** 판정한다 — 이 사진이 테두리로 그린 드로잉인가, 꽉 찬 덩어리인가 */
+  let paired = 0;
+  for (const c of cols) { c.pair = outlinePair(c); if (c.pair) paired++; }
+  const outline = paired >= cols.length * DRAW_OUTLINE_RATIO;
+
+  const pts = cols.map((c) => {
+    const r = outline && c.pair ? c.pair : c.runs[c.si];
+    return { x: c.x, top: r.top, bot: r.bot };
+  });
   pts.sort((p, q) => p.x - q.x);
-  return keepBand(pts);
+  const band = keepBand(pts);
+  if (band) band.refH = b.h;          // 랜드마크 눈썹 높이 — 두께 상식 검사용
+  return band;
 }
 
 /* 사진에 그려진 드로잉 위로 모든 선을 올린다. 올렸으면 true.
@@ -1870,6 +1900,14 @@ function autoFromDrawing() {
   if (!img) return false;
   const pts = readDrawing(img);
   if (!pts || pts.length < DRAW_MIN_HITS) return false;
+
+  /* ⚠️ **두께 상식 검사** (v1.31.2) — 읽어낸 두께가 랜드마크 눈썹 높이와 너무 다르면
+     눈꺼풀 주름·머리카락을 눈썹으로 잘못 읽은 것입니다. 그럴 땐 **조용히 포기하고**
+     AI 얼굴 윤곽 배치를 그대로 둡니다. 억지로 올리면 원장님이 다시 다 옮기셔야 합니다. */
+  if (pts.refH) {
+    const th = pts.map((p) => p.bot - p.top).sort((a, b) => a - b)[Math.floor(pts.length / 2)];
+    if (th > DRAW_THICK_MAX * pts.refH || th < DRAW_THICK_MIN * pts.refH) return false;
+  }
 
   /* seq[0] = 안쪽(앞머리) … seq[n−1] = 바깥(꼬리).
      화면 왼쪽 눈썹이면 x 가 큰 쪽이 코 방향(=안쪽)이므로 뒤집는다. */
@@ -2501,5 +2539,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
-  autoFromDrawing, readDrawing, browBoxes, inkRunAt,
+  autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking };

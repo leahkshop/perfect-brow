@@ -1842,9 +1842,13 @@ console.log("\n[밸런스 판정]");
     for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(sh.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(sh.cp, x, 2).toFixed(1)}`); }
     const poly = up.concat(dn.reverse()).join(" ");
     const paint = outline ? `fill="none" stroke="#2a1c14" stroke-width="5"` : `fill="#2a1c14"`;
+    /* crease=true → 눈썹 아래에 **쌍꺼풀 선**을 하나 깐다 (원장님 스크린샷의 실제 상황).
+       눈썹보다 옅지만 또렷해서, 이걸 눈썹에 붙여 읽으면 앞두께가 피부까지 내려갑니다. */
+    const crease = tag === "c"
+      ? `<line x1="120" y1="205" x2="340" y2="205" stroke="#6a5040" stroke-width="5"/>` : "";
     fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
       + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
-      + `<polygon points="${poly}" ${paint}/></svg>`);
+      + `<polygon points="${poly}" ${paint}/>${crease}</svg>`);
     return f;
   };
 
@@ -1865,7 +1869,8 @@ console.log("\n[밸런스 판정]");
     return L;
   })();
 
-  const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"), fb = drawFace(SHAPE_B, false, "b");
+  const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
+        fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c");
   const runDraw = async (useLandmarks, file, tr, sh) => {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -1925,7 +1930,13 @@ console.log("\n[밸런스 판정]");
      ⚠️ 「드로잉이 바뀌어도 각 드로잉 위에 알맞은 선이 자동 위치해야 한다」(원장님, 2026-08-20) */
   const o91 = await runDraw(true, fb, null, SHAPE_B);
   check("91. 드로잉 자동 맞춤 — 드로잉 모양이 달라지면(아치가 안쪽) 선도 그 모양을 따라간다", judge(o91), say(o91));
-  fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb);
+  /* 92. ⚠️ 원장님 스크린샷(2026-08-20)에서 실제로 난 문제.
+     눈썹 아래 **쌍꺼풀 선**이 눈썹에 딸려 붙어 앞두께가 피부까지 내려갔습니다.
+     이제 "잉크가 비슷한 두 줄"만 테두리로 보므로, 옅은 주름은 붙지 않습니다.
+     이 검사를 지우면 그 버그가 조용히 돌아옵니다. */
+  const o92 = await runDraw(true, fc, null, SHAPE_A);
+  check("92. 드로잉 자동 맞춤 — 눈썹 아래 쌍꺼풀 선에 앞두께가 끌려가지 않는다", judge(o92), say(o92));
+  fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc);
 
   for (const f of [f1, f0, fN, f6]) fs.unlinkSync(f);
 }
