@@ -324,17 +324,21 @@ function labelOf(k) {
   return sp ? t(sp.i18n) : k;
 }
 
+/* ⚠️ 표시 여부 — **사진을 넣으면 선이 전부 올라와 있어야 합니다** (v1.30.1)
+   v1.30.0 까지 앞머리·앞두께·아치·아치두께·꼬리·아우터가 꺼져 있어서,
+   드로잉에 맞춰 자리는 잡아 놓고도 **화면에는 안 보였습니다**(원장님 지적).
+   V 피봇·V 앵글(baseStructureVisible)과 눈 아몬드만 **사용자 선택**으로 꺼 둡니다. */
 const DEFAULT_GUIDE = Object.freeze({
   h1: 0.60,  h1Visible: true,   // v1.19.0 — 눈 기준선을 5% 아래로 (위에 V 사선 공간 확보)
-  h2: 0.34,  h2Visible: false,
-  h3: 0.43,  h3Visible: false,
-  archThickness: 0.38, archThicknessVisible: false,
-  front: 0.40, frontVisible: false,
-  frontThickness: 0.35, frontThicknessVisible: false,
+  h2: 0.34,  h2Visible: true,
+  h3: 0.43,  h3Visible: true,
+  archThickness: 0.38, archThicknessVisible: true,
+  front: 0.40, frontVisible: true,
+  frontThickness: 0.35, frontThicknessVisible: true,
   v1: 0.5,   v1Visible: true,
   v2: 0.35,  v2Visible: true,
   v3: 0.65,
-  v4: 0.15,  v4Visible: false,
+  v4: 0.15,  v4Visible: true,
   v5: 0.85,
   eyeGuideVisible: false,   // 아몬드 눈 가이드 — 자동 줌이 충분하므로 기본 꺼짐
   innerAngle: 0.10,      // Pivot Point Y (0=위, 1=아래) — v1.19.0: 위 10% 지점에서 시작

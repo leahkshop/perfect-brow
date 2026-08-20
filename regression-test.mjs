@@ -488,7 +488,11 @@ console.log("[세로 모드 · 기능]");
   // 35. 잠금 해제 + 빈 곳 한 손가락 드래그 → 사진이 사방으로 자유 이동 (선은 불변)
   await p.evaluate(() => {
     const S = window.PB.S;
-    S.locked = false; S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.locked = false;
+    /* v1.30.1 — 기본 표시가 전부 켜져 빈 곳이 없다. **사진 드래그 검사**이므로 선을 줄인다. */
+    S.g = { ...window.PB.DEFAULT_GUIDE, h2Visible: false, h3Visible: false,
+            frontVisible: false, frontThicknessVisible: false, archThicknessVisible: false,
+            v4Visible: false };
     S.p = { zoom: 2, ox: 0, oy: 0, rot: 0 };
     window.PB.render();
   });
@@ -508,6 +512,9 @@ console.log("[세로 모드 · 기능]");
   // 36. 사진보정 버튼 → 아래 가로 바가 사진 조절로 전환, 다시 누르면 선 조절로 복귀
   const share = await p.evaluate(() => {
     const S = window.PB.S, out = {};
+    S.g = { ...window.PB.DEFAULT_GUIDE, h2Visible: false, h3Visible: false,
+            frontVisible: false, frontThicknessVisible: false, archThicknessVisible: false,
+            v4Visible: false };
     S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; S.hMode = "line"; window.PB.render();
     const sl = document.getElementById("posSliderH");
     document.querySelector('#photoModes button[data-mode="balance"]').click();
@@ -851,10 +858,12 @@ console.log("[세로 모드 · 기능]");
     document.getElementById("btnMulti").click();           // 여러라인 OFF
     return { hiddenWhenOff, shownWhenOn, picked, cleared, hiddenAgain: document.getElementById("btnAllSel").hidden };
   });
-  /* 기본 표시 선 = Eye · Center · Inner (V 기본구조는 꺼져 있음) */
+  /* v1.30.1 — 기본 표시가 **전부 켜짐**. V 기본구조(피봇·앵글)만 꺼져 있다.
+     `outerAngle` 은 각도라 전체 선택에 넣지 않는다 (1-7). */
   check("58. 전체라인 — 여러라인 후속 버튼 · 보이는 선 전부 선택/해제",
     allSel.hiddenWhenOff === true && allSel.shownWhenOn === true
-      && allSel.picked.join() === "h1,v1,v2" && allSel.cleared === 0 && allSel.hiddenAgain === true,
+      && allSel.picked.join() === "archThickness,front,frontThickness,h1,h2,h3,v1,v2,v4"
+      && allSel.cleared === 0 && allSel.hiddenAgain === true,
     `OFF숨김=${allSel.hiddenWhenOff} ON표시=${allSel.shownWhenOn} 선택=[${allSel.picked}] 해제=${allSel.cleared}개`);
 
   // 59. 전체라인으로 고른 선들이 한 번에 움직인다
@@ -1702,7 +1711,11 @@ console.log("\n[밸런스 판정]");
       const S = window.PB.S;
       S.landmarks = null;
       S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
-      S.g = { ...window.PB.DEFAULT_GUIDE, h2: 200 / S.dim.H, h2Visible: true };
+      /* v1.30.1 — 기본 표시가 전부 켜졌으므로 **검사 대상만 남기고 끈다.**
+         합성 사진에는 아치 자리에만 막대가 있어 나머지는 "못 읽음"으로 건너뛴다. */
+      S.g = { ...window.PB.DEFAULT_GUIDE, h2: 200 / S.dim.H, h2Visible: true,
+              h3Visible: false, frontVisible: false, frontThicknessVisible: false,
+              archThicknessVisible: false };
       S.refSide = refSide;
       window.PB.render();
       const ok = window.PB.runBalance();
@@ -1773,7 +1786,8 @@ console.log("\n[밸런스 판정]");
       S.landmarks = null;
       S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
       S.g = { ...window.PB.DEFAULT_GUIDE, h2: 200 / S.dim.H, h2Visible: true,
-              v1: 0.5, v2: nv2, v3: 1 - nv2 };
+              h3Visible: false, frontVisible: false, frontThicknessVisible: false,
+              archThicknessVisible: false, v1: 0.5, v2: nv2, v3: 1 - nv2 };
       S.refSide = "L";
       window.PB.render();
       window.PB.runBalance();
