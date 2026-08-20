@@ -1612,53 +1612,41 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       && menuPos.ids === "btnPresetLoad",
     `왼쪽아래=${menuPos.leftBottom} 겹침없음=${menuPos.noOverlap} 눈가이드제거=${menuPos.gone} [${menuPos.ids}]`);
 
-  /* 83. 버튼 재배치 (v1.28.0) — 원장님이 정하신 자리
-     · 사진변경 = 오른쪽 도크 맨 위 (위아래 드래그 바 위쪽 끝선 위)
-     · 사진잠금 = 캔버스 가로 한가운데 · 그 왼쪽에 사진저장
-     · 초기화   = 위쪽 칩 줄 맨 오른쪽, 다른 칩과 한 칸 띄워서
-     · 아래 세 묶음(왼쪽·가운데·오른쪽)이 서로 겹치지 않는다 */
+  /* 83. 버튼 자리 (v1.28.1) — 원장님이 정하신 자리
+     · 사진변경 = 가운데 도크에서 사진저장 **왼쪽** · 사진저장과 같은 크기 · 회색(액센트 아님)
+     · 사진잠금 = 캔버스 가로 한가운데
+     · 초기화   = 오른쪽 도크 **맨 위**, `다시 실행` 과 간격을 두고 **짙은 빨강**
+     · 아래 세 묶음(왼쪽·가운데·오른쪽)이 즐겨찾기 3개를 채워도 겹치지 않는다 */
   const place = await p.evaluate(() => {
     /* 즐겨찾기를 3개 꽉 채운 **최악의 경우**로 검사한다.
        비어 있는 상태만 보면 이름이 긴 프리셋에서 겹치는 것을 놓친다. */
     localStorage.setItem("pb_favs_v1", JSON.stringify(["b:natural", "b:bold", "b:arch"]));
     window.PB.buildFavBar();
-    const r = (id) => document.getElementById(id).getBoundingClientRect();
-    const st = r("stage"), chg = r("btnChange"), ctlV = r("posCtlV"), rd = r("rightDock");
-    const lock = r("btnLock"), exp = r("btnExport");
-    const rst = r("btnReset"), bal = r("btnBalance"), tl = r("btnAllLine");
+    const el = (id) => document.getElementById(id);
+    const r = (id) => el(id).getBoundingClientRect();
+    const st = r("stage"), chg = r("btnChange"), exp = r("btnExport"), lock = r("btnLock");
+    const rst = r("btnReset"), redo = r("btnRedo"), rd = r("rightDock");
     const ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
-    const stW = st.width;
+    const cs = getComputedStyle(el("btnReset"));
     return {
-      chgTop: chg.top < ctlV.top - 4 && Math.abs(chg.top - rd.top) < 2,      // 도크 맨 위
-      chgRight: st.right - chg.right > stW * 0.02,
-      lockCentre: ((lock.left + lock.right) / 2 - st.left) / stW,            // 0.5 여야 한다
-      exportLeft: exp.right <= lock.left + 1,
-      resetInChips: Math.abs(rst.top - bal.top) < 4 && rst.left > bal.right, // 같은 줄 · 오른쪽
-      resetSpaced: rst.left - bal.right > 20,                                // 한 칸 띄움
-      resetRed: getComputedStyle(document.getElementById("btnReset")).color,
-      chipRowTop: Math.abs(rst.top - tl.top) < 4,
-      dockGaps: [Math.round(cd.left - ld.right), Math.round(bd.left - cd.right)],
+      chgInCentre: el("centerDock").contains(el("btnChange")) && chg.right <= exp.left + 1,
+      chgSameSize: Math.abs(chg.height - exp.height) < 1 && Math.abs(chg.width - exp.width) < 6,
+      chgGrey: !/34, 211, 238|103, 232, 249/.test(getComputedStyle(el("btnChange")).borderTopColor),
+      lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
+      resetTop: Math.abs(rst.top - rd.top) < 2 && rst.bottom <= redo.top + 1,
+      resetGap: Math.round(redo.top - rst.bottom),
+      resetDarkRed: cs.color,
       favs: document.querySelectorAll("#favRow .favbtn").length,
-      /* 세로선 라벨(이너·센터)이 초기화 칩 위에 겹쳐 그려지지 않아야 한다 */
-      labelHitsReset: [...document.getElementById("guides").querySelectorAll("rect")]
-        .filter((q) => +q.getAttribute("height") === 14)
-        .some((q) => {
-          const x = +q.getAttribute("x"), y = +q.getAttribute("y");
-          const w = +q.getAttribute("width"), h = 14;
-          const el = document.getElementById("btnReset"), par = el.offsetParent;
-          const bx = (par && par !== document.getElementById("stage") ? par.offsetLeft : 0) + el.offsetLeft;
-          const by = (par && par !== document.getElementById("stage") ? par.offsetTop : 0) + el.offsetTop;
-          return x < bx + el.offsetWidth && x + w > bx && y < by + el.offsetHeight && y + h > by;
-        }),
+      dockGaps: [Math.round(cd.left - ld.right), Math.round(bd.left - cd.right)],
     };
   });
-  check(`83. ${dev.n} — 사진변경 오른쪽 위 · 잠금 정가운데 · 초기화 칩 줄 끝`,
-    place.chgTop && place.chgRight && Math.abs(place.lockCentre - 0.5) < 0.02
-      && place.exportLeft && place.resetInChips && place.resetSpaced && place.chipRowTop
-      && /255, 107, 122/.test(place.resetRed)
-      && place.favs === 3 && place.dockGaps.every((g) => g > 0)
-      && place.labelHitsReset === false,
-    `사진변경위=${place.chgTop} 잠금중심=${(place.lockCentre * 100).toFixed(1)}% 저장왼쪽=${place.exportLeft} 초기화=칩줄${place.resetInChips}/띄움${place.resetSpaced} 즐겨찾기 ${place.favs}개일 때 도크간격=${place.dockGaps}px 라벨겹침=${place.labelHitsReset}`);
+  check(`83. ${dev.n} — 사진변경=저장 왼쪽 · 잠금 정가운데 · 초기화=도크 맨 위(짙은 빨강)`,
+    place.chgInCentre && place.chgSameSize && place.chgGrey
+      && Math.abs(place.lockCentre - 0.5) < 0.02
+      && place.resetTop && place.resetGap >= 10
+      && /240, 56, 76/.test(place.resetDarkRed)
+      && place.favs === 3 && place.dockGaps.every((g) => g > 8),
+    `사진변경=가운데${place.chgInCentre}/같은크기${place.chgSameSize}/회색${place.chgGrey} · 잠금중심=${(place.lockCentre * 100).toFixed(1)}% · 초기화=맨위${place.resetTop}/간격${place.resetGap}px/${place.resetDarkRed} · 도크간격=${place.dockGaps}px`);
   await ctx.close();
 }
 

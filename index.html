@@ -44,6 +44,10 @@
   --accent:#7C8CF8;
   --danger:#FF6B7A;
   --danger-b:rgba(255,107,122,.38);
+  /* 초기화 전용 — 다른 붉은 표시(밸런스 어긋남)보다 **한 단계 짙게** (v1.28.1)
+     같은 빨강을 쓰면 "고쳐야 할 곳"과 "전부 지우는 버튼"이 같은 무게로 보입니다 */
+  --danger-d:#F0384C;
+  --danger-db:rgba(240,56,76,.55);
   --btn-off:rgba(255,255,255,.03);
   --stage:#0A0C12;      /* 사진 캔버스 배경 — 피부톤이 정확히 읽히는 중성 다크 */
   --chrome:#0D1018;     /* 도구 영역 배경 — 흰색으로 되돌리지 마세요 (사진이 주인공) */
@@ -172,10 +176,12 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
   box-shadow:0 4px 18px rgba(0,0,0,.35);white-space:nowrap}
 .chip.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800;box-shadow:0 0 18px var(--glow)}
 .chip.warn{background:rgba(255,107,122,.16);border-color:var(--danger-b);color:var(--danger)}
-/* 초기화 (v1.28.0) — 위험 등급. 위쪽 칩 줄 끝에서 한 칸 띄우고 붉은 톤으로 분리합니다.
-   시술 중 손은 화면 아래·왼쪽 레일에 머무르므로 여기가 오발이 가장 적습니다. */
-.chip.danger{color:var(--danger);border-color:var(--danger-b);background:rgba(255,107,122,.10)}
-.chipgap{flex:0 0 auto;width:38px}
+/* 초기화 (v1.28.1) — 위험 등급. **오른쪽 도크 맨 위**, `다시 실행` 과 한 칸 띄웁니다.
+   붙여 두면 되돌리려다 전부 지웁니다. 색도 한 단계 짙은 빨강으로 분리합니다. */
+.dockbtn.danger{color:var(--danger-d);border-color:var(--danger-db);background:rgba(240,56,76,.12)}
+.dockbtn.danger:active{background:rgba(240,56,76,.22)}
+.rgap{flex:0 0 auto;height:16px}
+body.land.compact .rgap{height:11px}
 
 .linebar{position:absolute;bottom:8px;z-index:20;display:flex;gap:4px;background:rgba(13,16,24,.62);
   padding:4px;border-radius:11px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);flex-wrap:wrap}
@@ -232,7 +238,7 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
 .posctl:not(.active){opacity:.86}
 
 /* 오른쪽 도크 — 아래 도크 높이(--bdock)를 뺀 영역의 세로 한가운데 */
-.rdock{position:absolute;right:var(--redge);top:0;bottom:var(--bdock,152px);height:46%;min-height:180px;
+.rdock{position:absolute;right:var(--redge);top:0;bottom:var(--bdock,152px);height:56%;min-height:200px;
   margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
 .posctl.axis-v .pslot{flex:1;width:34px}
@@ -256,14 +262,16 @@ body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 .cdock{position:absolute;left:50%;bottom:calc(var(--safe-b) + 8px);z-index:30;display:flex;align-items:flex-end;
   transform:translateX(-100%) translateX(34px)}
 body.land.compact .cdock{transform:translateX(-100%) translateX(26px)}
-body:not(.land) .cdock{bottom:calc(var(--safe-b) + 56px)}
+/* 세로 폴백은 폭이 좁아 가운데 도크가 왼쪽 도크 위로 올라탑니다.
+   유지보수 대상은 아니지만 **버튼이 서로 가려 눌리지 않으면 안 되므로** 한 줄 위로 올립니다. */
+body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
 /* 즐겨찾기 버튼 — 프리셋보다 한 단계 조용하게(별표만 액센트).
    **폭을 반드시 제한하세요** — 프리셋 이름은 원장님이 직접 지으시므로 길어질 수 있고,
    그대로 두면 왼쪽 묶음이 가운데 `사진저장`까지 밀고 들어옵니다 (회귀 83번). */
-.favrow button{max-width:88px}
+.favrow button{max-width:80px}
 .favrow button i{color:var(--a2)}
 .favrow button em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.land.compact .favrow button{max-width:74px}
+body.land.compact .favrow button{max-width:58px;min-width:44px;padding:0 4px}
 /* 좌우 드래그 바 — 가운데 도크와 겹치지 않는 선까지만 넓힙니다 (v1.28.0).
    넓히면 사진잠금 위로 올라타고, 회귀 83번이 그것을 잡습니다. */
 .posctl.axis-h{flex-direction:row-reverse;width:min(46vw,430px);min-width:230px;height:46px}
@@ -420,7 +428,7 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .posctl.axis-h .plabel{min-width:60px;font-size:9.5px}
   body.land.compact #editor .posctl.axis-v .plabel{width:34px;font-size:8.5px;padding:2px 3px}
   body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
-  body.land.compact #editor .rdock{height:54%;min-height:124px;gap:6px}
+  body.land.compact #editor .rdock{height:66%;min-height:150px;gap:5px}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
   body.land.compact #editor .menurow button{height:46px;min-width:52px;font-size:9px;padding:0 6px}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
@@ -479,10 +487,6 @@ body:not(.land) #railLang{display:none}
       <!-- 밸런스 (v1.26.0) — 기준 쪽 버튼은 후속이라 켜야 나온다 -->
       <button class="chip" id="btnBalance" data-i18n="editor_balance_check">밸런스</button>
       <button class="chip" id="btnRefSide" hidden>기준 왼쪽</button>
-      <!-- 초기화 (v1.28.0) — 시술 중 손이 가지 않는 위쪽 가장자리로 옮겼습니다.
-           한 칸 띄우고 붉은 톤으로 분리해 실수로 누르는 것을 막습니다. -->
-      <span class="chipgap"></span>
-      <button class="chip danger" id="btnReset" data-i18n="editor_reset">초기화</button>
     </div>
 
     <div class="linebar linebar-left" id="hButtons"></div>
@@ -491,7 +495,10 @@ body:not(.land) #railLang{display:none}
     <!-- 오른쪽 도크 (v1.12.0) — 되돌리기(크게) + 위아래 드래그 바. 오른쪽 끝 · 세로 중앙
          v1.28.0 — 맨 위에 `사진변경`. 위아래 드래그 바 위쪽 끝선 위입니다. -->
     <div class="rdock" id="rightDock">
-      <button class="dockbtn" id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
+      <!-- 초기화 (v1.28.1) — 오른쪽 도크 맨 위. `다시 실행` 과 한 칸 띄우고 짙은 빨강으로 분리합니다.
+           위쪽 끝은 시술 중 손이 잘 가지 않는 자리라 실수로 눌릴 일이 적습니다. -->
+      <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
+      <span class="rgap"></span>
       <button class="dockbtn big" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
       <button class="dockbtn big" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
       <div class="posctl axis-v" id="posCtlV">
@@ -532,6 +539,7 @@ body:not(.land) #railLang{display:none}
          잠금은 이 앱의 모드 스위치라 손이 늘 같은 자리를 찾아가야 합니다. -->
     <div class="cdock" id="centerDock">
       <div class="menurow">
+        <button id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
         <button id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
         <button id="btnLock"><i id="lockIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/></svg></i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
       </div>
