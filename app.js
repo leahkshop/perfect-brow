@@ -247,11 +247,11 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 const H_SPECS = [
   { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#FF3B4E", dot: "#FF3B4E", w: 2.6, op: 1,   segs: [[0, 1]] },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.20, 0.40], [0.60, 0.80]] },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.25, 0.35], [0.65, 0.75]] },
-  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0, 0.20], [0.80, 1]] },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, segs: [[0, 0.13], [0.87, 1]] },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.145, 0.345], [0.655, 0.855]] },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.245, 0.345], [0.655, 0.755]] },
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0.145, 0.345], [0.655, 0.855]] },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0.145, 0.345], [0.655, 0.855]] },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, segs: [[-0.15, -0.02], [1.02, 1.15]] },
 ];
 
 const V_SPECS = [
@@ -499,15 +499,31 @@ function renderGuides() {
     almond(xR, xR + len);
   }
 
-  /* 가로 라인 */
-  for (const sp of H_SPECS) {
-    if (!g[sp.vis]) continue;
-    const y = g[sp.key] * H;
-    const sel = isSelected(sp.key);
-    for (const [a, b] of sp.segs) {
-      const xa = browX(a), xb = browX(b);
-      if (xb - xa < 2) continue;                       // 이너·아우터가 겹치면 그리지 않는다
-      drawLine(frag, xa, y, xb, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
+  /* 가로 라인 — 세로 이너 선과 **같은 방식**: 재는 구간만 두껍게, 이너까지는 얇은 실선 (v1.23.0)
+     얇은 선 색은 이너 선과 같은 중성색으로 통일한다. 이 선이 없으면 자가 공중에 떠 보인다. */
+  {
+    const HAIR = V_SPECS[1].color;                     // 이너 선 색 (중성)
+    for (const sp of H_SPECS) {
+      if (!g[sp.vis]) continue;
+      const y = g[sp.key] * H;
+      const sel = isSelected(sp.key);
+      if (sp.key !== "h1") {                           // 눈 기준선은 원래 좌우를 관통한다
+        const fr = sp.segs.flat();
+        const lo = Math.min(0, ...fr), hi = Math.max(1, ...fr);
+        for (const [a, b] of [[lo, 0.4], [0.6, hi]]) {
+          const xa = browX(a), xb = browX(b);
+          if (xb - xa < 2) continue;
+          frag.appendChild(mk("line", {
+            x1: xa, y1: y, x2: xb, y2: y, stroke: HAIR,
+            "stroke-width": 1, "stroke-opacity": 0.16,
+          }));
+        }
+      }
+      for (const [a, b] of sp.segs) {
+        const xa = browX(a), xb = browX(b);
+        if (xb - xa < 2) continue;                     // 이너·아우터가 겹치면 그리지 않는다
+        drawLine(frag, xa, y, xb, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
+      }
     }
   }
 

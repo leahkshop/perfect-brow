@@ -1115,6 +1115,43 @@ console.log("[세로 모드 · 기능]");
     S.sel = "h1"; S.hist = []; S.redo = []; window.PB.render();
   });
 
+  // 73. 자 정렬 (v1.23.0) — 앞머리·앞두께·아치·아치두께의 **안쪽 끝이 한 줄**, 꼬리는 아우터 바깥
+  const ruler = await p.evaluate(() => {
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE };
+    for (const k of ["h2Visible", "h3Visible", "archThicknessVisible", "frontVisible", "frontThicknessVisible"]) S.g[k] = true;
+    window.PB.render();
+    const solid = [...document.getElementById("guides").querySelectorAll("line")]
+      .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+                     y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+                     o: +(l.getAttribute("stroke-opacity") || 1), c: l.getAttribute("stroke") }))
+      .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.x1 - l.x2) > 1 && l.o > 0.2 && l.c !== "#ffffff");
+    const H = S.dim.H, W = S.dim.W, at = (k) => Math.round(S.g[k] * H);
+    const inner = (k) => {                     // 그 선의 왼쪽 토막 중 **오른쪽 끝**(=안쪽 끝)
+      const rows = solid.filter((l) => Math.abs(l.y1 - at(k)) < 1.5 && Math.max(l.x1, l.x2) < W * 0.55);
+      return rows.length ? Math.max(...rows.map((l) => Math.max(l.x1, l.x2))) / W : null;
+    };
+    const outerMost = (k) => {
+      const rows = solid.filter((l) => Math.abs(l.y1 - at(k)) < 1.5);
+      return rows.length ? Math.min(...rows.map((l) => Math.min(l.x1, l.x2))) / W : null;
+    };
+    const hair = solid.length;                 // 얇은 실선(0.16)은 위에서 걸러졌는지
+    const faint = [...document.getElementById("guides").querySelectorAll("line")]
+      .filter((l) => Math.abs(+l.getAttribute("stroke-opacity") - 0.16) < 1e-6
+                  && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5).length;
+    return {
+      front: inner("front"), ft: inner("frontThickness"),
+      arch: inner("h2"), at2: inner("archThickness"),
+      tail: outerMost("h3"), outerV: S.g.v4, hair, faint,
+    };
+  });
+  const ends = [ruler.front, ruler.ft, ruler.arch, ruler.at2];
+  check("73. 자 정렬 — 앞머리·앞두께·아치·아치두께의 안쪽 끝이 한 줄 · 꼬리는 아우터 바깥",
+    ends.every((v) => v !== null) && Math.max(...ends) - Math.min(...ends) < 0.004
+      && ruler.tail !== null && ruler.tail < ruler.outerV - 0.01
+      && ruler.faint >= 8,
+    `안쪽 끝 [${ends.map((v) => v === null ? "-" : (v * 100).toFixed(1)).join(", ")}]% · 꼬리 바깥끝 ${(ruler.tail * 100).toFixed(1)}% < 아우터 ${(ruler.outerV * 100).toFixed(1)}% · 얇은실선 ${ruler.faint}개`);
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;
