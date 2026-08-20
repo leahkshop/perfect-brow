@@ -738,13 +738,23 @@ console.log("[세로 모드 · 기능]");
   /* 54~56. 화면의 선을 직접 탭했을 때 (v1.18.1)
      레일 버튼과 같은 규칙이어야 한다 — 한 줄 모드 1탭 = 선택 / 같은 선 다시 탭 = 숨김.
      v1.18.0 에서는 캔버스 탭이 선택만 하고 숨기지 않는 버그가 있었다. */
+  /* 자의 길이·위치가 버전마다 바뀌므로 좌표를 하드코딩하지 않는다.
+     **실제로 그려진 토막의 한가운데**를 찾아서 찍는다 (v1.24.0). */
   const tapAt = async (key) => {
     const pt = await p.evaluate((k) => {
       const S = window.PB.S, { W, H } = S.dim;
       const H_KEYS = ["h1", "h2", "h3", "front", "frontThickness", "archThickness"];
-      return H_KEYS.includes(k)
-        ? { x: Math.round((S.wr || W) * 0.4), y: Math.round(S.g[k] * H) }
-        : { x: Math.round(S.g[k] * W), y: Math.round(H * 0.5) };
+      if (!H_KEYS.includes(k)) return { x: Math.round(S.g[k] * W), y: Math.round(H * 0.5) };
+      const y = S.g[k] * H;
+      const seg = [...document.getElementById("guides").querySelectorAll("line")]
+        .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+                       y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+                       o: +(l.getAttribute("stroke-opacity") || 1) }))
+        .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1.5 && l.o > 0.2
+                    && Math.abs(l.x2 - l.x1) > 4)
+        .sort((a, b) => Math.min(a.x1, a.x2) - Math.min(b.x1, b.x2))[0];
+      if (!seg) return { x: Math.round((S.wr || W) * 0.4), y: Math.round(y) };
+      return { x: Math.round((seg.x1 + seg.x2) / 2), y: Math.round(y) };
     }, key);
     await p.mouse.click(box2.x + pt.x, box2.y + pt.y);
     await p.waitForTimeout(120);
@@ -943,9 +953,9 @@ console.log("[세로 모드 · 기능]");
     return { dot, bg, before, sel: b.classList.contains("sel") };
   });
   check("64. 라인 버튼 — 색 띠가 선 색 · 버튼 전체를 선 색으로 칠하지 않음",
-    stripe.dot.toUpperCase() === "#FF3B4E"
-      && stripe.before === "rgb(255, 59, 78)"
-      && !/255, 59, 78/.test(stripe.bg),
+    stripe.dot.toUpperCase() === "#9AA3B2"
+      && stripe.before === "rgb(154, 163, 178)"
+      && !/154, 163, 178/.test(stripe.bg),
     `띠=${stripe.dot}(${stripe.before}) 배경=${stripe.bg}`);
 
   // 65. 잠금 아이콘은 상태에 따라 모양이 바뀐다 (색만으로 구분하지 않는다)
@@ -1115,42 +1125,40 @@ console.log("[세로 모드 · 기능]");
     S.sel = "h1"; S.hist = []; S.redo = []; window.PB.render();
   });
 
-  // 73. 자 정렬 (v1.23.0) — 앞머리·앞두께·아치·아치두께의 **안쪽 끝이 한 줄**, 꼬리는 아우터 바깥
+  /* 73. 자 정렬 (v1.24.0) — 짝끼리 길이·끝이 같아야 두께를 눈으로 잰다
+     · 앞머리 = 앞두께 (완전히 동일)
+     · 아치  = 아치두께 (완전히 동일) · 눈썹 **산**이 있는 바깥쪽
+     · 꼬리  = 제일 바깥 · 얇은 실선 없음
+     · 눈    = 좌우 관통 · 짙은 회색 반투명 */
   const ruler = await p.evaluate(() => {
     const S = window.PB.S;
+    const seg = (k) => JSON.stringify(window.PB.H_SPECS.find((x) => x.key === k).segs);
+    const spec = (k) => window.PB.H_SPECS.find((x) => x.key === k);
     S.g = { ...window.PB.DEFAULT_GUIDE };
     for (const k of ["h2Visible", "h3Visible", "archThicknessVisible", "frontVisible", "frontThicknessVisible"]) S.g[k] = true;
     window.PB.render();
-    const solid = [...document.getElementById("guides").querySelectorAll("line")]
-      .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
-                     y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
-                     o: +(l.getAttribute("stroke-opacity") || 1), c: l.getAttribute("stroke") }))
-      .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.x1 - l.x2) > 1 && l.o > 0.2 && l.c !== "#ffffff");
-    const H = S.dim.H, W = S.dim.W, at = (k) => Math.round(S.g[k] * H);
-    const inner = (k) => {                     // 그 선의 왼쪽 토막 중 **오른쪽 끝**(=안쪽 끝)
-      const rows = solid.filter((l) => Math.abs(l.y1 - at(k)) < 1.5 && Math.max(l.x1, l.x2) < W * 0.55);
-      return rows.length ? Math.max(...rows.map((l) => Math.max(l.x1, l.x2))) / W : null;
-    };
-    const outerMost = (k) => {
-      const rows = solid.filter((l) => Math.abs(l.y1 - at(k)) < 1.5);
-      return rows.length ? Math.min(...rows.map((l) => Math.min(l.x1, l.x2))) / W : null;
-    };
-    const hair = solid.length;                 // 얇은 실선(0.16)은 위에서 걸러졌는지
-    const faint = [...document.getElementById("guides").querySelectorAll("line")]
+    /* 얇은 실선(0.16)이 붙은 y 높이들 */
+    const H = S.dim.H;
+    const faintY = [...document.getElementById("guides").querySelectorAll("line")]
       .filter((l) => Math.abs(+l.getAttribute("stroke-opacity") - 0.16) < 1e-6
-                  && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5).length;
+                  && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5)
+      .map((l) => Math.round(+l.getAttribute("y1")));
+    const near = (k) => faintY.some((y) => Math.abs(y - S.g[k] * H) < 1.5);
     return {
-      front: inner("front"), ft: inner("frontThickness"),
-      arch: inner("h2"), at2: inner("archThickness"),
-      tail: outerMost("h3"), outerV: S.g.v4, hair, faint,
+      frontPair: seg("front") === seg("frontThickness"),
+      archPair: seg("h2") === seg("archThickness"),
+      archOutOfHead: spec("h2").segs[0][1] < spec("front").segs[0][0],   // 아치가 앞머리보다 바깥
+      tailOutermost: spec("h3").segs[0][0] < spec("h2").segs[0][0],      // 꼬리가 제일 바깥
+      tailHair: near("h3"), archHair: near("h2"), frontHair: near("front"), eyeHair: near("h1"),
+      eye: { c: spec("h1").color, op: spec("h1").op },
     };
   });
-  const ends = [ruler.front, ruler.ft, ruler.arch, ruler.at2];
-  check("73. 자 정렬 — 앞머리·앞두께·아치·아치두께의 안쪽 끝이 한 줄 · 꼬리는 아우터 바깥",
-    ends.every((v) => v !== null) && Math.max(...ends) - Math.min(...ends) < 0.004
-      && ruler.tail !== null && ruler.tail < ruler.outerV - 0.01
-      && ruler.faint >= 8,
-    `안쪽 끝 [${ends.map((v) => v === null ? "-" : (v * 100).toFixed(1)).join(", ")}]% · 꼬리 바깥끝 ${(ruler.tail * 100).toFixed(1)}% < 아우터 ${(ruler.outerV * 100).toFixed(1)}% · 얇은실선 ${ruler.faint}개`);
+  check("73. 자 정렬 — 짝끼리 동일 · 아치는 바깥 · 꼬리·눈은 얇은 실선 없음 · 눈은 회색 반투명",
+    ruler.frontPair && ruler.archPair && ruler.archOutOfHead && ruler.tailOutermost
+      && ruler.tailHair === false && ruler.eyeHair === false
+      && ruler.archHair === true && ruler.frontHair === true
+      && ruler.eye.c === "#3A3F4A" && ruler.eye.op === 0.5,
+    `앞머리쌍=${ruler.frontPair} 아치쌍=${ruler.archPair} 아치바깥=${ruler.archOutOfHead} 꼬리최외곽=${ruler.tailOutermost} · 얇은실선 꼬리=${ruler.tailHair}/눈=${ruler.eyeHair}/아치=${ruler.archHair} · 눈 ${ruler.eye.c} ${ruler.eye.op}`);
 
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {

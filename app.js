@@ -246,11 +246,11 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 /* 색상/기본위치는 원본 editor.tsx + BASELINE_CONFIG.md 를 그대로 계승 */
 
 const H_SPECS = [
-  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#FF3B4E", dot: "#FF3B4E", w: 2.6, op: 1,   segs: [[0, 1]] },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.145, 0.345], [0.655, 0.855]] },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.245, 0.345], [0.655, 0.755]] },
-  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0.145, 0.345], [0.655, 0.855]] },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0.145, 0.345], [0.655, 0.855]] },
+  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.6, op: 0.5, segs: [[0, 1]] },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.195, 0.345], [0.655, 0.805]] },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.195, 0.345], [0.655, 0.805]] },
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[-0.02, 0.13], [0.87, 1.02]] },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[-0.02, 0.13], [0.87, 1.02]] },
   { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, segs: [[-0.15, -0.02], [1.02, 1.15]] },
 ];
 
@@ -507,7 +507,8 @@ function renderGuides() {
       if (!g[sp.vis]) continue;
       const y = g[sp.key] * H;
       const sel = isSelected(sp.key);
-      if (sp.key !== "h1") {                           // 눈 기준선은 원래 좌우를 관통한다
+      /* 눈은 원래 좌우를 관통하고, 꼬리는 얇은 실선 없이 토막만 (v1.24.0) */
+      if (sp.key !== "h1" && sp.key !== "h3") {
         const fr = sp.segs.flat();
         const lo = Math.min(0, ...fr), hi = Math.max(1, ...fr);
         for (const [a, b] of [[lo, 0.4], [0.6, hi]]) {
@@ -1899,6 +1900,6 @@ if ("serviceWorker" in navigator) {
 }
 
 /* 개발/디버깅용 */
-window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX,
-  LINE_COLORS: { eye: "#FF3B4E", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
+window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
+  LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas };
