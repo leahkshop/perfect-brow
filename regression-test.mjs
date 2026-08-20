@@ -1025,6 +1025,96 @@ console.log("[세로 모드 · 기능]");
     filled.rows >= 5 && filled.n === 1,
     `${filled.rows}줄 · 채운 버튼 ${filled.n}개 [${filled.labels}]`);
 
+  /* ── v1.22.0 · AI 측정 배치 ─────────────────────────────
+     실제 MediaPipe 는 테스트에서 못 돌리므로(모델 CDN 필요) **가짜 랜드마크**를 넣어
+     계산 경로만 검증한다. 인덱스 규약이 바뀌면 여기서 잡힌다. */
+  const FAKE_FACE = (opt = {}) => {
+    const d = { innerR: 0.545, outerR: 0.670, ...opt };
+    const lm = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+    const set = (i, x, y) => { lm[i] = { x, y, z: 0 }; };
+    [468, 469, 470, 471, 472].forEach((i) => set(i, 0.400, 0.500));   // 왼 홍채
+    [473, 474, 475, 476, 477].forEach((i) => set(i, 0.600, 0.500));   // 오른 홍채
+    set(33, 0.330, 0.500); set(133, 0.455, 0.500);                    // 왼 외안각·내안각
+    set(362, d.innerR, 0.500); set(263, d.outerR, 0.500);             // 오른 내안각·외안각
+    set(70, 0.300, 0.420); set(300, 0.700, 0.420);                    // 꼬리 (위 윤곽)
+    set(105, 0.420, 0.400); set(334, 0.580, 0.400);                   // 산 (위)
+    set(52, 0.420, 0.440); set(282, 0.580, 0.440);                    // 산 (아래) = 두께
+    set(107, 0.465, 0.430); set(336, 0.535, 0.430);                   // 앞머리 (위)
+    set(55, 0.465, 0.455); set(285, 0.535, 0.455);                    // 앞머리 (아래) = 두께
+    return lm;
+  };
+
+  // 69. 두께 선은 고정 오프셋이 아니라 **눈썹 아래 윤곽 실측**
+  const meas = await p.evaluate((lm) => {
+    const S = window.PB.S;
+    S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
+    const g = S.g;
+    return { h2: g.h2, at: g.archThickness, front: g.front, ft: g.frontThickness };
+  }, FAKE_FACE());
+  /* 이미지에서 아치 위 0.400 / 아래 0.440, 앞머리 위 0.430 / 아래 0.455
+     → 화면에서도 두께 선이 각 짝보다 **아래**(값이 큼)에 와야 한다 */
+  check("69. 두께 선 — 눈썹 아래 윤곽 실측 (고정 오프셋 아님)",
+    meas.at > meas.h2 + 0.005 && meas.ft > meas.front + 0.003
+      && Math.abs((meas.at - meas.h2) - (meas.ft - meas.front) * (0.040 / 0.025)) < 0.02,
+    `아치 ${meas.h2.toFixed(3)}→두께 ${meas.at.toFixed(3)} / 앞머리 ${meas.front.toFixed(3)}→두께 ${meas.ft.toFixed(3)}`);
+
+  // 70. 비대칭 얼굴 — 이너 바 오차를 좌·우에 고르게 나눈다 (대칭은 유지)
+  const asym = await p.evaluate((lm) => {
+    const S = window.PB.S, W = S.dim.W;
+    S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
+    const P = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
+    return {
+      inL: Math.abs(S.g.v2 - P(133)), inR: Math.abs(S.g.v3 - P(362)),
+      outL: Math.abs(S.g.v4 - P(33)), outR: Math.abs(S.g.v5 - P(263)),
+      sym: Math.abs((S.g.v2 + S.g.v3) / 2 - S.g.v1),
+    };
+  }, FAKE_FACE({ innerR: 0.575, outerR: 0.690 }));   // 오른쪽을 바깥으로 (비대칭 얼굴)
+  /* 중심축을 **내안각 중점**으로 잡으므로 이너 바는 좌우 모두 정확히 닿는다.
+     비대칭의 오차는 아우터로 옮겨가고, 그건 좌우에 **똑같이** 나뉘어야 한다. */
+  check("70. 비대칭 얼굴 — 이너는 양쪽 다 닿고, 아우터 오차는 좌우 균등",
+    asym.inL < 0.002 && asym.inR < 0.002
+      && Math.abs(asym.outL - asym.outR) < 0.004 && asym.sym < 1e-6,
+    `이너 ${(asym.inL * 100).toFixed(2)}%/${(asym.inR * 100).toFixed(2)}% · 아우터 ${(asym.outL * 100).toFixed(2)}%/${(asym.outR * 100).toFixed(2)}% · 대칭오차 ${asym.sym.toExponential(1)}`);
+
+  // 71. 눈썹 꼬리가 프레임 안에 들어온다 (자동 정렬 후 잘리지 않음)
+  const fit = await p.evaluate((lm) => {
+    const S = window.PB.S, W = S.dim.W;
+    S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
+    const X = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
+    return { tailL: X(70), tailR: X(300), wr: S.wr / W, zoom: S.p.zoom };
+  }, FAKE_FACE());
+  check("71. 자동 정렬 — 양쪽 눈썹 꼬리가 화면 안 (잘리지 않음)",
+    fit.tailL > 0.01 && fit.tailR < fit.wr - 0.01,
+    `왼쪽 꼬리 ${(fit.tailL * 100).toFixed(1)}% / 오른쪽 ${(fit.tailR * 100).toFixed(1)}% (작업영역 ${(fit.wr * 100).toFixed(1)}%, 배율 ${fit.zoom.toFixed(2)}×)`);
+
+  // 72. 꺼져 있던 선을 켜면 그 사진에서 **측정한 자리**로 올라온다
+  const snap = await p.evaluate((lm) => {
+    const S = window.PB.S;
+    S.landmarks = lm; window.PB.autoAlign(lm);
+    S.g.h2Visible = false; S.g.h2 = 0.10;          // 엉뚱한 값으로 밀어둠
+    S.multi = false; S.selSet = []; S.sel = "h1"; S.hMode = "line";
+    window.PB.render();
+    const want = window.PB.aiValueFor("h2");
+    document.querySelector('.lbtn[data-key="h2"]').click();   // 켜기
+    const got = S.g.h2;
+    /* 랜드마크가 없으면(얼굴 인식 실패) 조용히 마지막 값 유지 */
+    S.landmarks = null; S.g.h3Visible = false; S.g.h3 = 0.11;
+    document.querySelector('.lbtn[data-key="h3"]').click();
+    const noAi = S.g.h3;
+    return { want, got, vis: S.g.h2Visible, noAi };
+  }, FAKE_FACE());
+  check("72. 선을 켜면 AI 측정 위치로 배치 (인식 실패 시엔 그대로)",
+    snap.vis === true && Math.abs(snap.got - snap.want) < 1e-9
+      && Math.abs(snap.got - 0.10) > 0.05 && Math.abs(snap.noAi - 0.11) < 1e-9,
+    `0.100 → ${snap.got.toFixed(3)} (기대 ${snap.want.toFixed(3)}) · 랜드마크 없을 때 ${snap.noAi.toFixed(3)} 유지`);
+
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.landmarks = null; S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.p = { ...window.PB.S.p, zoom: 1, rot: 0, ox: 0, oy: 0 };
+    S.sel = "h1"; S.hist = []; S.redo = []; window.PB.render();
+  });
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;

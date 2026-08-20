@@ -101,6 +101,7 @@ const I18N = {
     sel_line: "선택",
     line_hidden: "숨김",
     line_shown: "표시",
+    ai_placed: "AI 측정 위치",
     /* 라인 이름 (v1.19.0) — 왼쪽 레일 버튼 · 캔버스 라벨 · 조절자 이름이 모두 이걸 쓴다 */
     line_eye: "눈",
     line_front: "앞머리",
@@ -208,6 +209,7 @@ const I18N = {
     sel_line: "selected",
     line_hidden: "hidden",
     line_shown: "shown",
+    ai_placed: "AI-measured",
     line_eye: "Eye",
     line_front: "Front",
     line_ft: "F.T",
@@ -245,11 +247,11 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 const H_SPECS = [
   { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#FF3B4E", dot: "#FF3B4E", w: 2.6, op: 1,   segs: [[0, 1]] },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.30, 0.70]] },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.36, 0.64]] },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.20, 0.40], [0.60, 0.80]] },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.25, 0.35], [0.65, 0.75]] },
   { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0, 0.40], [0.60, 1]] },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, segs: [[0, 0.20], [0.80, 1]] },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[0, 0.20], [0.80, 1]] },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, segs: [[0, 0.13], [0.87, 1]] },
 ];
 
 const V_SPECS = [
@@ -976,6 +978,7 @@ function buildLineButtons() {
     b.dataset.vis = spec.vis;
     b.textContent = t(spec.i18n);
     b.addEventListener("click", () => {
+      let aiSnapped = false;
       /* 여러라인 모드 : 누를 때마다 선택에 추가 / 다시 누르면 해제 (숨기지 않음)
          한 줄 모드   : 1번 탭 = 선택(움직임), 같은 버튼 다시 탭 = 숨김/표시
          사진 보정 중이었다면 첫 탭은 선 조절로 되돌리는 역할만 한다. */
@@ -985,12 +988,17 @@ function buildLineButtons() {
         showHud(S.selSet.length ? `${S.selSet.length}${t("sel_count")}` : t("multi_on"));
       } else {
         step(() => {
+          const wasOn = S.g[spec.vis];
           if (S.sel === spec.key && S.hMode === "line") S.g[spec.vis] = !S.g[spec.vis];
           else S.g[spec.vis] = true;
+          /* 꺼져 있던 선을 켤 때는 **그 고객 사진에서 측정한 자리**로 올린다 (v1.22.0).
+             랜드마크가 없으면(얼굴 인식 실패) 마지막 값 그대로 — 조용히 실패한다. */
+          if (!wasOn && S.g[spec.vis] && aiPlaceLine(spec.key)) aiSnapped = true;
         });
         noteSel(spec.key);
       }
       render();
+      if (aiSnapped) showHud(`${t(spec.i18n)} · ${t("ai_placed")}`, 1400);
     });
     return b;
   };
@@ -1292,6 +1300,70 @@ function alignFromPupils(a, b) {
   placeLinesFromEyes(centerX(), CENTER_Y, EYE_FRAC / 2);
 }
 
+/* ═══ AI 랜드마크 → 각 선의 위치 (v1.22.0) ═══════════════════
+   MediaPipe FaceLandmarker 의 눈썹 윤곽점. 위/아래 윤곽이 따로 있어
+   **두께 선을 고정 오프셋이 아니라 실측**으로 잡을 수 있다.
+     눈썹 위 윤곽 : 꼬리 70/300 · 산 105/334 · 앞머리 107/336
+     눈썹 아래 윤곽:       46/276 ·    52/282 ·        55/285
+   ⚠️ 이 인덱스는 MediaPipe FaceMesh 규약이다. 모델을 바꾸면 같이 확인해야 한다. */
+const AI_LM = {
+  h1: null,                       // 눈 기준선은 동공에서 (아래 aiValueFor 참고)
+  h2: [105, 334],                 // 아치 = 눈썹 산 위쪽
+  archThickness: [52, 282],       // 아치 두께 = 같은 자리 아래쪽 윤곽
+  front: [107, 336],              // 앞머리 = 눈썹 머리 위쪽
+  frontThickness: [55, 285],      // 앞 두께 = 같은 자리 아래쪽 윤곽
+  h3: [70, 300],                  // 꼬리 = 눈썹 꼬리 위쪽
+};
+const IRIS_L = [468, 469, 470, 471, 472], IRIS_R = [473, 474, 475, 476, 477];
+const EYE_CORNERS = [33, 133, 362, 263];
+
+const lmAvg = (lm, idx) => {
+  let x = 0, y = 0;
+  for (const i of idx) { x += lm[i].x * S.iw; y += lm[i].y * S.ih; }
+  return { x: x / idx.length, y: y / idx.length };
+};
+
+/* 좌우 내안각·외안각 (이미지 좌표). x 순서로 정렬해 인덱스 규약에 의존하지 않는다. */
+function eyeCorners(lm) {
+  const c = EYE_CORNERS.map((i) => ({ x: lm[i].x * S.iw, y: lm[i].y * S.ih })).sort((a, b) => a.x - b.x);
+  return { outerL: c[0], innerL: c[1], innerR: c[2], outerR: c[3] };
+}
+
+/* 지금 화면 변환(S.p) 기준으로 그 선이 있어야 할 값(0~1). 랜드마크가 없으면 null. */
+function aiValueFor(key) {
+  const lm = S.landmarks;
+  if (!lm || !S.dim.H) return null;
+  const { W, H } = S.dim, tr = S.p;
+  const yOf = (idx) => { const p = lmAvg(lm, idx); return clamp(imgToCanvas(p.x, p.y, tr).y / H, 0.02, 0.98); };
+
+  if (key === "h1") {
+    const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
+    return clamp(imgToCanvas((a.x + b.x) / 2, (a.y + b.y) / 2, tr).y / H, 0.02, 0.98);
+  }
+  if (AI_LM[key]) return yOf(AI_LM[key]);
+
+  /* 세로선 — 대칭을 지켜야 하므로 좌·우 실측값의 **평균 거리**를 쓴다 (BASELINE 1-2).
+     한쪽만 재서 거울상을 만들면 비대칭 얼굴에서 한쪽이 크게 뜬다. */
+  if (key === "v1" || key === "v2" || key === "v4") {
+    const c = eyeCorners(lm);
+    const cx = (imgToCanvas(c.innerL.x, c.innerL.y, tr).x + imgToCanvas(c.innerR.x, c.innerR.y, tr).x) / 2 / W;
+    if (key === "v1") return clamp(cx, 0.02, 0.98);
+    const half = key === "v2"
+      ? (Math.abs(imgToCanvas(c.innerL.x, c.innerL.y, tr).x / W - cx) + Math.abs(imgToCanvas(c.innerR.x, c.innerR.y, tr).x / W - cx)) / 2
+      : (Math.abs(imgToCanvas(c.outerL.x, c.outerL.y, tr).x / W - cx) + Math.abs(imgToCanvas(c.outerR.x, c.outerR.y, tr).x / W - cx)) / 2;
+    return clamp(S.g.v1 - half, 0.02, 0.98);
+  }
+  return null;
+}
+
+/* 선을 켤 때 AI 위치로 스냅. 배치했으면 true. */
+function aiPlaceLine(key) {
+  const v = aiValueFor(key);
+  if (v === null) return false;
+  setLine(key, v);
+  return true;
+}
+
 function autoAlign(lm) {
   const { W, H } = S.dim;
   const iw = S.iw, ih = S.ih;
@@ -1329,28 +1401,80 @@ function autoAlign(lm) {
 
   /* 라인 자동 배치 */
   const g = S.g;
-  g.v1 = centerX();
-  g.h1 = clamp(imgToCanvas(mx, my, tr).y / H, 0.02, 0.98);
+  const cx = (x, y) => imgToCanvas(x, y, tr);
 
-  const cIn = imgToCanvas(innerL.x, innerL.y, tr);
-  g.v2 = clamp(cIn.x / W, 0.02, 0.98);
-  g.v3 = 2 * g.v1 - g.v2;
+  /* 중심축은 **동공 중점이 아니라 양쪽 내안각의 중점** (v1.22.0).
+     이너 바가 좌우 내안각에 고르게 닿으려면 이 축이 기준이어야 한다. */
+  const inLc = cx(innerL.x, innerL.y), inRc = cx(innerR.x, innerR.y);
+  g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
+  g.h1 = clamp(cx(mx, my).y / H, 0.02, 0.98);
 
-  const cOut = imgToCanvas(outerL.x, outerL.y, tr);
-  g.v4 = clamp(cOut.x / W, 0.02, 0.98);
-  g.v5 = 2 * g.v1 - g.v4;
+  /* 좌·우 실측 거리의 **평균** — 한쪽만 재서 거울상을 만들면 비대칭 얼굴에서 한쪽이 크게 뜬다.
+     평균을 쓰면 양쪽이 똑같이 아주 조금씩만 뜬다 (BASELINE 1-2 대칭 유지). */
+  const outLc = cx(outerL.x, outerL.y), outRc = cx(outerR.x, outerR.y);
+  const halfIn = (Math.abs(inLc.x / W - g.v1) + Math.abs(inRc.x / W - g.v1)) / 2;
+  const halfOut = (Math.abs(outLc.x / W - g.v1) + Math.abs(outRc.x / W - g.v1)) / 2;
+  g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
+  g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
 
-  /* 눈썹 기준선 (표시 여부는 그대로 두고 위치만 잡아둠) */
-  const browArch = avg([105, 334]);        // 눈썹 산
-  const browTail = avg([70, 300]);         // 눈썹 꼬리
-  const browHead = avg([107, 336]);        // 눈썹 앞머리
-  g.h2 = clamp(imgToCanvas(browArch.x, browArch.y, tr).y / H, 0.02, 0.98);
-  g.h3 = clamp(imgToCanvas(browTail.x, browTail.y, tr).y / H, 0.02, 0.98);
-  g.front = clamp(imgToCanvas(browHead.x, browHead.y, tr).y / H, 0.02, 0.98);
-  g.archThickness = clamp(g.h2 + 0.035, 0.02, 0.98);
-  g.frontThickness = clamp(g.front - 0.04, 0.02, 0.98);
+  /* 눈썹 기준선 — 두께 선은 **눈썹 아래 윤곽을 실측**한다 (고정 오프셋 아님, v1.22.0) */
+  const yAt = (idx) => { const p = avg(idx); return clamp(cx(p.x, p.y).y / H, 0.02, 0.98); };
+  g.h2 = yAt(AI_LM.h2);
+  g.h3 = yAt(AI_LM.h3);
+  g.front = yAt(AI_LM.front);
+  g.archThickness = yAt(AI_LM.archThickness);
+  g.frontThickness = yAt(AI_LM.frontThickness);
 
   /* Base Structure pivot 을 코끝 높이에 */
+  g.innerAngle = clamp(g.h1 + 0.16, 0.05, 0.95);
+
+  fitBrowsInFrame(lm);   // 눈썹 꼬리가 잘리면 배율을 낮춘다
+}
+
+/* ═══ 눈썹이 화면 안에 들어오게 (v1.22.0) ═════════════════════
+   autoAlign 은 동공 간 거리를 캔버스 폭의 EYE_FRAC 으로 고정 확대한다.
+   얼굴이 넓거나 눈 간격이 좁으면 **눈썹 꼬리가 프레임 밖으로 밀려난다** (실제로 잘렸음).
+   정렬 직후 양쪽 꼬리가 들어오는지 재고, 넘치면 들어올 때까지 배율만 낮춘다. */
+const FRAME_PAD = 0.06;          // 좌우 여백 (작업 영역 폭 기준)
+function fitBrowsInFrame(lm) {
+  if (!lm || !S.dim.W) return;
+  const { W } = S.dim, WRn = workRight();
+  const xs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
+  const lo = Math.min(...xs), hi = Math.max(...xs);
+  const left = FRAME_PAD * WRn, right = WRn - FRAME_PAD * WRn;
+  const c = S.g.v1;
+  const need = Math.max((c - lo) / Math.max(c - left, 1e-6), (hi - c) / Math.max(right - c, 1e-6));
+  if (need <= 1.001) return;                       // 이미 들어옴
+  const zoom = clamp(S.p.zoom / need, ZOOM_MIN, ZOOM_MAX);
+  if (Math.abs(zoom - S.p.zoom) < 1e-4) return;
+  S.p.zoom = zoom;
+  autoAlignRelayout(lm);
+}
+
+/* 배율만 바뀌었으므로 위치·선을 그 배율로 다시 계산 (재귀 없이 한 번만) */
+function autoAlignRelayout(lm) {
+  const { W, H } = S.dim, tr = S.p;
+  const c = eyeCorners(lm);
+  const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  const vx = (mx - S.iw / 2) * S.s0, vy = (my - S.ih / 2) * S.s0;
+  const r = (tr.rot * Math.PI) / 180;
+  const rx = vx * Math.cos(r) - vy * Math.sin(r), ry = vx * Math.sin(r) + vy * Math.cos(r);
+  S.p.ox = clamp(-(rx * tr.zoom) / W + (centerX() - 0.5), -OFFSET_MAX, OFFSET_MAX);
+  S.p.oy = clamp(-(ry * tr.zoom) / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX);
+  const g = S.g, cv = (x, y) => imgToCanvas(x, y, S.p);
+  const inLc = cv(c.innerL.x, c.innerL.y), inRc = cv(c.innerR.x, c.innerR.y);
+  const outLc = cv(c.outerL.x, c.outerL.y), outRc = cv(c.outerR.x, c.outerR.y);
+  g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
+  g.h1 = clamp(cv(mx, my).y / H, 0.02, 0.98);
+  const halfIn = (Math.abs(inLc.x / W - g.v1) + Math.abs(inRc.x / W - g.v1)) / 2;
+  const halfOut = (Math.abs(outLc.x / W - g.v1) + Math.abs(outRc.x / W - g.v1)) / 2;
+  g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
+  g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
+  for (const k of ["h2", "h3", "front", "archThickness", "frontThickness"]) {
+    const v = aiValueFor(k);
+    if (v !== null) g[k] = v;
+  }
   g.innerAngle = clamp(g.h1 + 0.16, 0.05, 0.95);
 }
 
@@ -1761,4 +1885,4 @@ if ("serviceWorker" in navigator) {
 /* 개발/디버깅용 */
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX,
   LINE_COLORS: { eye: "#FF3B4E", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
-  render, runFaceAI, loadPhoto, alignFromPupils };
+  render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas };
