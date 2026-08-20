@@ -506,6 +506,8 @@ body:not(.land) #railLang{display:none}
          기준 쪽은 후속 버튼이라 밸런스를 켜야 나오고, **왼쪽/오른쪽을 각각 눌러** 고릅니다
          (토글 하나면 지금 어느 쪽이 기준인지 눌러 보기 전엔 모릅니다). -->
     <div class="ov ov-bal">
+      <!-- 그린 선에 다시 맞추기 (v1.30.0) — 드로잉을 더 그린 뒤 누르면 자가 다시 올라갑니다 -->
+      <button class="chip" id="btnSnap" data-i18n="ai_redraw">드로잉 맞춤</button>
       <button class="chip" id="btnBalance" data-i18n="editor_balance_check">밸런스</button>
       <span class="refwrap" id="refWrap" hidden>
         <button class="chip ref" id="btnRefL" data-i18n="bal_left">왼쪽</button>

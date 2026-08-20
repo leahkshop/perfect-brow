@@ -83,6 +83,9 @@ const I18N = {
     preset_builtin: "기본",
     ai_loading: "AI 얼굴 인식 중…",
     ai_ok: "AI 자동 정렬 완료",
+    ai_drawn: "그린 선에 맞춰 배치했습니다",
+    ai_redraw: "드로잉 맞춤",
+    ai_redraw_fail: "그린 선을 못 찾았습니다",
     ai_fail: "AI 얼굴 인식 실패 · 사진을 손으로 맞춰 주세요",
     ai_noface: "얼굴 인식 실패 · [동공정렬]을 눌러 정렬하세요",
     hint_updown: "▼ 아래　　위 ▲ · 화면을 드래그해도 조절됩니다",
@@ -208,6 +211,9 @@ const I18N = {
     preset_builtin: "Built-in",
     ai_loading: "Detecting face…",
     ai_ok: "Auto-aligned",
+    ai_drawn: "Snapped to your drawing",
+    ai_redraw: "Snap to drawing",
+    ai_redraw_fail: "No drawing found",
     ai_fail: "Face detection failed · adjust the photo by hand",
     ai_noface: "No face found · use [Pupil Align]",
     hint_updown: "▼ down　　up ▲ · drag anywhere to adjust",
@@ -1668,7 +1674,11 @@ async function runFaceAI() {
     }
     S.landmarks = res.faceLandmarks[0];
     autoAlign(S.landmarks);
-    setAI(t("ai_ok"), "ok");
+    render();
+    /* 얼굴 정렬이 끝난 뒤 **그려진 드로잉 위로** 선을 다시 올린다 (v1.30.0).
+       그린 선이 없거나 못 읽으면 조용히 얼굴 기준 배치 그대로 둔다. */
+    const drawn = autoFromDrawing();
+    setAI(drawn ? t("ai_drawn") : t("ai_ok"), "ok");
     render();
   } catch (err) {
     console.warn("[PerfectBrow] face AI unavailable:", err);
@@ -1676,6 +1686,120 @@ async function runFaceAI() {
     setAI(t("ai_fail"), "warn");
     render();
   }
+}
+
+
+/* ═══ 드로잉 자동 맞춤 (v1.30.0) ═══════════════════════════════
+   ⚠️ **이 앱의 실제 사용 순서**를 코드에 반영한 것입니다. 지우지 마세요.
+
+     ① 원장님이 **왼쪽 눈썹에 먼저 굵은 드로잉**을 그린다
+     ② 오른쪽에 그리기 전 **포인트를 먼저 찍는다**
+     ③ 자(가로선)는 **왼쪽 드로잉의 짙은 선에 맞춰** 그 위에 올라가야 한다
+     ④ 오른쪽은 그 자와 눈썹 사이 **갭**을 보며 맞춘다
+     ⑤ 양쪽이 완성되면 `밸런스` 로 어긋난 곳을 확인한다
+
+   그래서 사진을 불러오면 **AI 얼굴 정렬 → 그려진 드로잉 읽기 → 그 위로 선 이동**
+   까지 자동으로 갑니다. 얼굴 랜드마크(눈썹 털)가 아니라 **그린 선**이 기준입니다.
+   V 피봇·V 앵글은 **자동으로 올리지 않습니다** — 쓰실 때만 켜는 보조선입니다. */
+const DRAW_SAMPLES = 25;      // 눈썹 구간에서 뽑는 x 표본 수
+const DRAW_CONTRAST = 16;     // 주변보다 이만큼 어두워야 "그린 선"으로 본다
+const DRAW_MIN_HITS = 8;      // 이보다 적게 찾으면 실패 (조용히 건너뛴다)
+const DRAW_BAND = 0.30;       // 눈 기준선 위로 훑는 범위 (캔버스 높이 비율)
+
+/* 한 x 열에서 **가장 굵고 어두운 덩어리**의 위/아래 y 를 찾는다.
+   평균보다 어두운 픽셀이 이어지는 구간 중 제일 긴 것을 고른다 —
+   눈썹 털 한 올이나 속눈썹에 끌려가지 않게 하려는 것. */
+function darkRunAt(img, x, y0, y1) {
+  const { W } = S.dim;
+  let sum = 0, n = 0;
+  for (let y = y0; y <= y1; y++) { sum += lumaAt(img, W, x, y); n++; }
+  if (!n) return null;
+  const avg = sum / n, cut = avg - DRAW_CONTRAST;
+  let best = null, curTop = -1;
+  for (let y = y0; y <= y1; y++) {
+    const dark = lumaAt(img, W, x, y) < cut;
+    if (dark && curTop < 0) curTop = y;
+    if ((!dark || y === y1) && curTop >= 0) {
+      const bot = dark ? y : y - 1, len = bot - curTop + 1;
+      if (!best || len > best.len) best = { top: curTop, bot, len };
+      curTop = -1;
+    }
+  }
+  return best && best.len >= 2 ? best : null;
+}
+
+/* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다.
+   반환: { atFrac(frac) → {top,bot} } · 실패하면 null */
+function readDrawing(img) {
+  const { W, H } = S.dim, g = S.g;
+  const y1 = Math.min(H - 1, Math.round(g.h1 * H));          // 눈 기준선 아래로는 안 본다
+  const y0 = Math.max(0, Math.round(y1 - DRAW_BAND * H));
+  if (y1 - y0 < 8) return null;
+  /* 기준 쪽(왼쪽이 기본)의 눈썹 구간을 frac 0~0.4 / 0.6~1 중에서 고른다 */
+  const lo = S.refSide === "L" ? -0.15 : 0.6;
+  const hi = S.refSide === "L" ? 0.4 : 1.15;
+  const pts = [];
+  for (let i = 0; i < DRAW_SAMPLES; i++) {
+    const frac = lo + ((hi - lo) * (i + 0.5)) / DRAW_SAMPLES;
+    const x = Math.round(browX(frac));
+    if (x < 0 || x >= W) continue;
+    const run = darkRunAt(img, x, y0, y1);
+    if (run) pts.push({ frac, x, top: run.top, bot: run.bot });
+  }
+  if (pts.length < DRAW_MIN_HITS) return null;
+  return pts;
+}
+
+/* frac 구간 안 표본들의 top/bot 중앙값 — 점 하나에 끌려가지 않게 */
+function medianOf(pts, a, b, key) {
+  const v = pts.filter((p) => p.frac >= Math.min(a, b) && p.frac <= Math.max(a, b)).map((p) => p[key]);
+  if (v.length < 2) return null;
+  v.sort((x, y) => x - y);
+  return v[Math.floor(v.length / 2)];
+}
+
+/* 사진에 그려진 드로잉 위로 모든 선을 올린다. 올렸으면 true. */
+function autoFromDrawing() {
+  const { H } = S.dim;
+  const img = photoPixels();
+  if (!img) return false;
+  const pts = readDrawing(img);
+  if (!pts) return false;
+
+  const mirror = S.refSide === "R";
+  /* 기준 쪽 frac → 그 선의 자(自) frac 으로 맞춘다.
+     앞머리·앞두께는 이너 바로 바깥(0.195~0.345), 아치·아치두께는 산(−0.02~0.13),
+     꼬리는 제일 바깥(−0.15~−0.02) — H_SPECS 의 segs 와 같은 구간입니다 (BASELINE 1-16). */
+  const seg = (a, b) => (mirror ? [1 - b, 1 - a] : [a, b]);
+  const front = seg(0.195, 0.345), arch = seg(-0.02, 0.13), tail = seg(-0.15, -0.02);
+
+  const yTop = (r) => medianOf(pts, r[0], r[1], "top");
+  const yBot = (r) => medianOf(pts, r[0], r[1], "bot");
+  const setY = (key, py) => { if (py !== null) setLine(key, clamp(py / H, 0.02, 0.98)); };
+
+  let n = 0;
+  const fT = yTop(front), fB = yBot(front);
+  const aT = yTop(arch), aB = yBot(arch);
+  const tT = yTop(tail);
+  if (fT !== null) { setY("front", fT); n++; }
+  if (fB !== null) { setY("frontThickness", fB); n++; }
+  if (aT !== null) { setY("h2", aT); n++; }
+  if (aB !== null) { setY("archThickness", aB); n++; }
+  if (tT !== null) { setY("h3", tT); n++; }
+
+  /* 세로선 — 드로잉이 실제로 있는 x 범위의 안쪽/바깥쪽 끝.
+     센터(v1)는 얼굴 중심축이라 건드리지 않습니다 (내안각 중점 · BASELINE 1-15). */
+  const xs = pts.map((p) => p.x).sort((a, b) => a - b);
+  if (xs.length >= DRAW_MIN_HITS) {
+    const W = S.dim.W, cx = S.g.v1 * W;
+    const outer = mirror ? xs[xs.length - 1] : xs[0];
+    const inner = mirror ? xs[0] : xs[xs.length - 1];
+    const half = (x) => Math.abs(x - cx) / W;
+    setLine("v2", clamp(S.g.v1 - half(inner), 0.02, 0.98));
+    setLine("v4", clamp(S.g.v1 - half(outer), 0.02, 0.98));
+    n += 2;
+  }
+  return n > 0;
 }
 
 /* ═══════════ 9. export ═══════════ */
@@ -2037,6 +2161,13 @@ function setRefSide(side) {
   render();
   showHud(side === "L" ? t("bal_ref_l") : t("bal_ref_r"), 1600);
 }
+/* 그린 선에 다시 맞추기 — 드로잉을 더 그리거나 지운 뒤 다시 올릴 때 (v1.30.0) */
+$("btnSnap").onclick = () => {
+  let ok = false;
+  step(() => { ok = autoFromDrawing(); });
+  render();
+  showHud(ok ? t("ai_drawn") : t("ai_redraw_fail"), 1600);
+};
 $("btnRefL").onclick = () => setRefSide("L");
 $("btnRefR").onclick = () => setRefSide("R");
 
@@ -2268,4 +2399,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
+  autoFromDrawing, readDrawing,
   applyLayout, openPicker, endPicking };

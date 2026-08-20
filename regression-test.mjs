@@ -1790,6 +1790,51 @@ console.log("\n[밸런스 판정]");
     `좁은 얼굴 이너 ${Math.round(narrow.inner)}px → 허용 ${narrow.tol.toFixed(1)}px · 6px 차이 ${narrow.off ? "잡음" : "통과"} / ` +
     `넓은 얼굴 이너 ${Math.round(wide.inner)}px → 허용 ${wide.tol.toFixed(1)}px · 6px 차이 ${wide.off ? "잡음" : "통과"}`);
 
+  /* 87. 드로잉 자동 맞춤 (v1.30.0)
+     원장님은 **왼쪽 눈썹에 먼저 굵은 드로잉을 그리고**, 자가 그 선 위로 올라가야 합니다.
+     그린 선의 위/아래 경계를 아는 합성 사진으로 검증합니다. */
+  const drawFace = () => {
+    const f = path.join(ROOT, ".draw.svg");
+    /* 왼쪽 눈썹 자리(x 90~300)에 두께 있는 드로잉: 위 176 / 아래 196 */
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<rect x="90" y="176" width="210" height="20" rx="8" fill="#2a1c14"/></svg>`);
+    return f;
+  };
+  const fd = drawFace();
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1300);
+    const out = await p.evaluate(() => {
+      const S = window.PB.S, H = S.dim.H;
+      S.landmarks = null;
+      S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.g = { ...window.PB.DEFAULT_GUIDE };
+      S.refSide = "L";
+      window.PB.render();
+      const before = { front: S.g.front, h2: S.g.h2 };
+      const ok = window.PB.autoFromDrawing();
+      const g = S.g;
+      return { ok, before, H,
+        frontPx: g.front * H, ftPx: g.frontThickness * H,
+        archPx: g.h2 * H, atPx: g.archThickness * H,
+        pivotUntouched: Math.abs(g.innerAngle - window.PB.DEFAULT_GUIDE.innerAngle) < 1e-9,
+        vBase: g.baseStructureVisible };
+    });
+    await ctx.close();
+    /* 그린 선은 위 176 / 아래 196 — 자가 그 경계에 올라가야 한다 */
+    check("87. 드로잉 자동 맞춤 — 그린 선의 위/아래에 자가 올라간다 · V 피봇은 건드리지 않음",
+      out.ok && near(out.frontPx, 176, 4) && near(out.ftPx, 196, 4)
+        && near(out.archPx, 176, 4) && near(out.atPx, 196, 4)
+        && out.pivotUntouched && out.vBase === false,
+      `앞머리 ${out.frontPx.toFixed(0)}px / 앞두께 ${out.ftPx.toFixed(0)}px / 아치 ${out.archPx.toFixed(0)}px / 아치두께 ${out.atPx.toFixed(0)}px (그린 선 176~196) · V피봇 그대로=${out.pivotUntouched}`);
+  }
+  fs.unlinkSync(fd);
+
   for (const f of [f1, f0, fN, f6]) fs.unlinkSync(f);
 }
 
