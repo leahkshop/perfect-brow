@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v19";  /* v1.31.0 — 눈썹 드로잉을 사진에서 직접 찾기 */
+const VERSION = "pb-v20";  /* v1.31.1 — 테두리만 그린 드로잉·모양 변화 대응 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

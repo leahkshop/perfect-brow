@@ -1721,6 +1721,8 @@ const DRAW_PAD_UP = 0.95;     // 위 여유 (눈썹 높이 비율)
 const DRAW_PAD_DN = 0.70;     // 아래 여유
 const DRAW_EYE_GAP = 0.55;    // 눈(동공)까지 이만큼은 남긴다 — 눈꺼풀을 읽지 않기 위해
 const DRAW_MAX_FILL = 0.72;   // 열의 이만큼을 넘게 어두우면 머리카락·그림자로 보고 버린다
+const DRAW_JOIN = 0.26;       // 이만큼 가까운 덩어리는 한 덩어리 — **윤곽선으로 그린 드로잉** 대응
+const DRAW_JOIN_DENS = 0.6;   // 씨앗의 이만큼은 진해야 이어 붙인다 (옅은 그림자 방지)
 
 /* 랜드마크 → 지금 화면 좌표의 **눈썹 탐색 상자** 2개(화면 왼쪽/오른쪽).
    랜드마크가 없으면 null → 아래 fallbackBox() 로 넘어간다. */
@@ -1770,27 +1772,51 @@ function inkRunAt(img, x, y0, y1, cy) {
   const { W } = S.dim;
   const v = [];
   for (let y = y0; y <= y1; y++) v.push(lumaAt(img, W, x, y));
-  if (v.length < 6) return null;
-  const s = [...v].sort((a, b) => a - b), k = Math.floor(s.length * 0.6);
+  const N = v.length;
+  if (N < 6) return null;
+  const s = [...v].sort((a, b) => a - b), k = Math.floor(N * 0.6);
   let sum = 0;
-  for (let i = k; i < s.length; i++) sum += s[i];
-  const cut = sum / Math.max(1, s.length - k) - DRAW_CONTRAST;
+  for (let i = k; i < N; i++) sum += s[i];
+  const cut = sum / Math.max(1, N - k) - DRAW_CONTRAST;
 
-  const near = (r) => (cy === null ? 0 : Math.abs((r.top + r.bot) / 2 - cy));
-  let best = null, top = -1, ink = 0;
-  for (let i = 0; i < v.length; i++) {
+  /* ① 이 열의 어두운 덩어리를 **전부** 모은다 */
+  const runs = [];
+  let t = -1, ink = 0;
+  for (let i = 0; i < N; i++) {
     const dark = v[i] < cut;
-    if (dark) { if (top < 0) { top = i; ink = 0; } ink += cut - v[i]; }
-    if ((!dark || i === v.length - 1) && top >= 0) {
-      const bi = dark ? i : i - 1;
-      const c = { top: y0 + top, bot: y0 + bi, ink, len: bi - top + 1 };
-      if (c.len >= 2 && c.len <= DRAW_MAX_FILL * v.length) {
-        if (!best || c.ink > best.ink * 1.15 || (c.ink > best.ink * 0.85 && near(c) < near(best))) best = c;
-      }
-      top = -1;
+    if (dark) { if (t < 0) { t = i; ink = 0; } ink += cut - v[i]; }
+    if ((!dark || i === N - 1) && t >= 0) {
+      const b = dark ? i : i - 1, len = b - t + 1;
+      if (len >= 2) runs.push({ t, b, ink, dens: ink / len });
+      t = -1;
     }
   }
-  return best;
+  if (!runs.length) return null;
+
+  /* ② 씨앗 = 잉크가 가장 많은 덩어리. 비슷하면 눈썹 중앙에 가까운 쪽 */
+  let si = 0;
+  const midY = (r) => y0 + (r.t + r.b) / 2;
+  for (let i = 1; i < runs.length; i++) {
+    const a = runs[i], b = runs[si];
+    const closer = cy !== null && Math.abs(midY(a) - cy) < Math.abs(midY(b) - cy);
+    if (a.ink > b.ink * 1.15 || (a.ink > b.ink * 0.85 && closer)) si = i;
+  }
+
+  /* ③ ⚠️ **윤곽선으로 그린 드로잉** — 위선·아래선이 따로 잡힙니다 (v1.31.1).
+     원장님은 속을 꽉 채우기도 하고 테두리만 그리기도 하십니다. 테두리만 그리면
+     ②에서 한 줄만 잡혀 **두께가 통째로 틀립니다.** 가까이 붙은 진한 덩어리는
+     한 덩어리로 봅니다 — 위선의 위 = 눈썹 위, 아래선의 아래 = 눈썹 아래. */
+  const join = DRAW_JOIN * N, maxLen = DRAW_MAX_FILL * N, dens0 = runs[si].dens;
+  let lo = si, hi = si, top = runs[si].t, bot = runs[si].b;
+  for (let pass = 0; pass < runs.length; pass++) {
+    const up = lo > 0 ? runs[lo - 1] : null, dn = hi < runs.length - 1 ? runs[hi + 1] : null;
+    let moved = false;
+    if (up && top - up.b <= join && up.dens >= dens0 * DRAW_JOIN_DENS && bot - up.t + 1 <= maxLen) { top = up.t; lo--; moved = true; }
+    if (dn && dn.t - bot <= join && dn.dens >= dens0 * DRAW_JOIN_DENS && dn.b - top + 1 <= maxLen) { bot = dn.b; hi++; moved = true; }
+    if (!moved) break;
+  }
+  if (bot - top + 1 > maxLen) return null;
+  return { top: y0 + top, bot: y0 + bot };
 }
 
 /* 찾은 덩어리들 중 **한 줄기로 이어지는 것**만 남긴다.

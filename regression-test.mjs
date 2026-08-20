@@ -1813,23 +1813,38 @@ console.log("\n[밸런스 판정]");
        꼬리 쪽  x 120~150 : 위 152 / 아래 164   (얇다)
      87 = 얼굴 인식이 된 경우(랜드마크 상자로 눈썹만 훑는 실제 경로)
      88 = 얼굴 인식이 실패한 경우(절반을 통째로 훑는 예비 경로) */
-  const CP = [[120, 152, 164], [150, 152, 164], [185, 122, 142], [215, 120, 140],
-              [260, 132, 158], [300, 148, 178], [340, 148, 178]];
-  const edgeAt = (x, i) => {
-    for (let k = 0; k < CP.length - 1; k++) {
-      const a = CP[k], b = CP[k + 1];
+  /* 모양 A — 아치가 **바깥쪽**(x 215)에 있는 눈썹 */
+  const SHAPE_A = {
+    cp: [[120, 152, 164], [150, 152, 164], [185, 122, 142], [215, 120, 140],
+         [260, 132, 158], [300, 148, 178], [340, 148, 178]],
+    front: [320, 148, 178], arch: [215, 120, 140], tail: [130, 152], inner: 340, outer: 120,
+  };
+  /* 모양 B — 아치가 **안쪽 가까이**(x 260) 있고 두께도 다른 눈썹.
+     ⚠️ 이 모양이 있어야 「아치를 사진에서 찾는다」가 진짜로 검증됩니다.
+     아치 자리를 코드에 박아 두면 A 는 통과해도 B 에서 틀립니다. */
+  const SHAPE_B = {
+    cp: [[120, 158, 168], [160, 154, 166], [210, 138, 162], [250, 120, 146],
+         [270, 120, 146], [300, 130, 166], [340, 130, 166]],
+    front: [320, 130, 166], arch: [260, 120, 146], tail: [130, 158], inner: 340, outer: 120,
+  };
+  const edgeAt = (cp, x, i) => {
+    for (let k = 0; k < cp.length - 1; k++) {
+      const a = cp[k], b = cp[k + 1];
       if (x >= a[0] && x <= b[0]) return a[i] + ((b[i] - a[i]) * (x - a[0])) / (b[0] - a[0]);
     }
-    return CP[CP.length - 1][i];
+    return cp[cp.length - 1][i];
   };
-  const drawFace = () => {
-    const f = path.join(ROOT, ".draw.svg");
+  /* outline=true → 속을 비우고 **테두리만** 그린 드로잉 (원장님이 자주 쓰시는 방식).
+     이때 한 열에 위선·아래선이 따로 잡히므로, 앱이 둘을 한 덩어리로 봐야 두께가 맞습니다. */
+  const drawFace = (sh, outline, tag) => {
+    const f = path.join(ROOT, `.draw-${tag}.svg`);
     const up = [], dn = [];
-    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(x, 2).toFixed(1)}`); }
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(sh.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(sh.cp, x, 2).toFixed(1)}`); }
     const poly = up.concat(dn.reverse()).join(" ");
+    const paint = outline ? `fill="none" stroke="#2a1c14" stroke-width="5"` : `fill="#2a1c14"`;
     fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
       + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
-      + `<polygon points="${poly}" fill="#2a1c14"/></svg>`);
+      + `<polygon points="${poly}" ${paint}/></svg>`);
     return f;
   };
 
@@ -1850,48 +1865,67 @@ console.log("\n[밸런스 판정]");
     return L;
   })();
 
-  const fd = drawFace();
-  const runDraw = async (useLandmarks) => {
+  const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"), fb = drawFace(SHAPE_B, false, "b");
+  const runDraw = async (useLandmarks, file, tr, sh) => {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(300);
-    await p.setInputFiles("#fileInput", fd);
+    await p.setInputFiles("#fileInput", file || fd);
     await p.waitForTimeout(1300);
-    const out = await p.evaluate((lm) => {
+    const out = await p.evaluate(([lm, tr, sh]) => {
       const S = window.PB.S, H = S.dim.H, W = S.dim.W;
       S.landmarks = lm;
-      S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.p = tr || { zoom: 1, rot: 0, ox: 0, oy: 0 };
       S.g = { ...window.PB.DEFAULT_GUIDE };
       S.refSide = "L";
       window.PB.render();
+      /* 사진을 확대·이동해도 같은 자리에 붙어야 한다 — 기대값을 지금 변환으로 환산한다 */
+      const cv = (ix, iy) => window.PB.imgToCanvas(ix, iy, S.p);
+      const exp = { front: cv(sh.front[0], sh.front[1]).y, ft: cv(sh.front[0], sh.front[2]).y,
+                    arch: cv(sh.arch[0], sh.arch[1]).y, at: cv(sh.arch[0], sh.arch[2]).y,
+                    tail: cv(sh.tail[0], sh.tail[1]).y,
+                    inner: cv(sh.inner, 160).x, outer: cv(sh.outer, 160).x };
       const ok = window.PB.autoFromDrawing();
       const g = S.g;
-      return { ok, W, H,
+      return { ok, W, H, exp,
         frontPx: g.front * H, ftPx: g.frontThickness * H,
         archPx: g.h2 * H, atPx: g.archThickness * H, tailPx: g.h3 * H,
         innerPx: g.v2 * W, outerPx: g.v4 * W,
         pivotUntouched: Math.abs(g.innerAngle - window.PB.DEFAULT_GUIDE.innerAngle) < 1e-9,
         vBase: g.baseStructureVisible };
-    }, useLandmarks ? LMK : null);
+    }, [useLandmarks ? LMK : null, tr || null, sh || SHAPE_A]);
     await ctx.close();
     return out;
   };
-  const judge = (o) => o.ok
-    && near(o.frontPx, 148, 5) && near(o.ftPx, 178, 5)
-    && near(o.archPx, 120, 5) && near(o.atPx, 140, 5)
-    && near(o.tailPx, 152, 5)
-    && near(o.innerPx, 340, 9) && near(o.outerPx, 120, 9)
+  /* 허용 오차도 **확대율을 따라간다** — 사진을 키우면 같은 오차가 픽셀로는 커집니다 */
+  const judge = (o, z = 1) => o.ok
+    && near(o.frontPx, o.exp.front, 5 * z) && near(o.ftPx, o.exp.ft, 5 * z)
+    && near(o.archPx, o.exp.arch, 5 * z) && near(o.atPx, o.exp.at, 5 * z)
+    && near(o.tailPx, o.exp.tail, 5 * z)
+    && near(o.innerPx, o.exp.inner, 9 * z) && near(o.outerPx, o.exp.outer, 9 * z)
     && o.pivotUntouched && o.vBase === false;
-  const say = (o) => `앞머리 ${o.frontPx.toFixed(0)}(148) / 앞두께 ${o.ftPx.toFixed(0)}(178) / `
-    + `아치 ${o.archPx.toFixed(0)}(120) / 아치두께 ${o.atPx.toFixed(0)}(140) / 꼬리 ${o.tailPx.toFixed(0)}(152) / `
-    + `이너 ${o.innerPx.toFixed(0)}(340) · 아우터 ${o.outerPx.toFixed(0)}(120) · V피봇 그대로=${o.pivotUntouched}`;
+  const say = (o) => `앞머리 ${o.frontPx.toFixed(0)}(${o.exp.front.toFixed(0)}) / 앞두께 ${o.ftPx.toFixed(0)}(${o.exp.ft.toFixed(0)}) / `
+    + `아치 ${o.archPx.toFixed(0)}(${o.exp.arch.toFixed(0)}) / 아치두께 ${o.atPx.toFixed(0)}(${o.exp.at.toFixed(0)}) / 꼬리 ${o.tailPx.toFixed(0)}(${o.exp.tail.toFixed(0)}) / `
+    + `이너 ${o.innerPx.toFixed(0)}(${o.exp.inner.toFixed(0)}) · 아우터 ${o.outerPx.toFixed(0)}(${o.exp.outer.toFixed(0)}) · V피봇 그대로=${o.pivotUntouched}`;
 
-  const o87 = await runDraw(true);
+  const o87 = await runDraw(true, fd, null, SHAPE_A);
   check("87. 드로잉 자동 맞춤 — 눈썹 모양(앞머리·앞두께·아치·아치두께·꼬리)을 사진에서 읽는다", judge(o87), say(o87));
-  const o88 = await runDraw(false);
+  const o88 = await runDraw(false, fd, null, SHAPE_A);
   check("88. 드로잉 자동 맞춤 — 얼굴 인식이 실패해도 그린 선을 찾는다 (예비 경로)", judge(o88), say(o88));
-  fs.unlinkSync(fd);
+  const o89 = await runDraw(true, fo, null, SHAPE_A);
+  check("89. 드로잉 자동 맞춤 — **테두리만 그린 드로잉**도 두께를 제대로 잡는다", judge(o89), say(o89));
+  /* 90. 얼굴(사진)이 커지고 위치가 달라져도 같은 자리에 붙어야 한다.
+     ⚠️ 이 검사가 「고객 얼굴이 바뀌어도 자동으로 맞아야 한다」(원장님, 2026-08-20)를 지킵니다.
+     ⚠️ 확대율을 더 올리지 마세요 — 눈썹 꼬리가 캔버스 밖으로 나가면 앱이 볼 수 없어
+     아우터가 화면 끝에 붙습니다(그게 맞는 동작입니다). 실제 앱은 `fitBrowsInFrame()` 이 막아 줍니다. */
+  const o90 = await runDraw(true, fd, { zoom: 1.35, rot: 0, ox: 0.03, oy: -0.02 }, SHAPE_A);
+  check("90. 드로잉 자동 맞춤 — 사진을 확대·이동해도 같은 드로잉 위에 붙는다", judge(o90, 1.35), say(o90));
+  /* 91. 드로잉 모양이 바뀌면 선도 따라가야 한다 — 아치가 안쪽으로 옮겨간 눈썹.
+     ⚠️ 「드로잉이 바뀌어도 각 드로잉 위에 알맞은 선이 자동 위치해야 한다」(원장님, 2026-08-20) */
+  const o91 = await runDraw(true, fb, null, SHAPE_B);
+  check("91. 드로잉 자동 맞춤 — 드로잉 모양이 달라지면(아치가 안쪽) 선도 그 모양을 따라간다", judge(o91), say(o91));
+  fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb);
 
   for (const f of [f1, f0, fN, f6]) fs.unlinkSync(f);
 }
