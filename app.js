@@ -130,6 +130,7 @@ const I18N = {
     line_at: "아치두께",
     line_tail: "꼬리",
     line_center: "센터",
+    line_archv: "아치선",
     line_inner: "이너",
     line_outer: "아우터",
     editor_redo: "다시 실행",
@@ -257,6 +258,7 @@ const I18N = {
     line_at: "A.T",
     line_tail: "Tail",
     line_center: "Center",
+    line_archv: "Arch V",
     line_inner: "Inner",
     line_outer: "Outer",
     editor_redo: "Redo",
@@ -286,24 +288,35 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 /* 색상/기본위치는 원본 editor.tsx + BASELINE_CONFIG.md 를 그대로 계승 */
 
 const H_SPECS = [
-  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.6, op: 0.5, segs: [[0, 1]] },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.195, 0.345], [0.655, 0.805]] },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, segs: [[0.195, 0.345], [0.655, 0.805]] },
-  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[-0.02, 0.13], [0.87, 1.02]] },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, segs: [[-0.02, 0.13], [0.87, 1.02]] },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, segs: [[-0.15, -0.02], [1.02, 1.15]] },
+/* ⚠️ `anchor` — 가로 자는 **자기 묶음의 세로선 위에** 올라간다 (v1.32.0)
+   원장님 지시(2026-08-20): 「아우터 세로라인은 꼬리와 함께 움직임 / 이너라인은 앞머리
+   앞두께와 함께 움직인다 / 아치 세로선 두개 더 생성」
+     앞머리 · 앞두께 → 이너(v2/v3)      · 검정
+     아치 · 아치두께 → **아치선(v6/v7)** · 파랑
+     꼬리            → 아우터(v4/v5)    · 보라
+   v1.31.x 까지는 자 위치가 frac 상수로 박혀 있어, **아치 자가 아우터를 따라 움직였습니다**
+   (원장님이 직접 찾아내신 문제). 상수를 되살리지 말고 anchor 를 쓰세요. */
+  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.6, op: 0.5, anchor: null },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, anchor: "v2" },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, anchor: "v2" },
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, anchor: "v6" },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, anchor: "v6" },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, anchor: "v4" },
 ];
 
 const V_SPECS = [
   { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.8, op: 1,   mirror: null },
   { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#14161B", dot: "#C9D1E0", w: 1.6, op: 0.6, mirror: "v3" },
-  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.6, op: 1,   mirror: "v5" },
+  /* 아치선 (v1.32.0) — 아치·아치두께가 올라가는 기둥. 아우터보다 **얇게** 그려 소속을 표시한다 */
+  { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.2, op: 0.9, mirror: "v7" },
+  /* 아우터는 **보라** — 꼬리와 한 묶음이라 색으로 묶어 준다 (원장님 지시 2026-08-20) */
+  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#A855F7", dot: "#A855F7", w: 1.6, op: 1,   mirror: "v5" },
 ];
 
 const ALL_VIS = [
   "h1Visible", "h2Visible", "h3Visible", "archThicknessVisible",
   "frontVisible", "frontThicknessVisible",
-  "v1Visible", "v2Visible", "v4Visible",
+  "v1Visible", "v2Visible", "v4Visible", "v6Visible",
   "baseStructureVisible", "eyeGuideVisible",
 ];
 
@@ -340,6 +353,8 @@ const DEFAULT_GUIDE = Object.freeze({
   v3: 0.65,
   v4: 0.15,  v4Visible: true,
   v5: 0.85,
+  v6: 0.24,  v6Visible: true,      // 아치선 — 이너와 아우터 사이 (v1.32.0)
+  v7: 0.76,
   eyeGuideVisible: false,   // 아몬드 눈 가이드 — 자동 줌이 충분하므로 기본 꺼짐
   innerAngle: 0.10,      // Pivot Point Y (0=위, 1=아래) — v1.19.0: 위 10% 지점에서 시작
   outerAngle: 0.125,     // V 벌어짐 (0.5 = 수평) — v1.19.0: 아래 45° 에서 시작
@@ -486,30 +501,28 @@ function drawBadge(frag, text, x, y, color, anchor) {
   frag.appendChild(tx);
 }
 
-/* ═══ 눈썹 구간 좌표계 (v1.21.0) ═══════════════════════════════
-   가로 자의 길이를 **캔버스 폭**이 아니라 **이너·아우터 세로선 사이**에서 뽑는다.
-   확대해도 자가 눈썹을 넘어 관자놀이·코까지 뻗지 않아 시술 중 화면이 깔끔하다.
-   frac 0 = 왼쪽 아우터 바깥 / 0.4 = 왼쪽 이너 / 0.6 = 오른쪽 이너 / 1 = 오른쪽 아우터 바깥
-   → H_SPECS 의 segs 는 그대로 두고 좌표계만 바꾸므로 각 선의 "모양"은 유지된다. */
-const BROW_PAD = 0.022;          // 양 끝 여유 (0~1 정규화)
+/* ═══ 가로 자의 x 범위 (v1.32.0) ═══════════════════════════════
+   ⚠️ **자는 자기 묶음의 세로선 위에 올라간다.** frac 상수로 박아 두지 마세요 —
+   v1.31.x 가 그렇게 돼 있어서 **아치 자가 아우터를 따라 움직였습니다**
+   (원장님이 직접 찾아내신 문제, 2026-08-20).
+     앞머리·앞두께 → 이너(v2/v3) · 아치·아치두께 → 아치선(v6/v7) · 꼬리 → 아우터(v4/v5)
+   자의 폭은 **눈썹 폭(이너~아우터 거리)** 에 비례하므로, 확대하거나 얼굴이 바뀌어도
+   자가 관자놀이·코까지 뻗지 않습니다. 눈 기준선(h1)만 좌우를 관통합니다. */
+const SEG_HALF = 0.19;           // 자 반폭 (눈썹 폭 기준)
+const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
 const VPAD = 0.045;              // 세로선이 위아래로 더 나가는 여유
 
-function browEdges() {
-  const g = S.g;
-  const v3 = 2 * g.v1 - g.v2, v5 = 2 * g.v1 - g.v4;
-  const lo = Math.min(g.v2, g.v4), li = Math.max(g.v2, g.v4);   // 왼쪽: 아우터 → 이너
-  const ri = Math.min(v3, v5), ro = Math.max(v3, v5);           // 오른쪽: 이너 → 아우터
-  return { L0: lo - BROW_PAD, L1: li + BROW_PAD, R0: ri - BROW_PAD, R1: ro + BROW_PAD };
-}
-
-/* frac(0~1) → 캔버스 x(px). 작업 영역(workRight) 밖으로는 나가지 않는다. */
-function browX(frac) {
-  const { L0, L1, R0, R1 } = browEdges(), W = S.dim.W;
-  let n;
-  if (frac <= 0.4) n = L0 + (frac / 0.4) * (L1 - L0);
-  else if (frac <= 0.6) n = L1 + ((frac - 0.4) / 0.2) * (R0 - L1);
-  else n = R0 + ((frac - 0.6) / 0.4) * (R1 - R0);
-  return clamp(n, 0, workRight()) * W;
+/* 그 가로선의 좌·우 토막 [x0px, x1px]. 그리는 범위 = 잡는 범위 = 재는 범위 (BASELINE 1-11) */
+function segPx(sp) {
+  const { W } = S.dim, g = S.g;
+  const cl0 = (t) => clamp(t, 0, workRight()) * W;
+  if (!sp.anchor) {                                      // 눈 기준선 — 눈썹 구간을 좌우로 관통
+    const lo = Math.min(g.v2, g.v4, g.v6) - BROW_PAD;
+    return [[cl0(lo), cl0(2 * g.v1 - lo)]];
+  }
+  const aL = g[sp.anchor], aR = 2 * g.v1 - aL;
+  const half = SEG_HALF * (Math.abs(g.v2 - g.v4) || 0.12);
+  return [[cl0(aL - half), cl0(aL + half)], [cl0(aR - half), cl0(aR + half)]];
 }
 
 /* 세로선이 실제로 진하게 보이는 구간 — 가장 위 가로선 위쪽부터 눈 기준선 아래까지.
@@ -556,12 +569,13 @@ function renderGuides() {
       if (!g[sp.vis]) continue;
       const y = g[sp.key] * H;
       const sel = isSelected(sp.key);
-      /* 눈은 원래 좌우를 관통하고, 꼬리는 얇은 실선 없이 토막만 (v1.24.0) */
+      const segs = segPx(sp);
+      /* 눈은 원래 좌우를 관통하고, 꼬리는 얇은 실선 없이 토막만 (v1.24.0).
+         나머지는 **자기 토막 ↔ 이너 선**을 아주 옅게 이어 준다 — 자가 공중에 떠 보이지 않게. */
       if (sp.key !== "h1" && sp.key !== "h3") {
-        const fr = sp.segs.flat();
-        const lo = Math.min(0, ...fr), hi = Math.max(1, ...fr);
-        for (const [a, b] of [[lo, 0.4], [0.6, hi]]) {
-          const xa = browX(a), xb = browX(b);
+        const xi = g.v2 * W, xi2 = (2 * g.v1 - g.v2) * W;
+        for (const [seg, tgt] of [[segs[0], xi], [segs[1], xi2]]) {
+          const xa = Math.min(seg[0], seg[1], tgt), xb = Math.max(seg[0], seg[1], tgt);
           if (xb - xa < 2) continue;
           frag.appendChild(mk("line", {
             x1: xa, y1: y, x2: xb, y2: y, stroke: HAIR,
@@ -572,9 +586,8 @@ function renderGuides() {
       /* 밸런스 표시 중이면 **기준 반대쪽 토막만** 빨갛게 (기준 쪽은 정답이므로 건드리지 않음) */
       const offBy = S.balOn && S.balance && S.balance.off[sp.key];
       const badIdx = S.refSide === "L" ? 1 : 0;
-      sp.segs.forEach(([a, b], idx) => {
-        const xa = browX(a), xb = browX(b);
-        if (xb - xa < 2) return;                       // 이너·아우터가 겹치면 그리지 않는다
+      segs.forEach(([xa, xb], idx) => {
+        if (xb - xa < 2) return;                       // 세로선이 화면 밖으로 밀리면 그리지 않는다
         const bad = offBy && idx === badIdx;
         drawLine(frag, xa, y, xb, y,
           bad ? BAL_RED : sp.color,
@@ -623,11 +636,26 @@ function renderGuides() {
     /* 캔버스 위쪽에 떠 있는 것들을 **전부** 피한다 (v1.29.0).
        하나라도 빼면 `센터`·`이너` 라벨이 그 글자 위에 겹쳐 둘 다 안 읽힙니다.
        실제로 v1.29.0 개발 중 밸런스 묶음을 빠뜨려 `센터` 라벨이 가려졌습니다. */
-    for (const el of [$("btnAllLine"), $("aiStatus"), $("btnBalance"), $("refWrap")]) {
+    /* ⚠️ offsetParent 를 **끝까지** 거슬러 올라가고, **transform 이동량까지** 더합니다.
+       `offsetLeft` 는 CSS transform 을 반영하지 않습니다 — `드로잉 맞춤`·`밸런스` 묶음이
+       `translateX(-50%)` 로 놓여 있어, 이걸 빼먹으면 좌표가 통째로 어긋나 라벨이 겹칩니다.
+       회전(rot90) 때문에 getBoundingClientRect 는 여기서 쓸 수 없습니다 (BASELINE 1-6). */
+    const tfxy = (el) => {
+      const m = getComputedStyle(el).transform;
+      const p = m && m !== "none" ? m.match(/matrix\(([^)]+)\)/) : null;
+      if (!p) return { x: 0, y: 0 };
+      const a = p[1].split(",").map(Number);
+      return { x: a[4] || 0, y: a[5] || 0 };
+    };
+    for (const el of [$("btnAllLine"), $("btnMulti"), $("aiStatus"), $("btnBalance"), $("btnSnap"), $("refWrap")]) {
       if (!el || !el.offsetWidth) continue;
-      const par = el.offsetParent;
-      const bx = (par && par !== stage ? par.offsetLeft : 0) + el.offsetLeft;
-      const by = (par && par !== stage ? par.offsetTop : 0) + el.offsetTop;
+      let bx = el.offsetLeft, by = el.offsetTop, node = el, par = el.offsetParent;
+      for (;;) {
+        const d = tfxy(node); bx += d.x; by += d.y;
+        if (!par || par === stage) break;
+        bx += par.offsetLeft; by += par.offsetTop;
+        node = par; par = par.offsetParent;
+      }
       blocks.push({ x0: bx, x1: bx + el.offsetWidth, y0: by, y1: by + el.offsetHeight });
     }
     vBadges.sort((a, b) => a.x - b.x);
@@ -686,10 +714,14 @@ function setLine(key, val) {
     g.v3 = clamp(g.v3 + d, 0, 1);
     g.v4 = clamp(g.v4 + d, 0, 1);
     g.v5 = clamp(g.v5 + d, 0, 1);
+    g.v6 = clamp(g.v6 + d, 0, 1);
+    g.v7 = clamp(g.v7 + d, 0, 1);
   } else if (key === "v2") {
     g.v2 = val; g.v3 = 2 * g.v1 - val;
   } else if (key === "v4") {
     g.v4 = val; g.v5 = 2 * g.v1 - val;
+  } else if (key === "v6") {
+    g.v6 = val; g.v7 = 2 * g.v1 - val;
   } else {
     g[key] = val;
   }
@@ -716,7 +748,7 @@ function linePixels() {
   const { W, H } = S.dim, g = S.g, out = [];
   for (const sp of H_SPECS) {
     if (!g[sp.vis]) continue;
-    out.push({ type: "h", key: sp.key, y: g[sp.key] * H, segs: sp.segs });
+    out.push({ type: "h", key: sp.key, y: g[sp.key] * H, segs: segPx(sp) });
   }
   for (const sp of V_SPECS) {
     if (!g[sp.vis]) continue;
@@ -754,8 +786,8 @@ function hitTest(x, y) {
   for (const L of linePixels()) {
     let d;
     if (L.type === "h") {
-      /* 그리는 범위와 잡는 범위는 반드시 같아야 한다 (BASELINE 1-11) — 둘 다 browX */
-      const inSeg = L.segs.some(([a, b]) => x >= browX(a) - 12 && x <= browX(b) + 12);
+      /* 그리는 범위와 잡는 범위는 반드시 같아야 한다 (BASELINE 1-11) — 둘 다 segPx */
+      const inSeg = L.segs.some(([xa, xb]) => x >= xa - 12 && x <= xb + 12);
       if (!inSeg) continue;
       d = Math.abs(y - L.y);
     } else {
@@ -1306,7 +1338,7 @@ function faceFrame(g) {
     ey: g.h1, uy: Math.max(Math.abs(g.h1 - g.h2), 0.02),
   };
 }
-const PRESET_VX = ["v1", "v2", "v3", "v4", "v5"];
+const PRESET_VX = ["v1", "v2", "v3", "v4", "v5", "v6", "v7"];
 const PRESET_VY = ["h1", "h2", "h3", "front", "frontThickness", "archThickness", "innerAngle"];
 
 function fitPresetToFace(state, frame) {
@@ -1319,6 +1351,7 @@ function fitPresetToFace(state, frame) {
     out[k] = clamp(now.ey + (state[k] - frame.ey) * ky, 0.01, 0.99);
   out.v3 = clamp(2 * out.v1 - out.v2, 0, 1);      /* 대칭 재확립 (BASELINE 1-2) */
   out.v5 = clamp(2 * out.v1 - out.v4, 0, 1);
+  out.v7 = clamp(2 * out.v1 - out.v6, 0, 1);
   return out;
 }
 
@@ -1517,13 +1550,16 @@ function aiValueFor(key) {
 
   /* 세로선 — 대칭을 지켜야 하므로 좌·우 실측값의 **평균 거리**를 쓴다 (BASELINE 1-2).
      한쪽만 재서 거울상을 만들면 비대칭 얼굴에서 한쪽이 크게 뜬다. */
-  if (key === "v1" || key === "v2" || key === "v4") {
+  if (key === "v1" || key === "v2" || key === "v4" || key === "v6") {
     const c = eyeCorners(lm);
     const cx = (imgToCanvas(c.innerL.x, c.innerL.y, tr).x + imgToCanvas(c.innerR.x, c.innerR.y, tr).x) / 2 / W;
     if (key === "v1") return clamp(cx, 0.02, 0.98);
-    const half = key === "v2"
-      ? (Math.abs(imgToCanvas(c.innerL.x, c.innerL.y, tr).x / W - cx) + Math.abs(imgToCanvas(c.innerR.x, c.innerR.y, tr).x / W - cx)) / 2
-      : (Math.abs(imgToCanvas(c.outerL.x, c.outerL.y, tr).x / W - cx) + Math.abs(imgToCanvas(c.outerR.x, c.outerR.y, tr).x / W - cx)) / 2;
+    /* 아치선은 **눈썹 산(105/334)** 의 x — 눈이 아니라 눈썹에서 잽니다 (v1.32.0) */
+    const xOf = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr).x / W;
+    const pair = key === "v2" ? [c.innerL, c.innerR] : key === "v4" ? [c.outerL, c.outerR] : null;
+    const half = pair
+      ? (Math.abs(imgToCanvas(pair[0].x, pair[0].y, tr).x / W - cx) + Math.abs(imgToCanvas(pair[1].x, pair[1].y, tr).x / W - cx)) / 2
+      : (Math.abs(xOf(AI_LM.h2[0]) - cx) + Math.abs(xOf(AI_LM.h2[1]) - cx)) / 2;
     return clamp(S.g.v1 - half, 0.02, 0.98);
   }
   return null;
@@ -1590,6 +1626,11 @@ function autoAlign(lm) {
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
   g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
 
+  /* 아치선 — 눈썹 산(105/334)의 x. 아치·아치두께 자가 이 기둥 위에 올라간다 (v1.32.0) */
+  const arL = cx(P(AI_LM.h2[0]).x, P(AI_LM.h2[0]).y), arR = cx(P(AI_LM.h2[1]).x, P(AI_LM.h2[1]).y);
+  const halfArch = (Math.abs(arL.x / W - g.v1) + Math.abs(arR.x / W - g.v1)) / 2;
+  g.v6 = clamp(g.v1 - halfArch, 0.02, 0.98); g.v7 = 2 * g.v1 - g.v6;
+
   /* 눈썹 기준선 — 두께 선은 **눈썹 아래 윤곽을 실측**한다 (고정 오프셋 아님, v1.22.0) */
   const yAt = (idx) => { const p = avg(idx); return clamp(cx(p.x, p.y).y / H, 0.02, 0.98); };
   g.h2 = yAt(AI_LM.h2);
@@ -1644,6 +1685,9 @@ function autoAlignRelayout(lm) {
   const halfOut = (Math.abs(outLc.x / W - g.v1) + Math.abs(outRc.x / W - g.v1)) / 2;
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
   g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
+
+  /* 아치선 — 눈썹 산(105/334)의 x (v1.32.0) */
+  { const v = aiValueFor("v6"); if (v !== null) { g.v6 = v; g.v7 = 2 * g.v1 - v; } }
   for (const k of ["h2", "h3", "front", "archThickness", "frontThickness"]) {
     const v = aiValueFor(k);
     if (v !== null) g[k] = v;
@@ -1939,6 +1983,8 @@ function autoFromDrawing() {
   /* 이너·아우터 = 드로잉이 실제로 있는 x 양 끝 (setLine 이 반대쪽을 대칭으로 맞춘다) */
   setLine("v2", clamp(S.g.v1 - Math.abs(seq[0].x - cx) / W, 0.02, 0.98));
   setLine("v4", clamp(S.g.v1 - Math.abs(seq[n - 1].x - cx) / W, 0.02, 0.98));
+  /* 아치선 = **제일 높은 곳의 x**. 아치 자가 진짜 산 위에 올라가게 하려는 것입니다 (v1.32.0) */
+  setLine("v6", clamp(S.g.v1 - Math.abs(seq[pk].x - cx) / W, 0.02, 0.98));
   return true;
 }
 
@@ -2229,7 +2275,7 @@ const lumaAt = (img, W, x, y) => {
    평균이 아니라 중앙값인 이유: 점·머리카락 한 올에 결과가 끌려가지 않게. */
 function measureSegY(img, seg, y0, band) {
   const { W, H } = S.dim;
-  const xa = browX(seg[0]), xb = browX(seg[1]);
+  const xa = seg[0], xb = seg[1];
   if (xb - xa < 4) return null;
   const y1 = Math.max(0, Math.round(y0 - band)), y2 = Math.min(H - 1, Math.round(y0 + band));
   if (y2 - y1 < 4) return null;
@@ -2259,10 +2305,11 @@ function runBalance() {
   const tol = balTolPx();                                       // 얼굴 크기에 맞춘 허용 오차 (v1.29.0)
   const off = {}, skipped = [];
   for (const sp of H_SPECS) {
-    if (!S.g[sp.vis] || sp.segs.length < 2) continue;             // 눈 기준선은 좌우 관통이라 제외
+    if (!S.g[sp.vis] || !sp.anchor) continue;                     // 눈 기준선은 좌우 관통이라 제외
+    const sg = segPx(sp);
     const y0 = S.g[sp.key] * H;
-    const L = measureSegY(img, sp.segs[0], y0, band);
-    const R = measureSegY(img, sp.segs[1], y0, band);
+    const L = measureSegY(img, sg[0], y0, band);
+    const R = measureSegY(img, sg[1], y0, band);
     if (L === null || R === null) { skipped.push(sp.key); continue; }
     const d = S.refSide === "L" ? R - L : L - R;                  // 반대쪽 − 기준쪽
     if (Math.abs(d) > tol) off[sp.key] = d;
@@ -2538,6 +2585,6 @@ if ("serviceWorker" in navigator) {
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
-  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
+  faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking };

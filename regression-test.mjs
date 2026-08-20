@@ -492,7 +492,7 @@ console.log("[세로 모드 · 기능]");
     /* v1.30.1 — 기본 표시가 전부 켜져 빈 곳이 없다. **사진 드래그 검사**이므로 선을 줄인다. */
     S.g = { ...window.PB.DEFAULT_GUIDE, h2Visible: false, h3Visible: false,
             frontVisible: false, frontThicknessVisible: false, archThicknessVisible: false,
-            v4Visible: false };
+            v4Visible: false, v6Visible: false };
     S.p = { zoom: 2, ox: 0, oy: 0, rot: 0 };
     window.PB.render();
   });
@@ -514,7 +514,7 @@ console.log("[세로 모드 · 기능]");
     const S = window.PB.S, out = {};
     S.g = { ...window.PB.DEFAULT_GUIDE, h2Visible: false, h3Visible: false,
             frontVisible: false, frontThicknessVisible: false, archThicknessVisible: false,
-            v4Visible: false };
+            v4Visible: false, v6Visible: false };
     S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; S.hMode = "line"; window.PB.render();
     const sl = document.getElementById("posSliderH");
     document.querySelector('#photoModes button[data-mode="balance"]').click();
@@ -862,7 +862,7 @@ console.log("[세로 모드 · 기능]");
      `outerAngle` 은 각도라 전체 선택에 넣지 않는다 (1-7). */
   check("58. 전체라인 — 여러라인 후속 버튼 · 보이는 선 전부 선택/해제",
     allSel.hiddenWhenOff === true && allSel.shownWhenOn === true
-      && allSel.picked.join() === "archThickness,front,frontThickness,h1,h2,h3,v1,v2,v4"
+      && allSel.picked.join() === "archThickness,front,frontThickness,h1,h2,h3,v1,v2,v4,v6"
       && allSel.cleared === 0 && allSel.hiddenAgain === true,
     `OFF숨김=${allSel.hiddenWhenOff} ON표시=${allSel.shownWhenOn} 선택=[${allSel.picked}] 해제=${allSel.cleared}개`);
 
@@ -1143,8 +1143,9 @@ console.log("[세로 모드 · 기능]");
      · 눈    = 좌우 관통 · 짙은 회색 반투명 */
   const ruler = await p.evaluate(() => {
     const S = window.PB.S;
-    const seg = (k) => JSON.stringify(window.PB.H_SPECS.find((x) => x.key === k).segs);
     const spec = (k) => window.PB.H_SPECS.find((x) => x.key === k);
+    const px = (k) => window.PB.segPx(spec(k));
+    const seg = (k) => JSON.stringify(px(k));
     S.g = { ...window.PB.DEFAULT_GUIDE };
     for (const k of ["h2Visible", "h3Visible", "archThicknessVisible", "frontVisible", "frontThicknessVisible"]) S.g[k] = true;
     window.PB.render();
@@ -1158,8 +1159,8 @@ console.log("[세로 모드 · 기능]");
     return {
       frontPair: seg("front") === seg("frontThickness"),
       archPair: seg("h2") === seg("archThickness"),
-      archOutOfHead: spec("h2").segs[0][1] < spec("front").segs[0][0],   // 아치가 앞머리보다 바깥
-      tailOutermost: spec("h3").segs[0][0] < spec("h2").segs[0][0],      // 꼬리가 제일 바깥
+      archOutOfHead: px("h2")[0][1] < px("front")[0][0],   // 아치가 앞머리보다 바깥
+      tailOutermost: px("h3")[0][0] < px("h2")[0][0],      // 꼬리가 제일 바깥
       tailHair: near("h3"), archHair: near("h2"), frontHair: near("front"), eyeHair: near("h1"),
       eye: { c: spec("h1").color, op: spec("h1").op },
     };
@@ -1652,14 +1653,16 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       favShorter: r("btnPresetLoad").height - document.querySelector("#favRow .favbtn").getBoundingClientRect().height,
       /* 세로선 라벨이 위쪽 오버레이(밸런스·기준 버튼) 위에 겹쳐 그려지지 않아야 한다 */
       labelHitsTop: (() => {
-        const stg = document.getElementById("stage");
-        const boxes = ["btnAllLine", "btnBalance", "refWrap"].map((id) => {
+        /* ⚠️ 여기서는 **화면 실측(getBoundingClientRect)** 으로 잽니다.
+           offsetLeft 는 CSS transform 을 반영하지 않아 `밸런스`·`드로잉 맞춤` 묶음
+           (translateX(-50%))의 자리를 통째로 틀리게 잡습니다 (v1.32.0 에서 실제로 겪음).
+           이 검사는 가로 뷰포트라 rot90 이 없어 실측이 안전합니다. */
+        const sr = document.getElementById("stage").getBoundingClientRect();
+        const boxes = ["btnAllLine", "btnMulti", "btnBalance", "btnSnap", "refWrap"].map((id) => {
           const e = document.getElementById(id);
           if (!e || !e.offsetWidth) return null;
-          const par = e.offsetParent;
-          const bx = (par && par !== stg ? par.offsetLeft : 0) + e.offsetLeft;
-          const by = (par && par !== stg ? par.offsetTop : 0) + e.offsetTop;
-          return { x0: bx, x1: bx + e.offsetWidth, y0: by, y1: by + e.offsetHeight };
+          const b = e.getBoundingClientRect();
+          return { x0: b.left - sr.left, x1: b.right - sr.left, y0: b.top - sr.top, y1: b.bottom - sr.top };
         }).filter(Boolean);
         return [...document.getElementById("guides").querySelectorAll("rect")]
           .filter((q) => +q.getAttribute("height") === 14)
@@ -1890,13 +1893,15 @@ console.log("\n[밸런스 판정]");
       const exp = { front: cv(sh.front[0], sh.front[1]).y, ft: cv(sh.front[0], sh.front[2]).y,
                     arch: cv(sh.arch[0], sh.arch[1]).y, at: cv(sh.arch[0], sh.arch[2]).y,
                     tail: cv(sh.tail[0], sh.tail[1]).y,
-                    inner: cv(sh.inner, 160).x, outer: cv(sh.outer, 160).x };
+                    inner: cv(sh.inner, 160).x, outer: cv(sh.outer, 160).x,
+                    archV: cv(sh.arch[0], sh.arch[1]).x };
       const ok = window.PB.autoFromDrawing();
       const g = S.g;
       return { ok, W, H, exp,
         frontPx: g.front * H, ftPx: g.frontThickness * H,
         archPx: g.h2 * H, atPx: g.archThickness * H, tailPx: g.h3 * H,
-        innerPx: g.v2 * W, outerPx: g.v4 * W,
+        innerPx: g.v2 * W, outerPx: g.v4 * W, archVPx: g.v6 * W,
+        mirrorOk: Math.abs(g.v7 - (2 * g.v1 - g.v6)) < 1e-9,
         pivotUntouched: Math.abs(g.innerAngle - window.PB.DEFAULT_GUIDE.innerAngle) < 1e-9,
         vBase: g.baseStructureVisible };
     }, [useLandmarks ? LMK : null, tr || null, sh || SHAPE_A]);
@@ -1909,10 +1914,12 @@ console.log("\n[밸런스 판정]");
     && near(o.archPx, o.exp.arch, 5 * z) && near(o.atPx, o.exp.at, 5 * z)
     && near(o.tailPx, o.exp.tail, 5 * z)
     && near(o.innerPx, o.exp.inner, 9 * z) && near(o.outerPx, o.exp.outer, 9 * z)
+    && near(o.archVPx, o.exp.archV, 12 * z) && o.mirrorOk
     && o.pivotUntouched && o.vBase === false;
   const say = (o) => `앞머리 ${o.frontPx.toFixed(0)}(${o.exp.front.toFixed(0)}) / 앞두께 ${o.ftPx.toFixed(0)}(${o.exp.ft.toFixed(0)}) / `
     + `아치 ${o.archPx.toFixed(0)}(${o.exp.arch.toFixed(0)}) / 아치두께 ${o.atPx.toFixed(0)}(${o.exp.at.toFixed(0)}) / 꼬리 ${o.tailPx.toFixed(0)}(${o.exp.tail.toFixed(0)}) / `
-    + `이너 ${o.innerPx.toFixed(0)}(${o.exp.inner.toFixed(0)}) · 아우터 ${o.outerPx.toFixed(0)}(${o.exp.outer.toFixed(0)}) · V피봇 그대로=${o.pivotUntouched}`;
+    + `이너 ${o.innerPx.toFixed(0)}(${o.exp.inner.toFixed(0)}) · 아치선 ${o.archVPx.toFixed(0)}(${o.exp.archV.toFixed(0)}) `
+    + `· 아우터 ${o.outerPx.toFixed(0)}(${o.exp.outer.toFixed(0)}) · V피봇 그대로=${o.pivotUntouched}`;
 
   const o87 = await runDraw(true, fd, null, SHAPE_A);
   check("87. 드로잉 자동 맞춤 — 눈썹 모양(앞머리·앞두께·아치·아치두께·꼬리)을 사진에서 읽는다", judge(o87), say(o87));
@@ -1937,6 +1944,52 @@ console.log("\n[밸런스 판정]");
   const o92 = await runDraw(true, fc, null, SHAPE_A);
   check("92. 드로잉 자동 맞춤 — 눈썹 아래 쌍꺼풀 선에 앞두께가 끌려가지 않는다", judge(o92), say(o92));
   fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc);
+
+  /* 93. ⚠️ 세로선 ↔ 가로 자 묶음 (v1.32.0) — 원장님이 직접 찾아내신 문제입니다.
+     「아우터라인과 아치 아치두께 라인이 함께 움직여」 → 아치는 **자기 세로선**을 따라가야 합니다.
+       앞머리·앞두께 → 이너 · 아치·아치두께 → 아치선 · 꼬리 → 아우터
+     자 위치를 다시 frac 상수로 박으면 이 검사가 깨집니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+    const grp = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      const spec = (k) => PBx.H_SPECS.find((x) => x.key === k);
+      const vspec = (k) => PBx.V_SPECS.find((x) => x.key === k);
+      const mid = (k) => { const s = PBx.segPx(spec(k))[0]; return (s[0] + s[1]) / 2; };
+      const snap = () => ({ front: mid("front"), ft: mid("frontThickness"), arch: mid("h2"), at: mid("archThickness"), tail: mid("h3") });
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; PBx.render();
+      const a = snap();
+      S.g.v4 -= 0.05; S.g.v5 = 2 * S.g.v1 - S.g.v4; PBx.render();     // 아우터만 옮긴다
+      const b = snap();
+      S.g = { ...PBx.DEFAULT_GUIDE }; S.g.v6 -= 0.05; S.g.v7 = 2 * S.g.v1 - S.g.v6; PBx.render();
+      const c = snap();                                               // 아치선만 옮긴다
+      S.g = { ...PBx.DEFAULT_GUIDE }; S.g.v2 -= 0.05; S.g.v3 = 2 * S.g.v1 - S.g.v2; PBx.render();
+      const d = snap();                                               // 이너만 옮긴다
+      const moved = (x, y, k) => Math.abs(x[k] - y[k]) > 3;
+      return {
+        outerMovesTail: moved(a, b, "tail"),
+        outerLeavesArch: !moved(a, b, "arch") && !moved(a, b, "at"),
+        archVMovesArch: moved(a, c, "arch") && moved(a, c, "at"),
+        archVLeavesTail: !moved(a, c, "tail") && !moved(a, c, "front"),
+        innerMovesFront: moved(a, d, "front") && moved(a, d, "ft"),
+        outerPurple: vspec("v4").color === "#A855F7" && spec("h3").color === "#A855F7",
+        archBlue: vspec("v6").color === "#2E8BFF" && spec("h2").color === "#2E8BFF",
+        archThinner: vspec("v6").w < vspec("v4").w,
+      };
+    });
+    await ctx.close();
+    check("93. 세로선 묶음 — 아치 자는 **아치선**을 따라간다 (아우터를 따라가지 않는다)",
+      grp.outerMovesTail && grp.outerLeavesArch && grp.archVMovesArch && grp.archVLeavesTail
+        && grp.innerMovesFront && grp.outerPurple && grp.archBlue && grp.archThinner,
+      `아우터→꼬리=${grp.outerMovesTail}/아치안움직임=${grp.outerLeavesArch} · `
+      + `아치선→아치=${grp.archVMovesArch}/꼬리안움직임=${grp.archVLeavesTail} · 이너→앞머리=${grp.innerMovesFront} · `
+      + `아우터보라=${grp.outerPurple} 아치파랑=${grp.archBlue} 아치선더얇음=${grp.archThinner}`);
+  }
 
   for (const f of [f1, f0, fN, f6]) fs.unlinkSync(f);
 }

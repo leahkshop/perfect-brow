@@ -350,17 +350,19 @@ input[type=range]:disabled{opacity:.4}
 button:disabled{opacity:.38;pointer-events:none}
 
 /* 가로 모드: 라인 선택 버튼 = 왼쪽 세로 레일 (왼손 전용) */
+/* ⚠️ 세로 공간이 빠듯합니다 — 라인이 하나 늘 때마다 여기가 먼저 넘칩니다 (v1.32.0 아치선).
+   회귀 10번이 `rail=overflow` 로 잡습니다. 버튼을 추가하면 높이·간격부터 확인하세요. */
 #lineRail{grid-area:lines;background:var(--chrome);border-right:1px solid var(--hair);
-  flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  flex-direction:column;align-items:center;justify-content:center;gap:7px;
   padding:calc(var(--safe-t) + 8px) 3px calc(var(--safe-b) + 8px);overflow-y:auto;min-height:0}
-#lineRail .linebar{position:static;flex-direction:column;flex-wrap:nowrap;gap:3px;
+#lineRail .linebar{position:static;flex-direction:column;flex-wrap:nowrap;gap:2px;
   background:transparent;border:none;padding:0;max-width:none;
   backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:0}
-#lineRail .lbtn{width:52px;height:29px;font-size:9.5px;border-radius:7px}
-#lineRail #hButtons{position:relative;padding-bottom:12px}
+#lineRail .lbtn{width:52px;height:25px;font-size:9.5px;border-radius:7px}
+#lineRail #hButtons{position:relative;padding-bottom:9px}
 #lineRail #hButtons::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--hair)}
 /* V 기본구조 버튼은 라인 버튼 아래에 (v1.11.0) */
-#railExtra{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:11px;width:100%}
+#railExtra{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:8px;width:100%}
 #railExtra::before{content:"";position:absolute;left:6px;right:6px;top:4px;height:1px;background:var(--hair)}
 #railExtra .chip{width:52px;padding:5px 3px;font-size:8.5px;line-height:1.15;white-space:normal;text-align:center}
 /* 레일 안(목록)은 담백하게 — 그라데이션·글로우를 쓰지 마세요 (디자인 규칙) */
@@ -430,9 +432,14 @@ body:not(.land) #railLang{display:none}
 
 /* 가로 화면이 낮을 때(아이폰 가로 등) 컨트롤 압축 */
 @media all{
-  body.land.compact #editor #lineRail{gap:7px;padding-top:5px;padding-bottom:5px}
-  body.land.compact #editor #lineRail .linebar{gap:3px;padding:4px}
-  body.land.compact #editor #lineRail .lbtn{width:56px;height:24px;font-size:9px}
+  body.land.compact #editor #lineRail{gap:5px;padding-top:4px;padding-bottom:4px}
+  body.land.compact #editor #lineRail .linebar{gap:2px;padding:3px}
+  body.land.compact #editor #lineRail .lbtn{width:56px;height:23px;font-size:9px}
+  /* 아치선이 늘면서 세로가 빠듯해졌습니다 (v1.32.0) — 회귀 10번이 넘침을 잡습니다 */
+  body.land.compact #editor #railExtra{padding-top:5px;gap:2px}
+  body.land.compact #editor #railExtra .chip{padding:4px 3px;font-size:8px}
+  body.land.compact #editor #railLang{gap:3px}
+  body.land.compact #editor #railLang button{width:26px;height:22px;font-size:9px}
   body.land.compact #editor #railExtra .chip{width:56px;padding:4px 3px;font-size:8px}
   body.land.compact #editor .chip{padding:5px 8px;font-size:10px}
   body.land.compact #editor .posctl{padding:4px;gap:5px}
