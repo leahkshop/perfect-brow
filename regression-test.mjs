@@ -1505,6 +1505,85 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
   await ctx.close();
 }
 
+/* ═══════ C. 밸런스 판정 (v1.26.0) ═══════
+   실제 고객 사진 대신 **답을 아는 합성 사진**을 만든다.
+   왼쪽 막대와 오른쪽 막대의 높이 차이를 정확히 몇 px 로 넣고, 그대로 잡아내는지 본다.
+   ⚠️ 반드시 **가로 모드**에서 돌린다 — 세로 폴백은 작업 영역이 좁아 오른쪽 토막이 안 그려진다. */
+console.log("\n[밸런스 판정]");
+{
+  const IW = 782, IH = 390, BY = 200;            // 가로 캔버스(844×390)의 스테이지 크기와 동일
+  const balFace = (dyRight, draw = true) => {
+    const bar = (x1, x2, yy) => `<rect x="${x1}" y="${yy}" width="${x2 - x1}" height="5" fill="#241a14"/>`;
+    const marks = draw ? bar(60, 250, BY) + bar(560, 740, BY + dyRight) : "";
+    const f = path.join(ROOT, `.bal-${dyRight}-${draw}.svg`);
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>${marks}</svg>`);
+    return f;
+  };
+
+  const runCase = async (file, ref) => {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", file);
+    await p.waitForTimeout(1300);
+    const out = await p.evaluate((refSide) => {
+      const S = window.PB.S;
+      S.landmarks = null;
+      S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.g = { ...window.PB.DEFAULT_GUIDE, h2: 200 / S.dim.H, h2Visible: true };
+      S.refSide = refSide;
+      window.PB.render();
+      const ok = window.PB.runBalance();
+      const b = S.balance;
+      S.balOn = true; window.PB.render();
+      /* 빨간 토막이 **기준 반대쪽에만** 그려지는지 */
+      const reds = [...document.getElementById("guides").querySelectorAll("line")]
+        .filter((l) => l.getAttribute("stroke") === "#FF3B4E"
+                    && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5)
+        .map((l) => (+l.getAttribute("x1") + +l.getAttribute("x2")) / 2 / S.dim.W);
+      return { ok, dim: { ...S.dim }, s0: S.s0, off: b ? { ...b.off } : null,
+               skipped: b ? [...b.skipped] : null, reds };
+    }, ref);
+    await ctx.close();
+    return { ...out, errs };
+  };
+
+  // 77. 오른쪽 드로잉이 6px 아래 → 잡아낸다 · 빨간 표시는 오른쪽에만
+  const f1 = balFace(6);
+  const c1 = await runCase(f1, "L");
+  const exp = 6 * (c1.s0 || 1);
+  check("77. 밸런스 — 기준(왼쪽) 대비 오른쪽 6px 차이를 잡아냄 · 빨간 표시는 반대쪽에만",
+    c1.errs.length === 0 && c1.off && near(c1.off.h2 ?? 0, exp, 1.5)
+      && c1.skipped.length === 0 && c1.reds.length === 1 && c1.reds[0] > 0.6,
+    `측정 ${c1.off ? (c1.off.h2 ?? "없음") : "실패"}px (기대 ${exp.toFixed(1)}) · 건너뜀 [${c1.skipped}] · 빨간토막 ${c1.reds.length}개 x=${c1.reds.map((v) => v.toFixed(2))}`);
+
+  // 78. 기준을 오른쪽으로 바꾸면 부호가 뒤집히고 빨간 표시도 왼쪽으로
+  const c2 = await runCase(f1, "R");
+  check("78. 밸런스 — 기준을 오른쪽으로 바꾸면 빨간 표시가 왼쪽으로",
+    c2.off && near(c2.off.h2 ?? 0, -exp, 1.5) && c2.reds.length === 1 && c2.reds[0] < 0.4,
+    `측정 ${c2.off ? (c2.off.h2 ?? "없음") : "실패"}px · 빨간토막 x=${c2.reds.map((v) => v.toFixed(2))}`);
+
+  // 79. 좌우가 같으면 빨간 표시가 없다 (건너뛴 것도 없어야 진짜 통과)
+  const f0 = balFace(0);
+  const c3 = await runCase(f0, "L");
+  check("79. 밸런스 — 좌우가 같으면 표시 없음",
+    c3.off && Object.keys(c3.off).length === 0 && c3.skipped.length === 0 && c3.reds.length === 0,
+    `차이 ${c3.off ? Object.keys(c3.off).length : "?"}곳 · 건너뜀 [${c3.skipped}] · 빨간토막 ${c3.reds.length}개`);
+
+  // 80. 선을 못 읽으면 조용히 건너뛴다 (억지로 빨갛게 칠하지 않는다)
+  const fN = balFace(0, false);
+  const c4 = await runCase(fN, "L");
+  check("80. 밸런스 — 그린 선이 없으면 조용히 건너뜀 (오판하지 않음)",
+    c4.off && Object.keys(c4.off).length === 0 && c4.skipped.includes("h2") && c4.reds.length === 0,
+    `건너뜀 [${c4.skipped}] · 빨간토막 ${c4.reds.length}개`);
+
+  for (const f of [f1, f0, fN]) fs.unlinkSync(f);
+}
+
 await browser.close();
 server.close();
 fs.unlinkSync(face.file);

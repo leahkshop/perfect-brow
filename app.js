@@ -103,6 +103,14 @@ const I18N = {
     line_shown: "표시",
     ai_placed: "AI 측정 위치",
     preset_fitted: "프리셋을 고객 얼굴에 맞춰 적용했습니다",
+    editor_balance_check: "밸런스",
+    bal_ref_l: "기준 왼쪽",
+    bal_ref_r: "기준 오른쪽",
+    bal_ok: "모든 선이 기준과 같습니다",
+    bal_diff: "곳이 기준과 다릅니다",
+    bal_skip: "곳은 선을 못 읽어 건너뜀",
+    bal_off: "밸런스 표시 끔",
+    bal_no_photo: "사진을 먼저 불러오세요",
     /* 라인 이름 (v1.19.0) — 왼쪽 레일 버튼 · 캔버스 라벨 · 조절자 이름이 모두 이걸 쓴다 */
     line_eye: "눈",
     line_front: "앞머리",
@@ -212,6 +220,14 @@ const I18N = {
     line_shown: "shown",
     ai_placed: "AI-measured",
     preset_fitted: "Preset fitted to this face",
+    editor_balance_check: "Balance",
+    bal_ref_l: "Ref: Left",
+    bal_ref_r: "Ref: Right",
+    bal_ok: "Every line matches the reference",
+    bal_diff: " differ from the reference",
+    bal_skip: " skipped (line not readable)",
+    bal_off: "Balance view off",
+    bal_no_photo: "Load a photo first",
     line_eye: "Eye",
     line_front: "Front",
     line_ft: "F.T",
@@ -344,6 +360,9 @@ const S = {
   hist: [],              // 되돌리기 스택 (v1.12.0) — 한 번에 한 작업씩
   redo: [],              // 다시 실행 스택 (v1.19.0) — 되돌린 작업을 앞으로 되감는다
   activePreset: null,    // 지금 적용 중인 프리셋 id (v1.25.0)
+  balOn: false,          // 밸런스 표시 중 (v1.26.0)
+  refSide: localStorage.getItem("pb_refside") === "R" ? "R" : "L",   // 기준 쪽 — 다음에도 유지
+  balance: null,         // { off: {key: 차이px}, skipped: [key] }
   multi: false,          // 여러라인 모드 (v1.18.0)
   selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
   photoMode: "zoom",
@@ -523,11 +542,18 @@ function renderGuides() {
           }));
         }
       }
-      for (const [a, b] of sp.segs) {
+      /* 밸런스 표시 중이면 **기준 반대쪽 토막만** 빨갛게 (기준 쪽은 정답이므로 건드리지 않음) */
+      const offBy = S.balOn && S.balance && S.balance.off[sp.key];
+      const badIdx = S.refSide === "L" ? 1 : 0;
+      sp.segs.forEach(([a, b], idx) => {
         const xa = browX(a), xb = browX(b);
-        if (xb - xa < 2) continue;                     // 이너·아우터가 겹치면 그리지 않는다
-        drawLine(frag, xa, y, xb, y, sp.color, sel ? sp.w + 1.6 : sp.w, sel ? 1 : sp.op);
-      }
+        if (xb - xa < 2) return;                       // 이너·아우터가 겹치면 그리지 않는다
+        const bad = offBy && idx === badIdx;
+        drawLine(frag, xa, y, xb, y,
+          bad ? BAL_RED : sp.color,
+          bad ? sp.w + 2.2 : (sel ? sp.w + 1.6 : sp.w),
+          bad ? 1 : (sel ? 1 : sp.op));
+      });
     }
   }
 
@@ -918,7 +944,8 @@ function commitEdit() {
   if (sameState(before, snapState())) return;          // 값이 그대로면 기록하지 않는다
   S.hist.push(before);
   if (S.hist.length > HIST_MAX) S.hist.shift();
-  S.redo = [];                                        // 새 작업을 하면 다시 실행 갈래는 버린다
+  S.redo = [];
+  S.balance = null;                                   // 선을 건드리면 측정값이 낡는다 (v1.26.0)                                        // 새 작업을 하면 다시 실행 갈래는 버린다
   updateUndoBtn();
 }
 function clearHist() { S.hist = []; S.redo = []; editSnap = null; updateUndoBtn(); }
@@ -1048,6 +1075,10 @@ function updateButtons() {
   setLockIcon(S.locked);
   $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
   $("btnPresetLoad").classList.toggle("preset-on", !!S.activePreset);
+  $("btnBalance").classList.toggle("on", S.balOn);
+  const rs = $("btnRefSide");
+  rs.hidden = !S.balOn;
+  rs.textContent = S.refSide === "L" ? t("bal_ref_l") : t("bal_ref_r");
   $("btnLock").classList.toggle("on", S.locked);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
   updateUndoBtn();
@@ -1629,6 +1660,7 @@ function loadPhoto(file) {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
+    S.balOn = false; S.balance = null;
     S.locked = false;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
@@ -1709,6 +1741,7 @@ $("btnReset").onclick = () => {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
+    S.balOn = false; S.balance = null;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
@@ -1767,6 +1800,88 @@ $("btnMulti").onclick = () => {
   toast(S.multi ? t("editor_multi") : t("multi_off"));
 };
 
+/* ═══ 밸런스 판정 (v1.26.0) ═══════════════════════════════════
+   가이드 선은 대칭이라 항상 맞습니다. 그래서 비교 대상은 **사진에 그려진 실제 선**입니다.
+   기준 쪽(왼/오른)에 그린 자리를 기준으로, 반대쪽 드로잉이 같은 높이에 있는지 봅니다.
+
+   ⚠️ 한계 — 사진을 읽는 방식이라 다음 상황에서는 틀릴 수 있습니다.
+      · 그린 선이 흐리거나 피부와 명도 차이가 작을 때
+      · 좌우 조명이 다를 때 (그림자를 선으로 오인)
+      · 얼굴이 옆으로 돌아가 한쪽이 짧게 찍혔을 때
+   그래서 못 읽은 선은 **빨간 표시를 하지 않고 조용히 건너뜁니다.** */
+const BAL_RED = "#FF3B4E";  // 밸런스가 다른 곳 표시색
+const BAL_BAND = 0.045;    // 선 위아래로 훑는 범위 (캔버스 높이 비율)
+const BAL_SAMPLES = 21;    // 한 토막에서 뽑는 x 표본 수
+const BAL_TOL = 1.0;       // 허용 오차(캔버스 px). 0 은 물리적으로 불가능해 1px 이 최소 단위
+const BAL_CONTRAST = 14;   // 이만큼도 안 어두우면 "선을 못 찾음"으로 본다
+
+/* 지금 화면에 보이는 그대로의 사진 픽셀. 사진은 캔버스 안에서만 처리되고 어디에도 안 나갑니다. */
+function photoPixels() {
+  const { W, H } = S.dim;
+  if (!S.imgEl || !W || !H) return null;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W / 2 + S.p.ox * W, H / 2 + S.p.oy * H);
+  ctx.scale(S.p.zoom, S.p.zoom);
+  ctx.rotate((S.p.rot * Math.PI) / 180);
+  ctx.drawImage(S.imgEl, -S.fitW / 2, -S.fitH / 2, S.fitW, S.fitH);
+  ctx.restore();
+  try { return ctx.getImageData(0, 0, W, H); } catch { return null; }
+}
+
+const lumaAt = (img, W, x, y) => {
+  const i = (y * W + x) * 4;
+  return 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2];
+};
+
+/* 한 토막(x 범위)에서 선의 y 를 잰다 — 표본마다 가장 어두운 y 를 찾아 **중앙값**.
+   평균이 아니라 중앙값인 이유: 점·머리카락 한 올에 결과가 끌려가지 않게. */
+function measureSegY(img, seg, y0, band) {
+  const { W, H } = S.dim;
+  const xa = browX(seg[0]), xb = browX(seg[1]);
+  if (xb - xa < 4) return null;
+  const y1 = Math.max(0, Math.round(y0 - band)), y2 = Math.min(H - 1, Math.round(y0 + band));
+  if (y2 - y1 < 4) return null;
+  const found = [];
+  for (let i = 0; i < BAL_SAMPLES; i++) {
+    const x = Math.round(xa + ((xb - xa) * (i + 0.5)) / BAL_SAMPLES);
+    if (x < 0 || x >= W) continue;
+    let best = -1, bestV = 1e9, sum = 0, n = 0;
+    for (let y = y1; y <= y2; y++) {
+      const v = lumaAt(img, W, x, y);
+      sum += v; n++;
+      if (v < bestV) { bestV = v; best = y; }
+    }
+    if (n && sum / n - bestV >= BAL_CONTRAST) found.push(best);   // 충분히 어두울 때만 채택
+  }
+  if (found.length < BAL_SAMPLES * 0.5) return null;              // 절반도 못 찾으면 포기
+  found.sort((a, b) => a - b);
+  return found[Math.floor(found.length / 2)];
+}
+
+/* 밸런스 검사 — 기준 쪽과 반대쪽의 드로잉 높이를 비교한다.
+   모든 선을 **한 번에** 검사합니다 (하나씩 넘기면 전체 패턴이 안 보입니다). */
+function runBalance() {
+  const img = photoPixels();
+  if (!img) { toast(t("bal_no_photo")); return false; }
+  const { H } = S.dim, band = BAL_BAND * H;
+  const off = {}, skipped = [];
+  for (const sp of H_SPECS) {
+    if (!S.g[sp.vis] || sp.segs.length < 2) continue;             // 눈 기준선은 좌우 관통이라 제외
+    const y0 = S.g[sp.key] * H;
+    const L = measureSegY(img, sp.segs[0], y0, band);
+    const R = measureSegY(img, sp.segs[1], y0, band);
+    if (L === null || R === null) { skipped.push(sp.key); continue; }
+    const d = S.refSide === "L" ? R - L : L - R;                  // 반대쪽 − 기준쪽
+    if (Math.abs(d) > BAL_TOL) off[sp.key] = d;
+  }
+  S.balance = { off, skipped };
+  return true;
+}
+
 /* 지금 화면에 보이는 선들의 키 — 숨긴 선은 함께 움직일 수 없으므로 제외한다 */
 function visibleLineKeys() {
   const out = [...H_SPECS, ...V_SPECS].filter((sp) => S.g[sp.vis]).map((sp) => sp.key);
@@ -1777,6 +1892,25 @@ function visibleLineKeys() {
 }
 
 /* 전체라인 — 화면의 모든 선을 한 번에 선택해서 통째로 옮긴다. 다시 누르면 전체 해제. */
+/* 밸런스 — 기준 쪽 드로잉과 반대쪽이 같은 높이인지 검사하고, 다른 곳만 빨갛게 (v1.26.0) */
+$("btnBalance").onclick = () => {
+  if (S.balOn) { S.balOn = false; S.balance = null; render(); showHud(t("bal_off"), 1400); return; }
+  if (!runBalance()) return;
+  S.balOn = true;
+  render();
+  const n = Object.keys(S.balance.off).length, sk = S.balance.skipped.length;
+  showHud(n === 0 ? t("bal_ok") : `${n}${t("bal_diff")}` + (sk ? `<br>${sk}${t("bal_skip")}` : ""), 3000);
+};
+
+/* 기준 쪽 — 밸런스의 후속 버튼. 고른 값은 다음에도 유지된다. */
+$("btnRefSide").onclick = () => {
+  S.refSide = S.refSide === "L" ? "R" : "L";
+  localStorage.setItem("pb_refside", S.refSide);
+  if (S.balOn) runBalance();
+  render();
+  showHud(S.refSide === "L" ? t("bal_ref_l") : t("bal_ref_r"), 1600);
+};
+
 $("btnAllSel").onclick = () => {
   if (!S.multi) return;
   const all = visibleLineKeys();
@@ -1943,4 +2077,4 @@ if ("serviceWorker" in navigator) {
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
-  faceFrame, applyPreset, fitPresetToFace };
+  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels };
