@@ -556,22 +556,24 @@ console.log("[세로 모드 · 기능]");
     dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd,
     `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd}`);
 
-  // 39. 되돌리기 버튼이 위아래 드래그 바 바로 위 · 초기화보다 크다 · 삭제된 버튼/패널 없음
+  /* 39. 되돌리기·다시실행 = **좌우 드래그 바 왼쪽, 같은 행** (v1.29.0)
+     되돌리기가 바에 가장 가깝습니다 — 제일 자주 누르는 버튼이라 손이 짧게 움직입니다.
+     v1.28.1 까지는 오른쪽 도크(위아래 바 위)에 있었습니다. */
   const placed = await p.evaluate(() => {
-    const u = document.getElementById("btnUndo").getBoundingClientRect();
-    const v = document.getElementById("posCtlV").getBoundingClientRect();
-    const rst = document.getElementById("btnReset").getBoundingClientRect();
+    const r = (id) => document.getElementById(id).getBoundingClientRect();
+    const u = r("btnUndo"), rd = r("btnRedo"), h = r("posCtlH");
     return {
-      undoAbove: u.bottom <= v.top + 1 && Math.abs((u.left + u.right) / 2 - (v.left + v.right) / 2) < 12,
-      bigger: u.height > rst.height * 1.05 || u.height >= 40,
+      leftOfBar: u.right <= h.left + 1 && rd.right <= u.left + 1,
+      sameRow: Math.abs((u.top + u.bottom) / 2 - (h.top + h.bottom) / 2) < 10,
+      undoNearest: Math.abs(h.left - u.right) < Math.abs(h.left - rd.right),
       removed: !document.getElementById("btnAlign") && !document.getElementById("btnRotate")
                && !document.getElementById("phSlider") && !document.getElementById("btnLock2")
                && !document.querySelector(".topbar") && !document.querySelector(".panels"),
     };
   });
-  check("39. 되돌리기 = 위아래 드래그 바 바로 위 (크게) · 삭제 버튼/패널 정리",
-    placed.undoAbove && placed.bigger && placed.removed,
-    `되돌리기위=${placed.undoAbove} 크게=${placed.bigger} 삭제완료=${placed.removed}`);
+  check("39. 되돌리기·다시실행 = 좌우 드래그 바 왼쪽 (되돌리기가 바에 가깝게) · 삭제 버튼 정리",
+    placed.leftOfBar && placed.sameRow && placed.undoNearest && placed.removed,
+    `바왼쪽=${placed.leftOfBar} 같은행=${placed.sameRow} 되돌리기가까움=${placed.undoNearest} 삭제완료=${placed.removed}`);
 
   // 41. 되돌리기 — 직전 작업 1단계씩, 두 번 누르면 그 전 작업까지
   const undoTest = await p.evaluate(async () => {
@@ -1612,41 +1614,62 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       && menuPos.ids === "btnPresetLoad",
     `왼쪽아래=${menuPos.leftBottom} 겹침없음=${menuPos.noOverlap} 눈가이드제거=${menuPos.gone} [${menuPos.ids}]`);
 
-  /* 83. 버튼 자리 (v1.28.1) — 원장님이 정하신 자리
-     · 사진변경 = 가운데 도크에서 사진저장 **왼쪽** · 사진저장과 같은 크기 · 회색(액센트 아님)
-     · 사진잠금 = 캔버스 가로 한가운데
-     · 초기화   = 오른쪽 도크 **맨 위**, `다시 실행` 과 간격을 두고 **짙은 빨강**
-     · 아래 세 묶음(왼쪽·가운데·오른쪽)이 즐겨찾기 3개를 채워도 겹치지 않는다 */
+  /* 83. 버튼 자리 (v1.29.0) — 원장님이 정하신 자리
+     · 오른쪽 도크 = `초기화`(짙은 빨강) …띄어서… `사진변경` → `사진저장` → 위아래 바
+     · 가운데 아래 = `사진잠금` 하나. 가로 중심이 캔버스 정중앙
+     · 좌우 바 왼쪽 = `다시 실행` · `되돌리기`
+     · 밸런스 = 위쪽, **중앙보다 약간 왼쪽**
+     · 즐겨찾기 3개를 채워도 아래 묶음끼리 겹치지 않는다 */
   const place = await p.evaluate(() => {
-    /* 즐겨찾기를 3개 꽉 채운 **최악의 경우**로 검사한다.
-       비어 있는 상태만 보면 이름이 긴 프리셋에서 겹치는 것을 놓친다. */
     localStorage.setItem("pb_favs_v1", JSON.stringify(["b:natural", "b:bold", "b:arch"]));
     window.PB.buildFavBar();
     const el = (id) => document.getElementById(id);
     const r = (id) => el(id).getBoundingClientRect();
     const st = r("stage"), chg = r("btnChange"), exp = r("btnExport"), lock = r("btnLock");
-    const rst = r("btnReset"), redo = r("btnRedo"), rd = r("rightDock");
-    const ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
+    const rst = r("btnReset"), ctlV = r("posCtlV"), rd = r("rightDock");
+    const bal = r("btnBalance"), ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
     const cs = getComputedStyle(el("btnReset"));
     return {
-      chgInCentre: el("centerDock").contains(el("btnChange")) && chg.right <= exp.left + 1,
+      photoInRDock: el("rightDock").contains(el("btnChange")) && el("rightDock").contains(el("btnExport")),
+      photoOrder: rst.bottom <= chg.top + 1 && chg.bottom <= exp.top + 1 && exp.bottom <= ctlV.top + 1,
       chgSameSize: Math.abs(chg.height - exp.height) < 1 && Math.abs(chg.width - exp.width) < 6,
       chgGrey: !/34, 211, 238|103, 232, 249/.test(getComputedStyle(el("btnChange")).borderTopColor),
-      lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
-      resetTop: Math.abs(rst.top - rd.top) < 2 && rst.bottom <= redo.top + 1,
-      resetGap: Math.round(redo.top - rst.bottom),
+      resetTop: Math.abs(rst.top - rd.top) < 2,
       resetDarkRed: cs.color,
+      lockAlone: el("centerDock").querySelectorAll("button").length === 1,
+      lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
+      balLeftOfCentre: ((bal.left + bal.right) / 2 - st.left) / st.width,
       favs: document.querySelectorAll("#favRow .favbtn").length,
+      favShorter: r("btnPresetLoad").height - document.querySelector("#favRow .favbtn").getBoundingClientRect().height,
+      /* 세로선 라벨이 위쪽 오버레이(밸런스·기준 버튼) 위에 겹쳐 그려지지 않아야 한다 */
+      labelHitsTop: (() => {
+        const stg = document.getElementById("stage");
+        const boxes = ["btnAllLine", "btnBalance", "refWrap"].map((id) => {
+          const e = document.getElementById(id);
+          if (!e || !e.offsetWidth) return null;
+          const par = e.offsetParent;
+          const bx = (par && par !== stg ? par.offsetLeft : 0) + e.offsetLeft;
+          const by = (par && par !== stg ? par.offsetTop : 0) + e.offsetTop;
+          return { x0: bx, x1: bx + e.offsetWidth, y0: by, y1: by + e.offsetHeight };
+        }).filter(Boolean);
+        return [...document.getElementById("guides").querySelectorAll("rect")]
+          .filter((q) => +q.getAttribute("height") === 14)
+          .some((q) => {
+            const x = +q.getAttribute("x"), y = +q.getAttribute("y"), w = +q.getAttribute("width");
+            return boxes.some((b) => x < b.x1 && x + w > b.x0 && y < b.y1 && y + 14 > b.y0);
+          });
+      })(),
       dockGaps: [Math.round(cd.left - ld.right), Math.round(bd.left - cd.right)],
     };
   });
-  check(`83. ${dev.n} — 사진변경=저장 왼쪽 · 잠금 정가운데 · 초기화=도크 맨 위(짙은 빨강)`,
-    place.chgInCentre && place.chgSameSize && place.chgGrey
-      && Math.abs(place.lockCentre - 0.5) < 0.02
-      && place.resetTop && place.resetGap >= 10
-      && /240, 56, 76/.test(place.resetDarkRed)
-      && place.favs === 3 && place.dockGaps.every((g) => g > 8),
-    `사진변경=가운데${place.chgInCentre}/같은크기${place.chgSameSize}/회색${place.chgGrey} · 잠금중심=${(place.lockCentre * 100).toFixed(1)}% · 초기화=맨위${place.resetTop}/간격${place.resetGap}px/${place.resetDarkRed} · 도크간격=${place.dockGaps}px`);
+  check(`83. ${dev.n} — 사진 2버튼=오른쪽 도크 · 잠금 단독 정가운데 · 밸런스는 중앙보다 왼쪽`,
+    place.photoInRDock && place.photoOrder && place.chgSameSize && place.chgGrey
+      && place.resetTop && /240, 56, 76/.test(place.resetDarkRed)
+      && place.lockAlone && Math.abs(place.lockCentre - 0.5) < 0.02
+      && place.balLeftOfCentre < 0.48 && place.balLeftOfCentre > 0.25
+      && place.favs === 3 && place.favShorter > 6
+      && place.dockGaps.every((g) => g > 8) && place.labelHitsTop === false,
+    `사진2버튼=도크${place.photoInRDock}/순서${place.photoOrder} · 잠금단독=${place.lockAlone}/중심${(place.lockCentre * 100).toFixed(1)}% · 밸런스 ${(place.balLeftOfCentre * 100).toFixed(1)}% · 즐겨찾기가 ${place.favShorter.toFixed(0)}px 낮음 · 도크간격=${place.dockGaps}px · 라벨겹침=${place.labelHitsTop}`);
   await ctx.close();
 }
 
@@ -1697,11 +1720,13 @@ console.log("\n[밸런스 판정]");
     return { ...out, errs };
   };
 
-  // 77. 오른쪽 드로잉이 6px 아래 → 잡아낸다 · 빨간 표시는 오른쪽에만
-  const f1 = balFace(6);
+  /* 77. 오른쪽 드로잉이 12px 아래 → 잡아낸다 · 빨간 표시는 오른쪽에만
+     v1.29.0 부터 허용 오차가 **얼굴 크기 기준**(기본값 화면에서 약 6px)이라
+     확실히 넘는 12px 로 검사합니다. 6px 은 86번에서 경계 검사로 씁니다. */
+  const f1 = balFace(12);
   const c1 = await runCase(f1, "L");
-  const exp = 6 * (c1.s0 || 1);
-  check("77. 밸런스 — 기준(왼쪽) 대비 오른쪽 6px 차이를 잡아냄 · 빨간 표시는 반대쪽에만",
+  const exp = 12 * (c1.s0 || 1);
+  check("77. 밸런스 — 기준(왼쪽) 대비 오른쪽 12px 차이를 잡아냄 · 빨간 표시는 반대쪽에만",
     c1.errs.length === 0 && c1.off && near(c1.off.h2 ?? 0, exp, 1.5)
       && c1.skipped.length === 0 && c1.reds.length === 1 && c1.reds[0] > 0.6,
     `측정 ${c1.off ? (c1.off.h2 ?? "없음") : "실패"}px (기대 ${exp.toFixed(1)}) · 건너뜀 [${c1.skipped}] · 빨간토막 ${c1.reds.length}개 x=${c1.reds.map((v) => v.toFixed(2))}`);
@@ -1726,7 +1751,46 @@ console.log("\n[밸런스 판정]");
     c4.off && Object.keys(c4.off).length === 0 && c4.skipped.includes("h2") && c4.reds.length === 0,
     `건너뜀 [${c4.skipped}] · 빨간토막 ${c4.reds.length}개`);
 
-  for (const f of [f1, f0, fN]) fs.unlinkSync(f);
+  /* 86. 허용 오차는 **얼굴 크기를 따라간다** (v1.29.0)
+     ⛔ px 고정으로 되돌리면 이 테스트가 잡습니다.
+     같은 사진·같은 6px 차이인데도
+       · 이너 간격이 좁으면(허용 오차 작음) → 잡아내고
+       · 이너 간격이 넓으면(확대한 것과 같음) → 맞다고 본다
+     원장님 기준: "이 정도는 밸런스가 맞다고 봐야 한다" (2026-08-20) */
+  const f6 = balFace(6);
+  /* ⚠️ 아우터(v4)는 **건드리지 마세요.** browX() 의 왼쪽 끝이 아우터에서 나오므로
+     v4 를 옮기면 자 토막이 합성 막대 밖으로 나가 "측정 실패"가 되고, 허용 오차가 아니라
+     엉뚱한 이유로 통과합니다(실제로 그렇게 잘못 짰다가 잡았습니다). 이너만 조절합니다. */
+  const runTol = async (v2) => {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", f6);
+    await p.waitForTimeout(1300);
+    const out = await p.evaluate((nv2) => {
+      const S = window.PB.S;
+      S.landmarks = null;
+      S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.g = { ...window.PB.DEFAULT_GUIDE, h2: 200 / S.dim.H, h2Visible: true,
+              v1: 0.5, v2: nv2, v3: 1 - nv2 };
+      S.refSide = "L";
+      window.PB.render();
+      window.PB.runBalance();
+      return { tol: window.PB.balTolPx(), off: Object.keys(S.balance.off).length,
+               inner: Math.abs(S.g.v3 - S.g.v2) * S.dim.W };
+    }, v2);
+    await ctx.close();
+    return out;
+  };
+  const narrow = await runTol(0.45);   // 이너 간격 좁음 → 예민
+  const wide = await runTol(0.20);     // 이너 간격 넓음(확대한 것과 같음) → 관대
+  check("86. 밸런스 — 허용 오차가 얼굴 크기를 따라간다 (px 고정 아님)",
+    narrow.tol < wide.tol - 1 && narrow.off === 1 && wide.off === 0,
+    `좁은 얼굴 이너 ${Math.round(narrow.inner)}px → 허용 ${narrow.tol.toFixed(1)}px · 6px 차이 ${narrow.off ? "잡음" : "통과"} / ` +
+    `넓은 얼굴 이너 ${Math.round(wide.inner)}px → 허용 ${wide.tol.toFixed(1)}px · 6px 차이 ${wide.off ? "잡음" : "통과"}`);
+
+  for (const f of [f1, f0, fN, f6]) fs.unlinkSync(f);
 }
 
 await browser.close();

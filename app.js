@@ -107,6 +107,13 @@ const I18N = {
     editor_balance_check: "밸런스",
     bal_ref_l: "기준 왼쪽",
     bal_ref_r: "기준 오른쪽",
+    bal_left: "왼쪽",
+    bal_right: "오른쪽",
+    preset_export: "내보내기",
+    preset_import: "가져오기",
+    preset_exported: "프리셋을 파일로 저장했습니다",
+    preset_imported: "개를 가져왔습니다",
+    preset_import_fail: "프리셋 파일을 읽지 못했습니다",
     bal_ok: "모든 선이 기준과 같습니다",
     bal_diff: "곳이 기준과 다릅니다",
     bal_skip: "곳은 선을 못 읽어 건너뜀",
@@ -225,6 +232,13 @@ const I18N = {
     editor_balance_check: "Balance",
     bal_ref_l: "Ref: Left",
     bal_ref_r: "Ref: Right",
+    bal_left: "Left",
+    bal_right: "Right",
+    preset_export: "Export",
+    preset_import: "Import",
+    preset_exported: "Presets saved to a file",
+    preset_imported: " imported",
+    preset_import_fail: "Could not read that preset file",
     bal_ok: "Every line matches the reference",
     bal_diff: " differ from the reference",
     bal_skip: " skipped (line not readable)",
@@ -596,9 +610,10 @@ function renderGuides() {
     /* 왼쪽 위 오버레이 칩(all line · AI 안내)을 가리지 않도록 그 사각형을 피해 배치한다.
        회전(rot90) 때문에 getBoundingClientRect 는 쓰지 않고 레이아웃 좌표로 계산한다. */
     const blocks = [];
-    /* v1.28.0 — 초기화 칩도 같은 줄에 있으므로 함께 피한다.
-       빼면 `이너` 라벨이 초기화 글자 위에 겹쳐 둘 다 안 읽힙니다. */
-    for (const el of [$("btnAllLine"), $("aiStatus"), $("btnReset")]) {
+    /* 캔버스 위쪽에 떠 있는 것들을 **전부** 피한다 (v1.29.0).
+       하나라도 빼면 `센터`·`이너` 라벨이 그 글자 위에 겹쳐 둘 다 안 읽힙니다.
+       실제로 v1.29.0 개발 중 밸런스 묶음을 빠뜨려 `센터` 라벨이 가려졌습니다. */
+    for (const el of [$("btnAllLine"), $("aiStatus"), $("btnBalance"), $("refWrap")]) {
       if (!el || !el.offsetWidth) continue;
       const par = el.offsetParent;
       const bx = (par && par !== stage ? par.offsetLeft : 0) + el.offsetLeft;
@@ -1080,9 +1095,10 @@ function updateButtons() {
   setLockIcon(S.locked);
   $("btnPresetLoad").classList.toggle("preset-on", !!S.activePreset);
   $("btnBalance").classList.toggle("on", S.balOn);
-  const rs = $("btnRefSide");
-  rs.hidden = !S.balOn;
-  rs.textContent = S.refSide === "L" ? t("bal_ref_l") : t("bal_ref_r");
+  /* 기준 쪽 — 밸런스를 켜야 나오고, **왼쪽/오른쪽 중 켜진 쪽만** 색이 들어온다 (v1.29.0) */
+  $("refWrap").hidden = !S.balOn;
+  $("btnRefL").classList.toggle("on", S.refSide === "L");
+  $("btnRefR").classList.toggle("on", S.refSide === "R");
   $("btnLock").classList.toggle("on", S.locked);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
   updateUndoBtn();
@@ -1898,8 +1914,30 @@ $("btnMulti").onclick = () => {
 const BAL_RED = "#FF3B4E";  // 밸런스가 다른 곳 표시색
 const BAL_BAND = 0.045;    // 선 위아래로 훑는 범위 (캔버스 높이 비율)
 const BAL_SAMPLES = 21;    // 한 토막에서 뽑는 x 표본 수
-const BAL_TOL = 1.0;       // 허용 오차(캔버스 px). 0 은 물리적으로 불가능해 1px 이 최소 단위
 const BAL_CONTRAST = 14;   // 이만큼도 안 어두우면 "선을 못 찾음"으로 본다
+
+/* ═══ 허용 오차 — 화면 px 이 아니라 **얼굴 크기 기준** (v1.29.0) ═══════
+   ⛔ **px 고정으로 되돌리지 마세요.**
+   v1.28.1 까지 `BAL_TOL = 1px` 고정이었는데, 이러면 **사진을 확대할수록 앱이 더 예민해집니다.**
+   눈썹 하나를 화면 가득 확대해서 보실 때(시술 중 늘 그렇게 하십니다) 1px 이 나타내는
+   실제 거리가 0.05mm 수준까지 줄어들어, **눈으로 완벽히 맞는 눈썹도 빨갛게** 칠했습니다.
+
+   그래서 기준을 얼굴에 붙입니다 — **양쪽 내안각 사이 거리(이너 선 간격)** 를 자로 씁니다.
+   확대하면 이너 간격도 같이 커지므로 **허용 오차가 배율을 따라갑니다.**
+
+   `BAL_TOL_MM` 은 원장님이 실제 시술 감각으로 정하신 값입니다 (2026-08-20).
+   "이 정도는 밸런스가 맞다고 봐야 한다" — 임의로 낮추지 마세요. */
+const BAL_TOL_MM = 0.8;    // 이보다 작은 차이는 **맞다고 본다** (원장님 기준)
+const INNER_MM = 32;       // 양쪽 내안각 사이 평균 거리(mm) · 인체 계측 평균
+const BAL_TOL_MIN = 2, BAL_TOL_MAX = 16;   // 이너 선이 겹치거나 극단적으로 벌어졌을 때의 안전선
+
+/* 지금 화면에서 허용 오차 몇 px 인가 */
+function balTolPx() {
+  const W = S.dim.W, g = S.g;
+  const innerPx = Math.abs(g.v3 - g.v2) * W;
+  if (!W || !innerPx) return 3;
+  return clamp((BAL_TOL_MM * innerPx) / INNER_MM, BAL_TOL_MIN, BAL_TOL_MAX);
+}
 
 /* 지금 화면에 보이는 그대로의 사진 픽셀. 사진은 캔버스 안에서만 처리되고 어디에도 안 나갑니다. */
 function photoPixels() {
@@ -1954,6 +1992,7 @@ function runBalance() {
   const img = photoPixels();
   if (!img) { toast(t("bal_no_photo")); return false; }
   const { H } = S.dim, band = BAL_BAND * H;
+  const tol = balTolPx();                                       // 얼굴 크기에 맞춘 허용 오차 (v1.29.0)
   const off = {}, skipped = [];
   for (const sp of H_SPECS) {
     if (!S.g[sp.vis] || sp.segs.length < 2) continue;             // 눈 기준선은 좌우 관통이라 제외
@@ -1962,9 +2001,9 @@ function runBalance() {
     const R = measureSegY(img, sp.segs[1], y0, band);
     if (L === null || R === null) { skipped.push(sp.key); continue; }
     const d = S.refSide === "L" ? R - L : L - R;                  // 반대쪽 − 기준쪽
-    if (Math.abs(d) > BAL_TOL) off[sp.key] = d;
+    if (Math.abs(d) > tol) off[sp.key] = d;
   }
-  S.balance = { off, skipped };
+  S.balance = { off, skipped, tol };
   return true;
 }
 
@@ -1988,14 +2027,18 @@ $("btnBalance").onclick = () => {
   showHud(n === 0 ? t("bal_ok") : `${n}${t("bal_diff")}` + (sk ? `<br>${sk}${t("bal_skip")}` : ""), 3000);
 };
 
-/* 기준 쪽 — 밸런스의 후속 버튼. 고른 값은 다음에도 유지된다. */
-$("btnRefSide").onclick = () => {
-  S.refSide = S.refSide === "L" ? "R" : "L";
-  localStorage.setItem("pb_refside", S.refSide);
+/* 기준 쪽 — 밸런스의 후속 버튼. 고른 값은 다음에도 유지된다.
+   v1.29.0: 토글 하나가 아니라 **왼쪽/오른쪽 두 버튼**. 지금 어느 쪽이 기준인지 눌러 보지 않아도 보인다. */
+function setRefSide(side) {
+  if (S.refSide === side) return;
+  S.refSide = side;
+  localStorage.setItem("pb_refside", side);
   if (S.balOn) runBalance();
   render();
-  showHud(S.refSide === "L" ? t("bal_ref_l") : t("bal_ref_r"), 1600);
-};
+  showHud(side === "L" ? t("bal_ref_l") : t("bal_ref_r"), 1600);
+}
+$("btnRefL").onclick = () => setRefSide("L");
+$("btnRefR").onclick = () => setRefSide("R");
 
 $("btnAllSel").onclick = () => {
   if (!S.multi) return;
@@ -2047,6 +2090,53 @@ $("doSave").onclick = () => {
   closeMask("mSave");
 };
 $("btnPresetLoad").onclick = () => { renderPresetList(); openMask("mLoad"); };
+
+/* ═══ 프리셋 내보내기 · 가져오기 (v1.29.0) ══════════════════════
+   프리셋은 브라우저 localStorage 에만 있습니다 — 기기를 바꾸거나 브라우저 데이터를 지우면
+   **그대로 사라집니다.** 파일로 빼 두면 옮길 수 있고, 원장님이 만드신 디자인을
+   앱 기본 제공 프리셋으로 넣을 때도 이 파일을 씁니다.
+   내장 프리셋은 코드에서 매번 만들므로 **내보내지 않습니다** (1-5). */
+const PRESET_FILE_TAG = "perfect-brow-presets";
+$("btnPresetExport").onclick = () => {
+  const data = { tag: PRESET_FILE_TAG, v: 1, presets: userPresets(), favs: favIds() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `perfect-brow-presets-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(t("preset_exported"));
+};
+$("btnPresetImport").onclick = () => $("presetFile").click();
+$("presetFile").addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      const list = Array.isArray(d) ? d : (d && Array.isArray(d.presets) ? d.presets : null);
+      if (!list) throw new Error("bad");
+      /* 같은 id 는 덮어쓰고 새 것은 뒤에 붙인다 — 기존 저장분을 지우지 않습니다 */
+      const cur = userPresets(), byId = new Map(cur.map((x) => [x.id, x]));
+      let n = 0;
+      for (const p of list) {
+        if (!p || typeof p !== "object" || !p.state) continue;
+        const id = p.id || "u" + Date.now() + Math.floor(n);
+        byId.set(id, { ...p, id });
+        n++;
+      }
+      if (!n) throw new Error("empty");
+      writeUserPresets([...byId.values()]);
+      if (d && Array.isArray(d.favs)) writeFavs(d.favs);
+      buildFavBar(); renderPresetList();
+      toast(`${n}${t("preset_imported")}`);
+    } catch { toast(t("preset_import_fail")); }
+  };
+  rd.onerror = () => toast(t("preset_import_fail"));
+  rd.readAsText(f);
+});
 $("doRename").onclick = () => {
   const n = $("renameName").value.trim();
   if (!n || !S.renamingId) return;
@@ -2177,5 +2267,5 @@ if ("serviceWorker" in navigator) {
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
-  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds,
+  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   applyLayout, openPicker, endPicking };
