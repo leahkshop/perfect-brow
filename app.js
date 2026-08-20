@@ -1693,117 +1693,189 @@ async function runFaceAI() {
 }
 
 
-/* ═══ 드로잉 자동 맞춤 (v1.30.0) ═══════════════════════════════
+/* ═══ 드로잉 자동 맞춤 (v1.31.0) ═══════════════════════════════
    ⚠️ **이 앱의 실제 사용 순서**를 코드에 반영한 것입니다. 지우지 마세요.
 
      ① 원장님이 **왼쪽 눈썹에 먼저 굵은 드로잉**을 그린다
      ② 오른쪽에 그리기 전 **포인트를 먼저 찍는다**
-     ③ 자(가로선)는 **왼쪽 드로잉의 짙은 선에 맞춰** 그 위에 올라가야 한다
-     ④ 오른쪽은 그 자와 눈썹 사이 **갭**을 보며 맞춘다
+     ③ 자(가로선)는 **그 드로잉의 짙은 선 위에** 올라가야 한다
+     ④ 오른쪽은 자와 눈썹 사이 **갭**을 보며 맞춘다
      ⑤ 양쪽이 완성되면 `밸런스` 로 어긋난 곳을 확인한다
 
-   그래서 사진을 불러오면 **AI 얼굴 정렬 → 그려진 드로잉 읽기 → 그 위로 선 이동**
-   까지 자동으로 갑니다. 얼굴 랜드마크(눈썹 털)가 아니라 **그린 선**이 기준입니다.
-   V 피봇·V 앵글은 **자동으로 올리지 않습니다** — 쓰실 때만 켜는 보조선입니다. */
-const DRAW_SAMPLES = 25;      // 눈썹 구간에서 뽑는 x 표본 수
-const DRAW_CONTRAST = 16;     // 주변보다 이만큼 어두워야 "그린 선"으로 본다
-const DRAW_MIN_HITS = 8;      // 이보다 적게 찾으면 실패 (조용히 건너뛴다)
-const DRAW_BAND = 0.30;       // 눈 기준선 위로 훑는 범위 (캔버스 높이 비율)
+   ⚠️ v1.30.x 는 x 를 `browX(frac)` 으로 뽑았습니다. 그건 **이너·아우터가 이미
+   맞아야** 눈썹을 훑는 구조라, 한 번 어긋나면 계속 눈꺼풀을 읽었습니다(원장님 지적:
+   「기본 라인이 이렇게 올라옴. 전혀 프로페셔널하지 못한 설정이다」 2026-08-20).
+   v1.31.0 은 순서를 뒤집습니다 — **사진에서 눈썹을 먼저 찾고**, 찾은 모양에서
+   이너·아우터·앞머리·앞두께·아치·아치두께·꼬리를 뽑습니다.
+   여기서 `browX()` 를 다시 쓰면 순환 의존이 되어 같은 버그가 돌아옵니다. */
 
-/* 한 x 열에서 **가장 굵고 어두운 덩어리**의 위/아래 y 를 찾는다.
-   평균보다 어두운 픽셀이 이어지는 구간 중 제일 긴 것을 고른다 —
+/* MediaPipe 눈썹 윤곽점 (FaceMesh 규약) — 위/아래가 따로 있어 두께를 실측할 수 있다 */
+const BROW_UP_A = [70, 63, 105, 66, 107], BROW_LO_A = [46, 53, 52, 65, 55];
+const BROW_UP_B = [300, 293, 334, 296, 336], BROW_LO_B = [276, 283, 282, 295, 285];
+
+const DRAW_COLS = 56;         // 눈썹 하나를 훑는 세로 열 개수
+const DRAW_CONTRAST = 18;     // 피부보다 이만큼 어두워야 "그린 선"으로 본다
+const DRAW_MIN_HITS = 10;     // 이보다 적게 찾으면 실패 (조용히 건너뛴다)
+const DRAW_PAD_X = 0.16;      // 좌우 여유 (눈썹 폭 비율) — 드로잉은 털보다 길게 그린다
+const DRAW_PAD_UP = 0.95;     // 위 여유 (눈썹 높이 비율)
+const DRAW_PAD_DN = 0.70;     // 아래 여유
+const DRAW_EYE_GAP = 0.55;    // 눈(동공)까지 이만큼은 남긴다 — 눈꺼풀을 읽지 않기 위해
+const DRAW_MAX_FILL = 0.72;   // 열의 이만큼을 넘게 어두우면 머리카락·그림자로 보고 버린다
+
+/* 랜드마크 → 지금 화면 좌표의 **눈썹 탐색 상자** 2개(화면 왼쪽/오른쪽).
+   랜드마크가 없으면 null → 아래 fallbackBox() 로 넘어간다. */
+function browBoxes() {
+  const lm = S.landmarks, { W, H } = S.dim;
+  if (!lm || !W || !H) return null;
+  const pt = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p);
+  let eyeY = null;
+  try {
+    const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
+    eyeY = imgToCanvas((a.x + b.x) / 2, (a.y + b.y) / 2, S.p).y;
+  } catch { eyeY = null; }
+
+  const box = (up, lo) => {
+    const U = up.map(pt), L = lo.map(pt), all = [...U, ...L];
+    const xs = all.map((p) => p.x);
+    const yU = Math.min(...U.map((p) => p.y)), yL = Math.max(...L.map((p) => p.y));
+    const h = Math.max(yL - yU, 6), wd = Math.max(Math.max(...xs) - Math.min(...xs), 10);
+    let y1 = yL + DRAW_PAD_DN * h;
+    if (eyeY !== null) y1 = Math.min(y1, eyeY - DRAW_EYE_GAP * h);   // 눈꺼풀 방어선
+    return {
+      x0: Math.min(...xs) - DRAW_PAD_X * wd, x1: Math.max(...xs) + DRAW_PAD_X * wd,
+      y0: yU - DRAW_PAD_UP * h, y1: Math.max(y1, yL + 0.15 * h),
+      cy: (yU + yL) / 2,
+    };
+  };
+  const a = box(BROW_UP_A, BROW_LO_A), b = box(BROW_UP_B, BROW_LO_B);
+  return a.x0 <= b.x0 ? { left: a, right: b } : { left: b, right: a };
+}
+
+/* 랜드마크가 없을 때 — 기준 쪽 절반의 위쪽을 통째로 훑는다.
+   실제 앱에서는 얼굴 인식이 끝난 뒤에만 부르므로 거의 쓰이지 않지만,
+   인식이 실패한 사진에서도 그린 선을 잡을 수 있게 남겨 둡니다. */
+function fallbackBox(side) {
+  const { W, H } = S.dim;
+  const cx = S.g.v1 * W, wr = workRight() * W;
+  return side === "L"
+    ? { x0: 0, x1: cx - 4, y0: 0, y1: S.g.h1 * H, cy: null }
+    : { x0: cx + 4, x1: wr, y0: 0, y1: S.g.h1 * H, cy: null };
+}
+
+/* 한 열에서 "그린 선" 한 덩어리를 찾는다.
+   밝은 쪽 40% 평균을 피부로 보고, 그보다 DRAW_CONTRAST 어두운 픽셀만 선으로 센다.
+   후보가 여럿이면 **잉크량(어두운 정도 × 두께)** 이 가장 많은 덩어리 —
    눈썹 털 한 올이나 속눈썹에 끌려가지 않게 하려는 것. */
-function darkRunAt(img, x, y0, y1) {
+function inkRunAt(img, x, y0, y1, cy) {
   const { W } = S.dim;
-  let sum = 0, n = 0;
-  for (let y = y0; y <= y1; y++) { sum += lumaAt(img, W, x, y); n++; }
-  if (!n) return null;
-  const avg = sum / n, cut = avg - DRAW_CONTRAST;
-  let best = null, curTop = -1;
-  for (let y = y0; y <= y1; y++) {
-    const dark = lumaAt(img, W, x, y) < cut;
-    if (dark && curTop < 0) curTop = y;
-    if ((!dark || y === y1) && curTop >= 0) {
-      const bot = dark ? y : y - 1, len = bot - curTop + 1;
-      if (!best || len > best.len) best = { top: curTop, bot, len };
-      curTop = -1;
+  const v = [];
+  for (let y = y0; y <= y1; y++) v.push(lumaAt(img, W, x, y));
+  if (v.length < 6) return null;
+  const s = [...v].sort((a, b) => a - b), k = Math.floor(s.length * 0.6);
+  let sum = 0;
+  for (let i = k; i < s.length; i++) sum += s[i];
+  const cut = sum / Math.max(1, s.length - k) - DRAW_CONTRAST;
+
+  const near = (r) => (cy === null ? 0 : Math.abs((r.top + r.bot) / 2 - cy));
+  let best = null, top = -1, ink = 0;
+  for (let i = 0; i < v.length; i++) {
+    const dark = v[i] < cut;
+    if (dark) { if (top < 0) { top = i; ink = 0; } ink += cut - v[i]; }
+    if ((!dark || i === v.length - 1) && top >= 0) {
+      const bi = dark ? i : i - 1;
+      const c = { top: y0 + top, bot: y0 + bi, ink, len: bi - top + 1 };
+      if (c.len >= 2 && c.len <= DRAW_MAX_FILL * v.length) {
+        if (!best || c.ink > best.ink * 1.15 || (c.ink > best.ink * 0.85 && near(c) < near(best))) best = c;
+      }
+      top = -1;
     }
   }
-  return best && best.len >= 2 ? best : null;
+  return best;
 }
 
-/* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다.
-   반환: { atFrac(frac) → {top,bot} } · 실패하면 null */
-function readDrawing(img) {
-  const { W, H } = S.dim, g = S.g;
-  const y1 = Math.min(H - 1, Math.round(g.h1 * H));          // 눈 기준선 아래로는 안 본다
-  const y0 = Math.max(0, Math.round(y1 - DRAW_BAND * H));
-  if (y1 - y0 < 8) return null;
-  /* 기준 쪽(왼쪽이 기본)의 눈썹 구간을 frac 0~0.4 / 0.6~1 중에서 고른다 */
-  const lo = S.refSide === "L" ? -0.15 : 0.6;
-  const hi = S.refSide === "L" ? 0.4 : 1.15;
-  const pts = [];
-  for (let i = 0; i < DRAW_SAMPLES; i++) {
-    const frac = lo + ((hi - lo) * (i + 0.5)) / DRAW_SAMPLES;
-    const x = Math.round(browX(frac));
-    if (x < 0 || x >= W) continue;
-    const run = darkRunAt(img, x, y0, y1);
-    if (run) pts.push({ frac, x, top: run.top, bot: run.bot });
-  }
+/* 찾은 덩어리들 중 **한 줄기로 이어지는 것**만 남긴다.
+   중앙값에서 크게 벗어난 열(머리카락·안경테·눈꺼풀)을 버리고 이웃 3개 중앙값으로 다듬는다. */
+function keepBand(pts) {
   if (pts.length < DRAW_MIN_HITS) return null;
-  return pts;
+  const mid = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  let keep = pts;
+  for (let pass = 0; pass < 2; pass++) {
+    const th = mid(keep.map((p) => p.bot - p.top));
+    const cy = mid(keep.map((p) => (p.top + p.bot) / 2));
+    const lim = Math.max(th * 1.6, 6);
+    const next = keep.filter((p) => Math.abs((p.top + p.bot) / 2 - cy) <= lim && p.bot - p.top <= th * 2.6 + 2);
+    if (next.length < DRAW_MIN_HITS) break;
+    keep = next;
+  }
+  if (keep.length < DRAW_MIN_HITS) return null;
+  const m3 = (i, key) => {
+    const s = [keep[Math.max(0, i - 1)][key], keep[i][key], keep[Math.min(keep.length - 1, i + 1)][key]].sort((a, b) => a - b);
+    return s[1];
+  };
+  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot") }));
 }
 
-/* frac 구간 안 표본들의 top/bot 중앙값 — 점 하나에 끌려가지 않게 */
-function medianOf(pts, a, b, key) {
-  const v = pts.filter((p) => p.frac >= Math.min(a, b) && p.frac <= Math.max(a, b)).map((p) => p[key]);
-  if (v.length < 2) return null;
-  v.sort((x, y) => x - y);
-  return v[Math.floor(v.length / 2)];
+/* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
+   반환: x 오름차순 [{x, top, bot}] — top/bot 은 캔버스 px */
+function readDrawing(img) {
+  const { W, H } = S.dim;
+  const boxes = browBoxes();
+  const b = boxes ? (S.refSide === "L" ? boxes.left : boxes.right) : fallbackBox(S.refSide);
+  const x0 = Math.max(0, Math.round(b.x0)), x1 = Math.min(W - 1, Math.round(b.x1));
+  const y0 = Math.max(0, Math.round(b.y0)), y1 = Math.min(H - 1, Math.round(b.y1));
+  if (x1 - x0 < 16 || y1 - y0 < 8) return null;
+  const pts = [];
+  for (let i = 0; i < DRAW_COLS; i++) {
+    const x = Math.round(x0 + ((x1 - x0) * (i + 0.5)) / DRAW_COLS);
+    if (x < 0 || x >= W) continue;
+    const r = inkRunAt(img, x, y0, y1, b.cy);
+    if (r) pts.push({ x, top: r.top, bot: r.bot });
+  }
+  pts.sort((p, q) => p.x - q.x);
+  return keepBand(pts);
 }
 
-/* 사진에 그려진 드로잉 위로 모든 선을 올린다. 올렸으면 true. */
+/* 사진에 그려진 드로잉 위로 모든 선을 올린다. 올렸으면 true.
+   센터(v1)는 얼굴 축이라 건드리지 않습니다 (내안각 중점 · BASELINE 1-15).
+   V 피봇·V 앵글도 자동으로 올리지 않습니다 — 쓰실 때만 켜는 보조선입니다. */
 function autoFromDrawing() {
-  const { H } = S.dim;
+  const { W, H } = S.dim;
   const img = photoPixels();
   if (!img) return false;
   const pts = readDrawing(img);
-  if (!pts) return false;
+  if (!pts || pts.length < DRAW_MIN_HITS) return false;
 
-  const mirror = S.refSide === "R";
-  /* 기준 쪽 frac → 그 선의 자(自) frac 으로 맞춘다.
-     앞머리·앞두께는 이너 바로 바깥(0.195~0.345), 아치·아치두께는 산(−0.02~0.13),
-     꼬리는 제일 바깥(−0.15~−0.02) — H_SPECS 의 segs 와 같은 구간입니다 (BASELINE 1-16). */
-  const seg = (a, b) => (mirror ? [1 - b, 1 - a] : [a, b]);
-  const front = seg(0.195, 0.345), arch = seg(-0.02, 0.13), tail = seg(-0.15, -0.02);
+  /* seq[0] = 안쪽(앞머리) … seq[n−1] = 바깥(꼬리).
+     화면 왼쪽 눈썹이면 x 가 큰 쪽이 코 방향(=안쪽)이므로 뒤집는다. */
+  const cx = S.g.v1 * W;
+  const seq = pts[0].x > cx ? pts : [...pts].reverse();
+  const n = seq.length;
 
-  const yTop = (r) => medianOf(pts, r[0], r[1], "top");
-  const yBot = (r) => medianOf(pts, r[0], r[1], "bot");
-  const setY = (key, py) => { if (py !== null) setLine(key, clamp(py / H, 0.02, 0.98)); };
+  /* 구간 t(0=앞머리 … 1=꼬리) 안 표본들의 중앙값 — 점 하나에 끌려가지 않게 */
+  const at = (a, b, key) => {
+    const i0 = clamp(Math.floor(a * (n - 1)), 0, n - 1);
+    const i1 = clamp(Math.ceil(b * (n - 1)), 0, n - 1);
+    const v = seq.slice(Math.min(i0, i1), Math.max(i0, i1) + 1).map((p) => p[key]).sort((x, y) => x - y);
+    return v.length ? v[Math.floor(v.length / 2)] : null;
+  };
 
-  let n = 0;
-  const fT = yTop(front), fB = yBot(front);
-  const aT = yTop(arch), aB = yBot(arch);
-  const tT = yTop(tail);
-  if (fT !== null) { setY("front", fT); n++; }
-  if (fB !== null) { setY("frontThickness", fB); n++; }
-  if (aT !== null) { setY("h2", aT); n++; }
-  if (aB !== null) { setY("archThickness", aB); n++; }
-  if (tT !== null) { setY("h3", tT); n++; }
+  /* 아치 = 드로잉에서 **제일 높은 곳**. 위치를 미리 정하지 않고 사진에서 찾는다. */
+  let pk = 0;
+  for (let i = 1; i < n; i++) if (seq[i].top < seq[pk].top) pk = i;
+  const win = Math.max(1, Math.round(n * 0.08));
+  const pa = clamp(pk - win, 0, n - 1) / (n - 1), pb = clamp(pk + win, 0, n - 1) / (n - 1);
 
-  /* 세로선 — 드로잉이 실제로 있는 x 범위의 안쪽/바깥쪽 끝.
-     센터(v1)는 얼굴 중심축이라 건드리지 않습니다 (내안각 중점 · BASELINE 1-15). */
-  const xs = pts.map((p) => p.x).sort((a, b) => a - b);
-  if (xs.length >= DRAW_MIN_HITS) {
-    const W = S.dim.W, cx = S.g.v1 * W;
-    const outer = mirror ? xs[xs.length - 1] : xs[0];
-    const inner = mirror ? xs[0] : xs[xs.length - 1];
-    const half = (x) => Math.abs(x - cx) / W;
-    setLine("v2", clamp(S.g.v1 - half(inner), 0.02, 0.98));
-    setLine("v4", clamp(S.g.v1 - half(outer), 0.02, 0.98));
-    n += 2;
-  }
-  return n > 0;
+  const setY = (key, py) => { if (py !== null && isFinite(py)) setLine(key, clamp(py / H, 0.02, 0.98)); };
+  setY("front", at(0, 0.18, "top"));             // 앞머리   = 머리 쪽 윗선
+  setY("frontThickness", at(0, 0.18, "bot"));    // 앞두께   = 같은 자리 아랫선
+  setY("h2", at(pa, pb, "top"));                 // 아치     = 제일 높은 곳 윗선
+  setY("archThickness", at(pa, pb, "bot"));      // 아치두께 = 그 자리 아랫선
+  setY("h3", at(0.86, 1, "top"));                // 꼬리     = 바깥쪽 끝 윗선
+
+  /* 이너·아우터 = 드로잉이 실제로 있는 x 양 끝 (setLine 이 반대쪽을 대칭으로 맞춘다) */
+  setLine("v2", clamp(S.g.v1 - Math.abs(seq[0].x - cx) / W, 0.02, 0.98));
+  setLine("v4", clamp(S.g.v1 - Math.abs(seq[n - 1].x - cx) / W, 0.02, 0.98));
+  return true;
 }
 
 /* ═══════════ 9. export ═══════════ */
@@ -2403,5 +2475,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
-  autoFromDrawing, readDrawing,
+  autoFromDrawing, readDrawing, browBoxes, inkRunAt,
   applyLayout, openPicker, endPicking };

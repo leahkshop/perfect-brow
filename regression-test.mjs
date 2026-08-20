@@ -1804,49 +1804,93 @@ console.log("\n[밸런스 판정]");
     `좁은 얼굴 이너 ${Math.round(narrow.inner)}px → 허용 ${narrow.tol.toFixed(1)}px · 6px 차이 ${narrow.off ? "잡음" : "통과"} / ` +
     `넓은 얼굴 이너 ${Math.round(wide.inner)}px → 허용 ${wide.tol.toFixed(1)}px · 6px 차이 ${wide.off ? "잡음" : "통과"}`);
 
-  /* 87. 드로잉 자동 맞춤 (v1.30.0)
+  /* 87·88. 드로잉 자동 맞춤 (v1.31.0)
      원장님은 **왼쪽 눈썹에 먼저 굵은 드로잉을 그리고**, 자가 그 선 위로 올라가야 합니다.
-     그린 선의 위/아래 경계를 아는 합성 사진으로 검증합니다. */
+     v1.30.x 는 이너·아우터가 이미 맞아야 눈썹을 훑는 구조라 눈꺼풀을 읽었습니다.
+     그래서 여기서는 **네모가 아니라 진짜 눈썹 모양**(아치가 있고 두께가 변하는)으로 검증합니다.
+       앞머리 쪽 x 300~340 : 위 148 / 아래 178   (두껍다)
+       아치      x  ~215   : 위 120 / 아래 140   (제일 높다)
+       꼬리 쪽  x 120~150 : 위 152 / 아래 164   (얇다)
+     87 = 얼굴 인식이 된 경우(랜드마크 상자로 눈썹만 훑는 실제 경로)
+     88 = 얼굴 인식이 실패한 경우(절반을 통째로 훑는 예비 경로) */
+  const CP = [[120, 152, 164], [150, 152, 164], [185, 122, 142], [215, 120, 140],
+              [260, 132, 158], [300, 148, 178], [340, 148, 178]];
+  const edgeAt = (x, i) => {
+    for (let k = 0; k < CP.length - 1; k++) {
+      const a = CP[k], b = CP[k + 1];
+      if (x >= a[0] && x <= b[0]) return a[i] + ((b[i] - a[i]) * (x - a[0])) / (b[0] - a[0]);
+    }
+    return CP[CP.length - 1][i];
+  };
   const drawFace = () => {
     const f = path.join(ROOT, ".draw.svg");
-    /* 왼쪽 눈썹 자리(x 90~300)에 두께 있는 드로잉: 위 176 / 아래 196 */
+    const up = [], dn = [];
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(x, 2).toFixed(1)}`); }
+    const poly = up.concat(dn.reverse()).join(" ");
     fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
       + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
-      + `<rect x="90" y="176" width="210" height="20" rx="8" fill="#2a1c14"/></svg>`);
+      + `<polygon points="${poly}" fill="#2a1c14"/></svg>`);
     return f;
   };
+
+  /* 합성 랜드마크 — 그린 선 근처의 눈썹 털이라고 가정한 위/아래 윤곽 + 동공 */
+  const LMK = (() => {
+    const L = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+    const put = (i, x, y) => { L[i] = { x: x / IW, y: y / IH, z: 0 }; };
+    const upA = [[70, 124, 154], [63, 155, 152], [105, 200, 124], [66, 265, 136], [107, 336, 150]];
+    const loA = [[46, 124, 162], [53, 155, 162], [52, 200, 140], [65, 265, 156], [55, 336, 176]];
+    upA.forEach(([i, x, y]) => put(i, x, y));
+    loA.forEach(([i, x, y]) => put(i, x, y));
+    /* 반대쪽 눈썹 — 중심 391 기준 거울 */
+    const mir = (i, j) => { const s = L[j]; L[i] = { x: (2 * 391) / IW - s.x, y: s.y, z: 0 }; };
+    [[300, 70], [293, 63], [334, 105], [296, 66], [336, 107],
+     [276, 46], [283, 53], [282, 52], [295, 65], [285, 55]].forEach(([a, b]) => mir(a, b));
+    for (let i = 468; i <= 472; i++) put(i, 230, 250);
+    for (let i = 473; i <= 477; i++) put(i, 552, 250);
+    return L;
+  })();
+
   const fd = drawFace();
-  {
+  const runDraw = async (useLandmarks) => {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(300);
     await p.setInputFiles("#fileInput", fd);
     await p.waitForTimeout(1300);
-    const out = await p.evaluate(() => {
-      const S = window.PB.S, H = S.dim.H;
-      S.landmarks = null;
+    const out = await p.evaluate((lm) => {
+      const S = window.PB.S, H = S.dim.H, W = S.dim.W;
+      S.landmarks = lm;
       S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
       S.g = { ...window.PB.DEFAULT_GUIDE };
       S.refSide = "L";
       window.PB.render();
-      const before = { front: S.g.front, h2: S.g.h2 };
       const ok = window.PB.autoFromDrawing();
       const g = S.g;
-      return { ok, before, H,
+      return { ok, W, H,
         frontPx: g.front * H, ftPx: g.frontThickness * H,
-        archPx: g.h2 * H, atPx: g.archThickness * H,
+        archPx: g.h2 * H, atPx: g.archThickness * H, tailPx: g.h3 * H,
+        innerPx: g.v2 * W, outerPx: g.v4 * W,
         pivotUntouched: Math.abs(g.innerAngle - window.PB.DEFAULT_GUIDE.innerAngle) < 1e-9,
         vBase: g.baseStructureVisible };
-    });
+    }, useLandmarks ? LMK : null);
     await ctx.close();
-    /* 그린 선은 위 176 / 아래 196 — 자가 그 경계에 올라가야 한다 */
-    check("87. 드로잉 자동 맞춤 — 그린 선의 위/아래에 자가 올라간다 · V 피봇은 건드리지 않음",
-      out.ok && near(out.frontPx, 176, 4) && near(out.ftPx, 196, 4)
-        && near(out.archPx, 176, 4) && near(out.atPx, 196, 4)
-        && out.pivotUntouched && out.vBase === false,
-      `앞머리 ${out.frontPx.toFixed(0)}px / 앞두께 ${out.ftPx.toFixed(0)}px / 아치 ${out.archPx.toFixed(0)}px / 아치두께 ${out.atPx.toFixed(0)}px (그린 선 176~196) · V피봇 그대로=${out.pivotUntouched}`);
-  }
+    return out;
+  };
+  const judge = (o) => o.ok
+    && near(o.frontPx, 148, 5) && near(o.ftPx, 178, 5)
+    && near(o.archPx, 120, 5) && near(o.atPx, 140, 5)
+    && near(o.tailPx, 152, 5)
+    && near(o.innerPx, 340, 9) && near(o.outerPx, 120, 9)
+    && o.pivotUntouched && o.vBase === false;
+  const say = (o) => `앞머리 ${o.frontPx.toFixed(0)}(148) / 앞두께 ${o.ftPx.toFixed(0)}(178) / `
+    + `아치 ${o.archPx.toFixed(0)}(120) / 아치두께 ${o.atPx.toFixed(0)}(140) / 꼬리 ${o.tailPx.toFixed(0)}(152) / `
+    + `이너 ${o.innerPx.toFixed(0)}(340) · 아우터 ${o.outerPx.toFixed(0)}(120) · V피봇 그대로=${o.pivotUntouched}`;
+
+  const o87 = await runDraw(true);
+  check("87. 드로잉 자동 맞춤 — 눈썹 모양(앞머리·앞두께·아치·아치두께·꼬리)을 사진에서 읽는다", judge(o87), say(o87));
+  const o88 = await runDraw(false);
+  check("88. 드로잉 자동 맞춤 — 얼굴 인식이 실패해도 그린 선을 찾는다 (예비 경로)", judge(o88), say(o88));
   fs.unlinkSync(fd);
 
   for (const f of [f1, f0, fN, f6]) fs.unlinkSync(f);
