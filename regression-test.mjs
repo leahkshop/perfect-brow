@@ -1245,6 +1245,16 @@ console.log("\n[강제 가로 회전]");
   await p.evaluate(() => localStorage.setItem("pb_orient", "on"));
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.waitForTimeout(500);
+
+  /* 81. 홈(사진 선택)은 기기 방향 그대로 — 가짜 회전은 편집 화면에서만 (v1.27.0)
+     홈까지 돌려놓으면 iOS 사진 시트(OS 가 그림)와 90° 어긋나 사진을 못 고른다. */
+  const homeUp = await p.evaluate(() => ({
+    rot: document.body.classList.contains("rot90"),
+    editorOn: document.getElementById("editor").classList.contains("active"),
+    homeOn: document.getElementById("home").classList.contains("active"),
+    ctaVisible: document.getElementById("pickBtn").getBoundingClientRect().width > 40,
+  }));
+
   await p.setInputFiles("#fileInput", face.file);
   await p.waitForTimeout(1200);
 
@@ -1255,6 +1265,10 @@ console.log("\n[강제 가로 회전]");
     stageW: document.getElementById("stage").offsetWidth,
     stageH: document.getElementById("stage").offsetHeight,
   }));
+  check("81. 홈(사진 선택)은 세로 그대로 · 사진을 넣으면 편집기가 가로로",
+    homeUp.rot === false && homeUp.homeOn && !homeUp.editorOn && homeUp.ctaVisible && cls.rot === true,
+    `홈 rot90=${homeUp.rot} 사진선택버튼=${homeUp.ctaVisible} → 편집기 rot90=${cls.rot}`);
+
   check("13. 세로 기기에서 가로 강제 — 회전 적용", cls.rot && cls.land && cls.railVisible,
     `rot90=${cls.rot} land=${cls.land} rail=${cls.railVisible}`);
   check("13. 세로 기기에서 가로 강제 — 캔버스가 가로", cls.stageW > cls.stageH,
@@ -1314,11 +1328,42 @@ console.log("\n[강제 가로 회전]");
     near(dH, 60, 4) && near(dV, 60, 4),
     `아래로끌기→h1 ${dH.toFixed(1)}px / 오른쪽끌기→v2 ${dV.toFixed(1)}px`);
 
+  /* 82. 사진 선택 시트가 열려 있는 동안 — **방향은 그대로**, 화면만 어두워진다 (v1.27.0)
+        세로로 되돌리면 지금 가로인지 세로인지 헷갈리므로 딤만 깐다.
+        ⚠️ 실제 iOS 시트는 자동화로 못 띄우므로 **판정 경로만** 검증한다.
+           파일 다이얼로그가 뜨지 않도록 input.click 만 잠시 막는다. */
+  const pickRot = await p.evaluate(() => {
+    const inp = document.getElementById("fileInput");
+    const real = inp.click.bind(inp);
+    inp.click = () => {};                      // 다이얼로그는 열지 않는다
+    const rot = () => document.body.classList.contains("rot90");
+    const dim = () => {
+      const s = getComputedStyle(document.querySelector(".screen.active"), "::after");
+      const m = (s.backgroundColor || "").match(/[\d.]+/g);
+      return !!m && m.length === 4 && +m[3] > 0.3 && s.content !== "none";
+    };
+    const before = { rot: rot(), dim: dim() };
+    window.PB.openPicker();
+    const during = { rot: rot(), dim: dim() };
+    window.PB.endPicking();
+    const after = { rot: rot(), dim: dim() };
+    inp.click = real;
+    return { before, during, after };
+  });
+  check("82. 사진 선택 중 — 가로 그대로 · 화면만 어둡게 · 닫으면 복구",
+    pickRot.before.rot === true && pickRot.before.dim === false
+      && pickRot.during.rot === true && pickRot.during.dim === true
+      && pickRot.after.rot === true && pickRot.after.dim === false,
+    `가로 ${pickRot.before.rot}→${pickRot.during.rot}→${pickRot.after.rot} · 딤 ${pickRot.before.dim}→${pickRot.during.dim}→${pickRot.after.dim}`);
+
   /* 29. v1.8.0 — 기본(auto)에서 회전 잠금이 켜진 세로 터치 기기도 항상 가로.
-        저장값을 스스로 off 로 바꾸지 않아야 한다(v1.7.0 자동 해제 로직 제거 확인). */
+        저장값을 스스로 off 로 바꾸지 않아야 한다(v1.7.0 자동 해제 로직 제거 확인).
+        v1.27.0 — 가짜 회전은 편집 화면에서만이므로 사진을 넣은 뒤에 검사한다. */
   await p.evaluate(() => localStorage.removeItem("pb_orient"));
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.waitForTimeout(500);
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1200);
   const auto = await p.evaluate(() => ({
     stored: localStorage.getItem("pb_orient"),
     rot: document.body.classList.contains("rot90"),

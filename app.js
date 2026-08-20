@@ -57,7 +57,6 @@ const I18N = {
     pick_2: "② 오른쪽 눈동자 중앙을 탭하세요",
     pick_done: "동공 기준 자동 정렬 완료",
     pick_cancel: "정렬을 취소했습니다",
-    picker_rot: "사진 선택 창은 <b>기기 방향</b>을 따릅니다<br>폰을 세로로 세워서 고른 뒤 다시 눕히세요<br><br>제어센터에서 <b>화면 회전 잠금</b>을 풀면<br>이 창도 함께 가로로 돌아갑니다",
     rot_auto_off: "기기 회전이 되는 환경입니다 · 강제 가로를 껐습니다",
     editor_inner_angle: "V 센터 피봇",
     editor_outer_angle: "V 앵글",
@@ -174,7 +173,6 @@ const I18N = {
     pick_2: "② Tap the centre of the right pupil",
     pick_done: "Aligned to pupils",
     pick_cancel: "Alignment cancelled",
-    picker_rot: "The photo picker follows the <b>device</b> orientation<br>Hold the phone upright to choose, then turn it back<br><br>Unlock <b>rotation lock</b> in Control Centre<br>and the picker will rotate too",
     rot_auto_off: "Device rotation works — forced landscape turned off",
     editor_inner_angle: "V Center Pivot",
     editor_outer_angle: "V Angle",
@@ -375,6 +373,7 @@ const S = {
   renamingId: null,
   pickMode: false,       // 동공 2점 지정 모드
   pick: [],
+  picking: false,        // 사진 선택 시트가 열려 있는 동안 (v1.27.0) — 그때만 세로로 되돌린다
 };
 
 /* ═══════════ DOM ═══════════ */
@@ -1645,8 +1644,11 @@ async function exportImage() {
 }
 
 /* ═══════════ 화면 전환 · 사진 로드 ═══════════ */
+/* 화면을 바꾸면 방향 판정도 다시 한다 (v1.27.0)
+   홈 = 기기 방향 그대로(세로) / 편집기 = 가로 강제. applyLayout() 참고. */
 function show(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("active", s.id === id));
+  applyLayout();
 }
 
 function loadPhoto(file) {
@@ -1722,16 +1724,38 @@ $("langEn").onclick = () => setLang("en");
 document.querySelectorAll("#railLang button").forEach((b) =>
   b.addEventListener("click", () => { setLang(b.dataset.lang); render(); }));
 
+/* ═══ 사진 선택 중에는 화면을 어둡게 (v1.27.0) ═══════════════
+   iOS 사진 선택 시트는 웹페이지 **바깥에서 OS 가 그리므로** 앱이 회전시킬 수 없다.
+   앱을 세로로 되돌려 방향을 맞추는 방법도 있지만, 화면이 돌아버리면
+   **지금 가로인지 세로인지 헷갈린다**(원장님 판단). 그래서 방향은 그대로 두고
+   화면만 어둡게 낮춰 시트가 주인공이 되게 한다.
+   시트가 닫힌 것은 웹이 직접 알 수 없으므로 네 갈래로 감지한다
+   (change · focus · visibilitychange · 첫 터치). 하나만 믿으면 화면이 어두운 채로 남는다. */
+let pickOpenedAt = 0;
 function openPicker() {
-  /* iOS 의 사진 선택 시트는 웹페이지 바깥에서 그려지므로 앱이 회전시킬 수 없다.
-     강제 회전 중일 때만 방향이 어긋나므로 그때 안내한다. */
-  if (document.body.classList.contains("rot90")) showHud(t("picker_rot"), 4200);
+  S.picking = true;
+  applyLayout();                    // 시트가 뜨기 전에 먼저 어둡게
+  pickOpenedAt = Date.now();
   $("fileInput").click();
 }
+function endPicking() {
+  if (!S.picking) return;
+  S.picking = false;
+  applyLayout();                    // 밝기 복구
+}
+/* 시트를 여는 순간 곧바로 오는 focus/pointerdown 은 무시한다 (아직 열리는 중) */
+const pickSettled = () => S.picking && Date.now() - pickOpenedAt > 400;
+window.addEventListener("focus", () => { if (pickSettled()) setTimeout(endPicking, 120); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && pickSettled()) setTimeout(endPicking, 120);
+});
+window.addEventListener("pointerdown", () => { if (pickSettled()) endPicking(); }, { passive: true });
+
 $("pickBtn").onclick = openPicker;
 $("btnChange").onclick = openPicker;
 $("fileInput").addEventListener("change", (e) => {
   const f = e.target.files && e.target.files[0];
+  endPicking();                     // 사진을 골랐으면 loadPhoto 전에 가로로 되돌린다
   if (f) loadPhoto(f);
   e.target.value = "";
 });
@@ -2017,8 +2041,19 @@ function applyLayout() {
   /* v1.8.0 — 세로 지원 중지.
      뷰포트가 세로면(= 기기 회전 잠금이 켜져 있든 아니든) 화면을 90° 돌려 가로로 만든다.
      OS 레벨 잠금(tryOrientationLock)이 성공하면 뷰포트 자체가 가로가 되므로
-     devPortrait 가 false 가 되어 이 가짜 회전은 자동으로 꺼진다. */
-  const rot = devPortrait && (mode === "on" || (mode === "auto" && isTouchDevice()));
+     devPortrait 가 false 가 되어 이 가짜 회전은 자동으로 꺼진다.
+
+     v1.27.0 — **가짜 회전은 편집 화면에서만.**
+     홈(사진 선택)과 사진 선택 시트가 열려 있는 동안은 기기 방향을 그대로 따른다.
+     iOS 사진 시트는 OS 가 그려서 앱이 회전시킬 수 없으므로, 앱만 돌아 있으면
+     둘이 90° 어긋나 사진을 고르기가 어렵다 (원장님 실제 불편 · 스크린샷 확인).
+     "가로 전용"은 **작업 화면**에 대한 규칙이고, 사진을 넣는 동안에는 적용하지 않는다. */
+  const editing = !!($("editor") && $("editor").classList.contains("active"));
+  const rot = devPortrait && editing
+    && (mode === "on" || (mode === "auto" && isTouchDevice()));
+  /* 사진 선택 중에는 **방향을 바꾸지 않고** 화면만 어둡게 낮춘다 (index.html `body.picking`).
+     세로로 돌려버리면 "지금 가로냐 세로냐"가 헷갈린다 — 원장님 지시 (v1.27.0). */
+  document.body.classList.toggle("picking", !!S.picking);
 
   document.body.classList.toggle("rot90", rot);
   const w = rot ? window.innerHeight : window.innerWidth;
@@ -2077,4 +2112,5 @@ if ("serviceWorker" in navigator) {
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
-  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels };
+  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels,
+  applyLayout, openPicker, endPicking };

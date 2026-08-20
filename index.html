@@ -135,6 +135,14 @@ body.rot90 .screen.active{
   overflow:hidden;
 }
 body.rot90 #home.active{overflow-y:auto}
+/* ── 사진 선택 중 (v1.27.0) ────────────────────────────────
+   iOS 사진 시트는 OS 가 그려서 늘 **기기 방향(세로)** 으로 뜬다.
+   그렇다고 앱까지 세로로 되돌리면 "지금 가로인가 세로인가"가 헷갈린다.
+   **앱은 가로 그대로 두고 화면만 어둡게 낮춰** 시트가 주인공이 되게 한다.
+   딤은 레이아웃을 건드리지 않으므로 시트를 닫으면 그대로 돌아온다. */
+body.picking .screen.active::after{
+  content:"";position:absolute;inset:0;z-index:60;pointer-events:none;
+  background:rgba(0,0,0,.55)}
 /* Stage */
 /* --redge : 오른쪽 컨트롤이 화면 오른쪽 끝에서 떨어지는 거리 (v1.13.0)
    아이폰은 화면 맨 오른쪽 가장자리가 시스템 스와이프 영역이라 컨트롤이 눌리지 않는다.
