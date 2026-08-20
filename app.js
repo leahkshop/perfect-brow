@@ -296,21 +296,22 @@ const H_SPECS = [
      꼬리            → 아우터(v4/v5)    · 보라
    v1.31.x 까지는 자 위치가 frac 상수로 박혀 있어, **아치 자가 아우터를 따라 움직였습니다**
    (원장님이 직접 찾아내신 문제). 상수를 되살리지 말고 anchor 를 쓰세요. */
-  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.6, op: 0.5, anchor: null },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, anchor: "v2" },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 2, op: 0.9, anchor: "v2" },
-  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, anchor: "v6" },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 2, op: 0.95, anchor: "v6" },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 2, op: 0.95, anchor: "v4" },
+  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.2, op: 0.5, anchor: null },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 1.4, op: 0.9, anchor: "v2" },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 1.4, op: 0.9, anchor: "v2" },
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.4, op: 0.95, anchor: "v6" },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 1.4, op: 0.95, anchor: "v6" },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 1.4, op: 0.95, anchor: "v4" },
 ];
 
 const V_SPECS = [
-  { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.8, op: 1,   mirror: null },
-  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#14161B", dot: "#C9D1E0", w: 1.6, op: 0.6, mirror: "v3" },
+  { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.3, op: 1,   mirror: null },
+  /* 이너만 길게(눈까지) 남긴다 — 콧방울·내안각과 맞춰 보는 기준선이기 때문 (원장님 지시 2026-08-20) */
+  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#14161B", dot: "#C9D1E0", w: 1.6, op: 0.6, mirror: "v3", long: true },
   /* 아치선 (v1.32.0) — 아치·아치두께가 올라가는 기둥. 아우터보다 **얇게** 그려 소속을 표시한다 */
-  { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.2, op: 0.9, mirror: "v7" },
+  { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 0.9, op: 0.9, mirror: "v7" },
   /* 아우터는 **보라** — 꼬리와 한 묶음이라 색으로 묶어 준다 (원장님 지시 2026-08-20) */
-  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#A855F7", dot: "#A855F7", w: 1.6, op: 1,   mirror: "v5" },
+  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#A855F7", dot: "#A855F7", w: 1.1, op: 1,   mirror: "v5" },
 ];
 
 const ALL_VIS = [
@@ -510,7 +511,8 @@ function drawBadge(frag, text, x, y, color, anchor) {
    자가 관자놀이·코까지 뻗지 않습니다. 눈 기준선(h1)만 좌우를 관통합니다. */
 const SEG_HALF = 0.19;           // 자 반폭 (눈썹 폭 기준)
 const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
-const VPAD = 0.045;              // 세로선이 위아래로 더 나가는 여유
+const VPAD = 0.045;              // 세로선(긴 것)이 위아래로 더 나가는 여유
+const VPAD_TIGHT = 0.025;        // 짧은 세로선의 여유 — 눈까지 내려오지 않는다 (v1.33.0)
 
 /* 그 가로선의 좌·우 토막 [x0px, x1px]. 그리는 범위 = 잡는 범위 = 재는 범위 (BASELINE 1-11) */
 function segPx(sp) {
@@ -527,10 +529,14 @@ function segPx(sp) {
 
 /* 세로선이 실제로 진하게 보이는 구간 — 가장 위 가로선 위쪽부터 눈 기준선 아래까지.
    표시 여부와 무관하게 모든 가로선 값을 쓰므로 선을 껐다 켜도 길이가 흔들리지 않는다. */
-function browBandY() {
+/* tight=true → **눈썹 가로선만** 감싼다 (눈 기준선 제외). 아치선·아우터가 씁니다.
+   원장님 지시(2026-08-20): 「세로 라인은 이너라인 빼고 더 얇게 짧게 · 아래 눈 위치까지
+   내려오지 않아도 된다」. 이너만 눈까지 길게 — 내안각과 맞춰 보는 기준선이라서. */
+function browBandY(tight) {
   const g = S.g;
-  const ys = H_SPECS.map((sp) => g[sp.key]);
-  return { y0: clamp(Math.min(...ys) - VPAD, 0, 1), y1: clamp(Math.max(...ys) + VPAD, 0, 1) };
+  const ys = H_SPECS.filter((sp) => !tight || sp.anchor).map((sp) => g[sp.key]);
+  const pad = tight ? VPAD_TIGHT : VPAD;
+  return { y0: clamp(Math.min(...ys) - pad, 0, 1), y1: clamp(Math.max(...ys) + pad, 0, 1) };
 }
 
 function renderGuides() {
@@ -599,15 +605,17 @@ function renderGuides() {
 
   /* 세로 라인 (+ 대칭선) */
   {
-    const band = browBandY(), by0 = band.y0 * H, by1 = band.y1 * H;
+    const bandL = browBandY(false), bandT = browBandY(true);
     /* Center(v1) 는 얼굴 중심축이라 위아래 전체 길이 그대로 (BASELINE 1-7).
-       Inner/Outer 는 **눈썹 구간만** 진하게 긋고, 라벨(캔버스 맨 위)까지는
-       아주 옅은 연결선만 남겨 라벨이 허공에 뜨지 않게 한다. */
+       이너(long)는 눈까지 길게, 아치선·아우터는 **눈썹 구간만 짧게** (v1.33.0 원장님 지시).
+       라벨(캔버스 맨 위)까지는 아주 옅은 연결선만 남겨 라벨이 허공에 뜨지 않게 한다. */
     for (const sp of V_SPECS) {
       if (!g[sp.vis]) continue;
       const sel = isSelected(sp.key);
       const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : sp.op;
       const full = sp.key === "v1";
+      const band = sp.long ? bandL : bandT;
+      const by0 = band.y0 * H, by1 = band.y1 * H;
       const draw = (x) => {
         if (full) { drawLine(frag, x, 0, x, H, sp.color, w, op); return; }
         frag.appendChild(mk("line", {                       // 라벨 ↔ 선 연결 (헤일로 없음)
@@ -1758,7 +1766,11 @@ const BROW_UP_A = [70, 63, 105, 66, 107], BROW_LO_A = [46, 53, 52, 65, 55];
 const BROW_UP_B = [300, 293, 334, 296, 336], BROW_LO_B = [276, 283, 282, 295, 285];
 
 const DRAW_COLS = 56;         // 눈썹 하나를 훑는 세로 열 개수
-const DRAW_CONTRAST = 18;     // 피부보다 이만큼 어두워야 "그린 선"으로 본다
+const DRAW_CONTRAST = 18;     // 피부보다 이만큼 어두워야 "그린 선"으로 본다 (1차 패스)
+/* 2차 패스 (v1.33.0) — **맨 눈썹(드로잉 없음)** 은 털과 피부의 대비가 그린 선보다 훨씬
+   약합니다. 1차가 실패하면 이 낮은 문턱으로 한 번 더 읽습니다. 낮은 문턱은 그림자도
+   잘못 잡기 쉬우므로 **1차가 실패했을 때만** 씁니다 — 순서를 바꾸지 마세요. */
+const DRAW_CONTRAST_SOFT = 9;
 const DRAW_MIN_HITS = 10;     // 이보다 적게 찾으면 실패 (조용히 건너뛴다)
 const DRAW_PAD_X = 0.16;      // 좌우 여유 (눈썹 폭 비율) — 드로잉은 털보다 길게 그린다
 const DRAW_PAD_UP = 0.95;     // 위 여유 (눈썹 높이 비율)
@@ -1826,7 +1838,7 @@ function fallbackBox(side) {
 /* 한 열의 어두운 덩어리를 **전부** 모으고, 그중 씨앗(잉크가 가장 많은 것)을 고른다.
    ⚠️ 여기서 덩어리를 합치지 마세요. 합칠지 말지는 `readDrawing` 이 **사진 전체를 보고**
    한 번만 정합니다 — 열마다 따로 합쳤다가 눈꺼풀 주름이 딸려 왔습니다 (v1.31.1 의 실패). */
-function columnRuns(img, x, y0, y1, cy) {
+function columnRuns(img, x, y0, y1, cy, contrast) {
   const { W } = S.dim;
   const v = [];
   for (let y = y0; y <= y1; y++) v.push(lumaAt(img, W, x, y));
@@ -1835,7 +1847,7 @@ function columnRuns(img, x, y0, y1, cy) {
   const s = [...v].sort((a, b) => a - b), k = Math.floor(N * 0.6);
   let sum = 0;
   for (let i = k; i < N; i++) sum += s[i];
-  const cut = sum / Math.max(1, N - k) - DRAW_CONTRAST;
+  const cut = sum / Math.max(1, N - k) - contrast;
 
   const runs = [];
   let t = -1, ink = 0;
@@ -1904,7 +1916,7 @@ function keepBand(pts) {
 
 /* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
    반환: x 오름차순 [{x, top, bot}] — top/bot 은 캔버스 px */
-function readDrawing(img) {
+function readDrawing(img, contrast) {
   const { W, H } = S.dim;
   const boxes = browBoxes();
   const b = boxes ? (S.refSide === "L" ? boxes.left : boxes.right) : fallbackBox(S.refSide);
@@ -1915,7 +1927,7 @@ function readDrawing(img) {
   for (let i = 0; i < DRAW_COLS; i++) {
     const x = Math.round(x0 + ((x1 - x0) * (i + 0.5)) / DRAW_COLS);
     if (x < 0 || x >= W) continue;
-    const c = columnRuns(img, x, y0, y1, b.cy);
+    const c = columnRuns(img, x, y0, y1, b.cy, contrast);
     if (c) cols.push(c);
   }
   if (cols.length < DRAW_MIN_HITS) return null;
@@ -1942,16 +1954,23 @@ function autoFromDrawing() {
   const { W, H } = S.dim;
   const img = photoPixels();
   if (!img) return false;
-  const pts = readDrawing(img);
-  if (!pts || pts.length < DRAW_MIN_HITS) return false;
-
-  /* ⚠️ **두께 상식 검사** (v1.31.2) — 읽어낸 두께가 랜드마크 눈썹 높이와 너무 다르면
-     눈꺼풀 주름·머리카락을 눈썹으로 잘못 읽은 것입니다. 그럴 땐 **조용히 포기하고**
-     AI 얼굴 윤곽 배치를 그대로 둡니다. 억지로 올리면 원장님이 다시 다 옮기셔야 합니다. */
-  if (pts.refH) {
-    const th = pts.map((p) => p.bot - p.top).sort((a, b) => a - b)[Math.floor(pts.length / 2)];
-    if (th > DRAW_THICK_MAX * pts.refH || th < DRAW_THICK_MIN * pts.refH) return false;
+  /* 2패스 (v1.33.0) — ① 그린 드로잉(진한 대비) ② 실패하면 맨 눈썹(옅은 대비).
+     원장님 스크린샷(2026-08-20)에서 맨 눈썹 사진이 1차에서 떨어져 랜드마크 배치로
+     남았고, 그 배치가 「전혀 프로페셔널하지 못한」 위치였습니다. */
+  let pts = null;
+  for (const contrast of [DRAW_CONTRAST, DRAW_CONTRAST_SOFT]) {
+    const cand = readDrawing(img, contrast);
+    if (!cand || cand.length < DRAW_MIN_HITS) continue;
+    /* ⚠️ **두께 상식 검사** (v1.31.2) — 읽어낸 두께가 랜드마크 눈썹 높이와 너무 다르면
+       눈꺼풀 주름·머리카락을 잘못 읽은 것입니다. 그 패스는 버리고 다음 패스로 넘어갑니다.
+       억지로 올리면 원장님이 다시 다 옮기셔야 합니다. */
+    if (cand.refH) {
+      const th = cand.map((p) => p.bot - p.top).sort((a, b) => a - b)[Math.floor(cand.length / 2)];
+      if (th > DRAW_THICK_MAX * cand.refH || th < DRAW_THICK_MIN * cand.refH) continue;
+    }
+    pts = cand; break;
   }
+  if (!pts) return false;
 
   /* seq[0] = 안쪽(앞머리) … seq[n−1] = 바깥(꼬리).
      화면 왼쪽 눈썹이면 x 가 큰 쪽이 코 방향(=안쪽)이므로 뒤집는다. */

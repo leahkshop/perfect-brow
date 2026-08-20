@@ -1844,7 +1844,11 @@ console.log("\n[밸런스 판정]");
     const up = [], dn = [];
     for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(sh.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(sh.cp, x, 2).toFixed(1)}`); }
     const poly = up.concat(dn.reverse()).join(" ");
-    const paint = outline ? `fill="none" stroke="#2a1c14" stroke-width="5"` : `fill="#2a1c14"`;
+    /* tag "n" → **맨 눈썹**: 피부(#e9d8c6, 휘도 ≈218)보다 겨우 ~13 어두운 색.
+       1차 패스(대비 18)로는 안 보이고 2차 패스(대비 9)로만 잡힙니다 — 색을 진하게
+       바꾸면 이 테스트는 1차로 통과해 버려서 2차 패스가 죽어도 모릅니다. */
+    const ink = tag === "n" ? "#e0cab5" : "#2a1c14";
+    const paint = outline ? `fill="none" stroke="${ink}" stroke-width="5"` : `fill="${ink}"`;
     /* crease=true → 눈썹 아래에 **쌍꺼풀 선**을 하나 깐다 (원장님 스크린샷의 실제 상황).
        눈썹보다 옅지만 또렷해서, 이걸 눈썹에 붙여 읽으면 앞두께가 피부까지 내려갑니다. */
     const crease = tag === "c"
@@ -1873,7 +1877,8 @@ console.log("\n[밸런스 판정]");
   })();
 
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
-        fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c");
+        fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
+        fn = drawFace(SHAPE_A, false, "n");
   const runDraw = async (useLandmarks, file, tr, sh) => {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -1943,7 +1948,56 @@ console.log("\n[밸런스 판정]");
      이 검사를 지우면 그 버그가 조용히 돌아옵니다. */
   const o92 = await runDraw(true, fc, null, SHAPE_A);
   check("92. 드로잉 자동 맞춤 — 눈썹 아래 쌍꺼풀 선에 앞두께가 끌려가지 않는다", judge(o92), say(o92));
-  fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc);
+  /* 94. ⚠️ **맨 눈썹(드로잉 없음)** — 원장님 스크린샷(2026-08-20)의 실제 상황.
+     자연 눈썹은 대비가 약해 1차 패스가 포기하고 랜드마크 배치로 남았고, 그 배치가
+     「전혀 프로페셔널하지 못한」 위치였습니다. 2차 저대비 패스가 털을 읽어야 합니다. */
+  const o94 = await runDraw(true, fn, null, SHAPE_A);
+  check("94. 맨 눈썹 — 드로잉이 없어도 저대비 2차 패스가 털을 읽어 배치한다", judge(o94), say(o94));
+  fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc); fs.unlinkSync(fn);
+
+  /* 95. 세로선 길이·굵기 (v1.33.0) — 원장님 지시:
+     「세로 라인은 이너라인 빼고 더 얇게 짧게 · 아래 눈 위치까지 내려오지 않아도 된다」
+     · 아치선·아우터의 진한 구간은 눈 기준선(h1)에 **닿지 않는다**
+     · 이너는 길게 남는다 (내안각과 맞춰 보는 기준선)
+     · 아치선·아우터는 이너보다 얇다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+    const vl = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, H = S.dim.H;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = []; PBx.render();
+      const g = S.g, eyeY = g.h1 * H;
+      const lows = { front: g.front, frontThickness: g.frontThickness, h2: g.h2, archThickness: g.archThickness, h3: g.h3 };
+      const browBot = Math.max(...Object.values(lows)) * H;
+      /* 진한 세로 구간만 (연결선 opacity 0.16 제외) */
+      const seg = (key) => {
+        const x = g[key] * S.dim.W;
+        const ls = [...document.getElementById("guides").querySelectorAll("line")]
+          .filter((l) => Math.abs(+l.getAttribute("x1") - x) < 0.6 && Math.abs(+l.getAttribute("x1") - +l.getAttribute("x2")) < 0.5
+                      && +(l.getAttribute("stroke-opacity") || 1) > 0.2);
+        if (!ls.length) return null;
+        const l = ls[0];
+        return { y0: Math.min(+l.getAttribute("y1"), +l.getAttribute("y2")),
+                 y1: Math.max(+l.getAttribute("y1"), +l.getAttribute("y2")),
+                 w: +l.getAttribute("stroke-width") };
+      };
+      const arch = seg("v6"), outer = seg("v4"), inner = seg("v2");
+      return { arch, outer, inner, eyeY, browBot };
+    });
+    await ctx.close();
+    const clear = (s) => s && s.y1 < vl.eyeY - 4 && s.y1 < vl.browBot + 0.05 * 390 + 14;
+    check("95. 세로선 — 아치선·아우터는 짧고 얇게 (눈까지 안 내려옴) · 이너는 길게",
+      clear(vl.arch) && clear(vl.outer)
+        && vl.inner && vl.inner.y1 > vl.eyeY - 30
+        && vl.arch.w < vl.inner.w && vl.outer.w < vl.inner.w,
+      `아치선끝 ${vl.arch && vl.arch.y1.toFixed(0)} · 아우터끝 ${vl.outer && vl.outer.y1.toFixed(0)} `
+      + `< 눈 ${vl.eyeY.toFixed(0)} · 이너끝 ${vl.inner && vl.inner.y1.toFixed(0)} · `
+      + `굵기 아치선 ${vl.arch && vl.arch.w}/아우터 ${vl.outer && vl.outer.w}/이너 ${vl.inner && vl.inner.w}`);
+  }
 
   /* 93. ⚠️ 세로선 ↔ 가로 자 묶음 (v1.32.0) — 원장님이 직접 찾아내신 문제입니다.
      「아우터라인과 아치 아치두께 라인이 함께 움직여」 → 아치는 **자기 세로선**을 따라가야 합니다.
