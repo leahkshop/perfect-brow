@@ -1160,6 +1160,71 @@ console.log("[세로 모드 · 기능]");
       && ruler.eye.c === "#3A3F4A" && ruler.eye.op === 0.5,
     `앞머리쌍=${ruler.frontPair} 아치쌍=${ruler.archPair} 아치바깥=${ruler.archOutOfHead} 꼬리최외곽=${ruler.tailOutermost} · 얇은실선 꼬리=${ruler.tailHair}/눈=${ruler.eyeHair}/아치=${ruler.archHair} · 눈 ${ruler.eye.c} ${ruler.eye.op}`);
 
+  /* ── v1.25.0 · 프리셋을 고객 얼굴에 맞춤 ───────────────── */
+
+  // 74. 얼굴이 넓은/좁은 고객에게 같은 프리셋을 올리면 선이 그 얼굴 크기로 환산된다
+  const pfit = await p.evaluate(() => {
+    const S = window.PB.S, D = window.PB.DEFAULT_GUIDE;
+    /* 좁은 얼굴에서 저장한 프리셋 (이너 반폭 0.10 · 눈~아치 0.20) */
+    const src = { ...D, v1: 0.50, v2: 0.40, v3: 0.60, v4: 0.30, v5: 0.70,
+                  h1: 0.60, h2: 0.40, h3: 0.46, front: 0.44,
+                  h2Visible: true, h3Visible: true, frontVisible: true };
+    const preset = { id: "t:fit", name: "테스트", state: src, frame: window.PB.faceFrame(src) };
+
+    /* 지금 고객: 얼굴이 1.5배 넓고, 눈~눈썹 사이가 1.5배 멀다 */
+    S.g = { ...D, v1: 0.50, v2: 0.35, v3: 0.65, v4: 0.20, v5: 0.80, h1: 0.60, h2: 0.30 };
+    window.PB.applyPreset(preset);
+    const wide = { ...S.g };
+
+    /* 지금 고객: 얼굴이 절반으로 좁고 눈썹도 가깝다 */
+    S.g = { ...D, v1: 0.50, v2: 0.45, v3: 0.55, v4: 0.40, v5: 0.60, h1: 0.60, h2: 0.50 };
+    window.PB.applyPreset(preset);
+    const narrow = { ...S.g };
+
+    return {
+      wide:   { v4: wide.v4,   h3: wide.h3,   sym: Math.abs((wide.v2 + wide.v3) / 2 - wide.v1) },
+      narrow: { v4: narrow.v4, h3: narrow.h3, sym: Math.abs((narrow.v2 + narrow.v3) / 2 - narrow.v1) },
+      on: !!S.activePreset,
+    };
+  });
+  /* 원본: v4 는 중심에서 −0.20 (ux 0.10 의 2배) · h3 는 눈에서 −0.14 (uy 0.20 의 0.7배)
+     넓은 얼굴(ux 0.15 · uy 0.30) → v4 = 0.50 − 0.30 = 0.20 · h3 = 0.60 − 0.21 = 0.39
+     좁은 얼굴(ux 0.05 · uy 0.10) → v4 = 0.50 − 0.10 = 0.40 · h3 = 0.60 − 0.07 = 0.53 */
+  check("74. 프리셋 — 고객 얼굴 폭·눈썹 높이에 맞춰 자동 환산 (대칭 유지)",
+    near(pfit.wide.v4, 0.20, 0.005) && near(pfit.wide.h3, 0.39, 0.005)
+      && near(pfit.narrow.v4, 0.40, 0.005) && near(pfit.narrow.h3, 0.53, 0.005)
+      && pfit.wide.sym < 1e-9 && pfit.narrow.sym < 1e-9,
+    `넓은얼굴 아우터 ${pfit.wide.v4.toFixed(3)} 꼬리 ${pfit.wide.h3.toFixed(3)} / 좁은얼굴 아우터 ${pfit.narrow.v4.toFixed(3)} 꼬리 ${pfit.narrow.h3.toFixed(3)}`);
+
+  // 75. 프리셋 적용 중이면 프리셋 버튼에 표시 · 초기화하면 꺼진다
+  const badge = await p.evaluate(() => {
+    const S = window.PB.S;
+    const on = () => document.getElementById("btnPresetLoad").classList.contains("preset-on");
+    const applied = on();
+    document.getElementById("btnReset").click();
+    return { applied, afterReset: on(), id: S.activePreset };
+  });
+  check("75. 프리셋 적용 중 표시 · 초기화 시 해제",
+    badge.applied === true && badge.afterReset === false && badge.id === null,
+    `적용중=${badge.applied} 초기화후=${badge.afterReset}`);
+
+  // 76. 기준틀이 없는 옛 프리셋은 예전처럼 그대로 적용 (기존 저장분이 깨지지 않아야 함)
+  const legacy = await p.evaluate(() => {
+    const S = window.PB.S, D = window.PB.DEFAULT_GUIDE;
+    S.g = { ...D, v1: 0.5, v2: 0.35, h1: 0.6, h2: 0.3 };
+    window.PB.applyPreset({ id: "t:old", name: "옛것", state: { ...D, v2: 0.42, h3: 0.47, h3Visible: true } });
+    return { v2: S.g.v2, h3: S.g.h3 };
+  });
+  check("76. 기준틀 없는 옛 프리셋 — 환산 없이 그대로 적용",
+    near(legacy.v2, 0.42, 1e-9) && near(legacy.h3, 0.47, 1e-9),
+    `이너 ${legacy.v2} 꼬리 ${legacy.h3}`);
+
+  await p.evaluate(() => {
+    const S = window.PB.S;
+    S.activePreset = null; S.g = { ...window.PB.DEFAULT_GUIDE };
+    S.sel = "h1"; S.hist = []; S.redo = []; window.PB.render();
+  });
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;

@@ -102,6 +102,7 @@ const I18N = {
     line_hidden: "숨김",
     line_shown: "표시",
     ai_placed: "AI 측정 위치",
+    preset_fitted: "프리셋을 고객 얼굴에 맞춰 적용했습니다",
     /* 라인 이름 (v1.19.0) — 왼쪽 레일 버튼 · 캔버스 라벨 · 조절자 이름이 모두 이걸 쓴다 */
     line_eye: "눈",
     line_front: "앞머리",
@@ -210,6 +211,7 @@ const I18N = {
     line_hidden: "hidden",
     line_shown: "shown",
     ai_placed: "AI-measured",
+    preset_fitted: "Preset fitted to this face",
     line_eye: "Eye",
     line_front: "Front",
     line_ft: "F.T",
@@ -305,7 +307,7 @@ const DEFAULT_PHOTO = Object.freeze({ zoom: 1, ox: 0, oy: 0, rot: 0 });
 
 const V_ANGLE_MAX = 60;   // V Angle 최대 각도(도) — v1.19.0: ±45° 를 담으려고 40 → 60
 const ROT_MAX = 30;       // 밸런스(회전) 최대 각도(도)
-const ZOOM_MIN = 0.5, ZOOM_MAX = 8;
+const ZOOM_MIN = 0.5, ZOOM_MAX = 20;   /* v1.25.0 — 작은 사진도 목표 눈 크기까지 확대되도록 8→20 */
 const OFFSET_MAX = 1.0;   // 사진 좌우/위아래 이동 한계 (캔버스 비율)
 const SLIDER_OFFSET = 0.5;// 좌우/위아래 슬라이더 범위 (드래그는 OFFSET_MAX 까지)
 const HIT_PX = 28;        // 화면에서 선을 탭/드래그로 잡는 인식 반경
@@ -341,6 +343,7 @@ const S = {
   hMode: "line",
   hist: [],              // 되돌리기 스택 (v1.12.0) — 한 번에 한 작업씩
   redo: [],              // 다시 실행 스택 (v1.19.0) — 되돌린 작업을 앞으로 되감는다
+  activePreset: null,    // 지금 적용 중인 프리셋 id (v1.25.0)
   multi: false,          // 여러라인 모드 (v1.18.0)
   selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
   photoMode: "zoom",
@@ -1044,6 +1047,7 @@ function updateButtons() {
   $("btnAllLine").classList.toggle("on", !!S.hiddenSnapshot);
   setLockIcon(S.locked);
   $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
+  $("btnPresetLoad").classList.toggle("preset-on", !!S.activePreset);
   $("btnLock").classList.toggle("on", S.locked);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
   updateUndoBtn();
@@ -1170,10 +1174,11 @@ function updatePanels() {
 /* ═══════════ 7. presets ═══════════ */
 const PKEY = "pb_presets_v1";
 
+const BUILTIN_FRAME = () => faceFrame(DEFAULT_GUIDE);
 const BUILTINS = () => [
-  { id: "b:natural", name: t("p_natural"), builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.36, h2Visible: true, archThickness: 0.40, archThicknessVisible: true, h3: 0.45, h3Visible: true, v2: 0.38, v2Visible: true } },
-  { id: "b:bold",    name: t("p_bold"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.30, h2Visible: true, archThickness: 0.375, archThicknessVisible: true, h3: 0.41, h3Visible: true, v2: 0.33, v4: 0.12, v4Visible: true, front: 0.38, frontVisible: true } },
-  { id: "b:arch",    name: t("p_arch"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.28, h2Visible: true, archThickness: 0.345, archThicknessVisible: true, h3: 0.44, h3Visible: true, v2: 0.36, v4: 0.17, v4Visible: true, baseStructureVisible: true, innerAngle: 0.44, outerAngle: 0.58 } },
+  { id: "b:natural", frame: BUILTIN_FRAME(), name: t("p_natural"), builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.36, h2Visible: true, archThickness: 0.40, archThicknessVisible: true, h3: 0.45, h3Visible: true, v2: 0.38, v2Visible: true } },
+  { id: "b:bold", frame: BUILTIN_FRAME(),    name: t("p_bold"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.30, h2Visible: true, archThickness: 0.375, archThicknessVisible: true, h3: 0.41, h3Visible: true, v2: 0.33, v4: 0.12, v4Visible: true, front: 0.38, frontVisible: true } },
+  { id: "b:arch", frame: BUILTIN_FRAME(),    name: t("p_arch"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.28, h2Visible: true, archThickness: 0.345, archThicknessVisible: true, h3: 0.44, h3Visible: true, v2: 0.36, v4: 0.17, v4Visible: true, baseStructureVisible: true, innerAngle: 0.44, outerAngle: 0.58 } },
 ];
 
 function userPresets() {
@@ -1184,16 +1189,49 @@ function writeUserPresets(list) {
 }
 function allPresets() { return [...BUILTINS(), ...userPresets()]; }
 
+/* ═══ 얼굴 기준틀 (v1.25.0) ═══════════════════════════════════
+   프리셋을 화면 좌표 그대로 적용하면 **얼굴 폭·눈썹 높이가 다른 고객에게 안 맞습니다.**
+   저장할 때 그 얼굴의 기준틀을 같이 넣고, 불러올 때 **지금 고객의 기준틀로 환산**합니다.
+     가로 단위 ux = |Inner − Center|   → 얼굴이 넓다/좁다
+     세로 단위 uy = |Eye − Arch|       → 눈과 눈썹 사이가 멀다/가깝다
+   두 축을 따로 두는 이유: 얼굴은 넓은데 눈썹이 낮은 사람이 있기 때문입니다. */
+function faceFrame(g) {
+  return {
+    cx: g.v1, ux: Math.max(Math.abs(g.v2 - g.v1), 0.02),
+    ey: g.h1, uy: Math.max(Math.abs(g.h1 - g.h2), 0.02),
+  };
+}
+const PRESET_VX = ["v1", "v2", "v3", "v4", "v5"];
+const PRESET_VY = ["h1", "h2", "h3", "front", "frontThickness", "archThickness", "innerAngle"];
+
+function fitPresetToFace(state, frame) {
+  const now = faceFrame(S.g);
+  const kx = now.ux / frame.ux, ky = now.uy / frame.uy;
+  const out = { ...state };
+  for (const k of PRESET_VX) if (typeof state[k] === "number")
+    out[k] = clamp(now.cx + (state[k] - frame.cx) * kx, 0.01, 0.99);
+  for (const k of PRESET_VY) if (typeof state[k] === "number")
+    out[k] = clamp(now.ey + (state[k] - frame.ey) * ky, 0.01, 0.99);
+  out.v3 = clamp(2 * out.v1 - out.v2, 0, 1);      /* 대칭 재확립 (BASELINE 1-2) */
+  out.v5 = clamp(2 * out.v1 - out.v4, 0, 1);
+  return out;
+}
+
 function savePreset(name) {
   const list = userPresets();
-  list.push({ id: "u" + Date.now(), name, state: { ...S.g } });
+  list.push({ id: "u" + Date.now(), name, state: { ...S.g }, frame: faceFrame(S.g) });
   writeUserPresets(list);
   toast(t("preset_saved"));
 }
 function applyPreset(p) {
-  step(() => { S.g = { ...DEFAULT_GUIDE, ...p.state }; });   // 누락 필드 자동 보정
+  const raw = { ...DEFAULT_GUIDE, ...p.state };              // 누락 필드 자동 보정
+  /* 기준틀이 있으면 지금 고객 얼굴에 맞춰 크기를 환산한다.
+     옛 프리셋(기준틀 없음)은 예전처럼 그대로 적용 — 조용히 실패해야 기존 저장분이 안 깨집니다. */
+  const fitted = p.frame ? fitPresetToFace(raw, p.frame) : raw;
+  step(() => { S.g = fitted; });
+  S.activePreset = p.id;                                    // 프리셋 버튼에 적용중 표시
   render();
-  toast(t("preset_loaded"));
+  toast(p.frame ? t("preset_fitted") : t("preset_loaded"));
 }
 function renderPresetList() {
   const box = $("presetList");
@@ -1590,6 +1628,7 @@ function loadPhoto(file) {
     photo.src = url;
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
+    S.activePreset = null;
     S.locked = false;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
@@ -1669,6 +1708,7 @@ $("btnReset").onclick = () => {
   step(() => {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
+    S.activePreset = null;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
@@ -1902,4 +1942,5 @@ if ("serviceWorker" in navigator) {
 /* 개발/디버깅용 */
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
-  render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas };
+  render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
+  faceFrame, applyPreset, fitPresetToFace };
