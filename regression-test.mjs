@@ -915,7 +915,7 @@ console.log("[세로 모드 · 기능]");
 
   // 62. 아이콘은 SVG 선 아이콘 — 이모지가 남아 있으면 안 된다 (기기마다 모양이 달라짐)
   const icons = await p.evaluate(() => {
-    const ids = ["btnChange","btnPresetLoad","btnEyeGuide","btnExport","btnLock","btnReset","btnUndo","btnRedo"];
+    const ids = ["btnChange","btnPresetLoad","btnExport","btnLock","btnUndo","btnRedo"];   /* v1.28.0 — 눈가이드 제거 · 초기화는 칩(글자) */
     const bad = [], ok = [];
     for (const id of ids) {
       const i = document.getElementById(id).querySelector("i");
@@ -925,7 +925,7 @@ console.log("[세로 모드 · 기능]");
     return { ok: ok.length, bad };
   });
   check("62. 아이콘 — 이모지 없음 · 전부 SVG 선 아이콘",
-    icons.bad.length === 0 && icons.ok === 8, `SVG ${icons.ok}/8, 문제 [${icons.bad}]`);
+    icons.bad.length === 0 && icons.ok === 6, `SVG ${icons.ok}/6, 문제 [${icons.bad}]`);
 
   // 63. 왼쪽 레일은 담백 — 발광(box-shadow)·그라데이션 금지
   const railFlat = await p.evaluate(() => {
@@ -1225,6 +1225,69 @@ console.log("[세로 모드 · 기능]");
     S.sel = "h1"; S.hist = []; S.redo = []; window.PB.render();
   });
 
+  /* ── v1.28.0 · 프리셋 즐겨찾기 ─────────────────────────── */
+
+  // 84. 즐겨찾기 — 지정한 개수만큼만 버튼으로 나오고, 누르면 그 프리셋이 올라간다
+  const fav = await p.evaluate(() => {
+    localStorage.removeItem("pb_favs_v1");
+    localStorage.removeItem("pb_presets_v1");
+    const S = window.PB.S;
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.activePreset = null;
+    const row = () => [...document.querySelectorAll("#favRow .favbtn")];
+    const names = () => row().map((b) => b.querySelector("em").textContent);
+    window.PB.buildFavBar();
+    const none = row().length;                       // 하나도 없으면 빈 자리도 없어야 한다
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:bold"]));
+    window.PB.buildFavBar();
+    const one = names();
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:bold", "b:arch"]));
+    window.PB.buildFavBar();
+    const two = names();
+    /* 눌러서 실제로 적용되는지 — 아치형 프리셋은 h2 가 0.28 */
+    row()[1].click();
+    const applied = { h2: S.g.h2, id: S.activePreset };
+    /* 지워진 프리셋 id 는 조용히 걸러낸다 */
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:bold", "u:없는것"]));
+    window.PB.buildFavBar();
+    const filtered = row().length;
+    return { none, one, two, applied, filtered };
+  });
+  check("84. 즐겨찾기 — 지정한 개수만큼만 · 누르면 바로 적용 · 없는 id 는 걸러냄",
+    fav.none === 0 && fav.one.length === 1 && fav.two.length === 2
+      && fav.applied.id === "b:arch" && Math.abs(fav.applied.h2 - 0.28) < 0.06
+      && fav.filtered === 1,
+    `0개→${fav.none} 1개→[${fav.one}] 2개→[${fav.two}] · 적용=${fav.applied.id} · 없는id걸러냄=${fav.filtered === 1}`);
+
+  // 85. 별표는 3개까지 — 4번째는 들어가지 않고, 다시 누르면 해제된다
+  const star = await p.evaluate(() => {
+    localStorage.removeItem("pb_favs_v1");
+    localStorage.setItem("pb_presets_v1", JSON.stringify([{ id: "u:t1", name: "테스트A", state: {} }]));
+    document.getElementById("btnPresetLoad").click();
+    const s = (id) => document.querySelector(`#presetList .star[data-star="${id}"]`);
+    const favs = () => JSON.parse(localStorage.getItem("pb_favs_v1") || "[]");
+    s("b:natural").click(); s("b:bold").click(); s("b:arch").click();
+    const three = favs();
+    const litUp = [...document.querySelectorAll("#presetList .star.on")].length;
+    s("u:t1").click();                                  // 4번째 — 거부돼야 한다
+    const stillThree = favs();
+    const toastMsg = document.getElementById("toast").textContent;
+    s("b:bold").click();                                // 해제
+    const afterOff = favs();
+    const barCount = document.querySelectorAll("#favRow .favbtn").length;
+    document.getElementById("mLoad").classList.remove("on");
+    localStorage.removeItem("pb_presets_v1");
+    localStorage.removeItem("pb_favs_v1");
+    window.PB.buildFavBar();
+    return { three, litUp, stillThree, toastMsg, afterOff, barCount };
+  });
+  check("85. 별표 — 3개까지 · 4번째는 거부 · 다시 누르면 해제",
+    star.three.length === 3 && star.litUp === 3
+      && star.stillThree.length === 3 && !star.stillThree.includes("u:t1")
+      && /3개까지/.test(star.toastMsg)
+      && star.afterOff.length === 2 && !star.afterOff.includes("b:bold")
+      && star.barCount === 2,
+    `3개=[${star.three}] 켜진별=${star.litUp} · 4번째거부=${star.stillThree.length === 3}("${star.toastMsg}") · 해제후=[${star.afterOff}] 버튼=${star.barCount}개`);
+
   // 12. 좌표계 규약
   const norm = await p.evaluate(() => {
     const g = window.PB.S.g;
@@ -1443,15 +1506,16 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     g.railFits && g.docksFit && g.dockGap > 0 && g.stageShare > 0.9,
     `rail=${g.railFits ? "ok" : "overflow"} 도크안쪽=${g.docksFit} 도크간격=${g.dockGap}px`);
 
-  // 40. 메뉴 행 = 왼쪽 아래 · 초기화는 같은 행에 띄어서 · 좌우 드래그 바와 겹치지 않음 (가로 전용)
+  /* 40. 왼쪽 아래 = 프리셋(+즐겨찾기) · 좌우 드래그 바와 겹치지 않음 (가로 전용 · v1.28.0)
+     v1.27.0 까지는 여기에 메뉴 6버튼이 한 줄로 있었고 초기화가 끝에 붙어 있었습니다.
+     v1.28.0 에서 사진변경→오른쪽 위 / 저장·잠금→가운데 / 초기화→위쪽 칩 줄로 흩어졌습니다. */
   const menuPos = await p.evaluate(() => {
     const r = (id) => document.getElementById(id).getBoundingClientRect();
-    const n = r("menuRow"), st = r("stage"), rst = r("btnReset"), lock = r("btnLock"), h = r("posCtlH");
+    const n = r("leftDock"), st = r("stage"), h = r("posCtlH");
     return {
       leftBottom: n.left - st.left < 20 && st.bottom - n.bottom < 24,
       ids: [...document.querySelectorAll("#menuRow button")].map((b) => b.id).join(","),
-      sameRow: Math.abs(rst.top - lock.top) < 6,
-      spaced: rst.left - lock.right > 12,
+      gone: !document.getElementById("btnEyeGuide"),
       noOverlap: n.right < h.left,
     };
   });
@@ -1543,10 +1607,58 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     lab.count >= 3 && lab.top >= 4 && lab.top <= 10 && !lab.hitChip,
     `개수=${lab.count} 맨위 y=${lab.top}px 칩겹침=${lab.hitChip}`);
 
-  check(`40. ${dev.n} — 메뉴 행 왼쪽 아래 · 초기화 띄어서 같은 행`,
-    menuPos.leftBottom && menuPos.sameRow && menuPos.spaced && menuPos.noOverlap
-      && menuPos.ids === "btnChange,btnPresetLoad,btnEyeGuide,btnExport,btnLock,btnReset",
-    `왼쪽아래=${menuPos.leftBottom} 같은행=${menuPos.sameRow} 띄움=${menuPos.spaced} 겹침없음=${menuPos.noOverlap}`);
+  check(`40. ${dev.n} — 왼쪽 아래는 프리셋(+즐겨찾기) · 좌우 바와 겹치지 않음`,
+    menuPos.leftBottom && menuPos.noOverlap && menuPos.gone
+      && menuPos.ids === "btnPresetLoad",
+    `왼쪽아래=${menuPos.leftBottom} 겹침없음=${menuPos.noOverlap} 눈가이드제거=${menuPos.gone} [${menuPos.ids}]`);
+
+  /* 83. 버튼 재배치 (v1.28.0) — 원장님이 정하신 자리
+     · 사진변경 = 오른쪽 도크 맨 위 (위아래 드래그 바 위쪽 끝선 위)
+     · 사진잠금 = 캔버스 가로 한가운데 · 그 왼쪽에 사진저장
+     · 초기화   = 위쪽 칩 줄 맨 오른쪽, 다른 칩과 한 칸 띄워서
+     · 아래 세 묶음(왼쪽·가운데·오른쪽)이 서로 겹치지 않는다 */
+  const place = await p.evaluate(() => {
+    /* 즐겨찾기를 3개 꽉 채운 **최악의 경우**로 검사한다.
+       비어 있는 상태만 보면 이름이 긴 프리셋에서 겹치는 것을 놓친다. */
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:natural", "b:bold", "b:arch"]));
+    window.PB.buildFavBar();
+    const r = (id) => document.getElementById(id).getBoundingClientRect();
+    const st = r("stage"), chg = r("btnChange"), ctlV = r("posCtlV"), rd = r("rightDock");
+    const lock = r("btnLock"), exp = r("btnExport");
+    const rst = r("btnReset"), bal = r("btnBalance"), tl = r("btnAllLine");
+    const ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
+    const stW = st.width;
+    return {
+      chgTop: chg.top < ctlV.top - 4 && Math.abs(chg.top - rd.top) < 2,      // 도크 맨 위
+      chgRight: st.right - chg.right > stW * 0.02,
+      lockCentre: ((lock.left + lock.right) / 2 - st.left) / stW,            // 0.5 여야 한다
+      exportLeft: exp.right <= lock.left + 1,
+      resetInChips: Math.abs(rst.top - bal.top) < 4 && rst.left > bal.right, // 같은 줄 · 오른쪽
+      resetSpaced: rst.left - bal.right > 20,                                // 한 칸 띄움
+      resetRed: getComputedStyle(document.getElementById("btnReset")).color,
+      chipRowTop: Math.abs(rst.top - tl.top) < 4,
+      dockGaps: [Math.round(cd.left - ld.right), Math.round(bd.left - cd.right)],
+      favs: document.querySelectorAll("#favRow .favbtn").length,
+      /* 세로선 라벨(이너·센터)이 초기화 칩 위에 겹쳐 그려지지 않아야 한다 */
+      labelHitsReset: [...document.getElementById("guides").querySelectorAll("rect")]
+        .filter((q) => +q.getAttribute("height") === 14)
+        .some((q) => {
+          const x = +q.getAttribute("x"), y = +q.getAttribute("y");
+          const w = +q.getAttribute("width"), h = 14;
+          const el = document.getElementById("btnReset"), par = el.offsetParent;
+          const bx = (par && par !== document.getElementById("stage") ? par.offsetLeft : 0) + el.offsetLeft;
+          const by = (par && par !== document.getElementById("stage") ? par.offsetTop : 0) + el.offsetTop;
+          return x < bx + el.offsetWidth && x + w > bx && y < by + el.offsetHeight && y + h > by;
+        }),
+    };
+  });
+  check(`83. ${dev.n} — 사진변경 오른쪽 위 · 잠금 정가운데 · 초기화 칩 줄 끝`,
+    place.chgTop && place.chgRight && Math.abs(place.lockCentre - 0.5) < 0.02
+      && place.exportLeft && place.resetInChips && place.resetSpaced && place.chipRowTop
+      && /255, 107, 122/.test(place.resetRed)
+      && place.favs === 3 && place.dockGaps.every((g) => g > 0)
+      && place.labelHitsReset === false,
+    `사진변경위=${place.chgTop} 잠금중심=${(place.lockCentre * 100).toFixed(1)}% 저장왼쪽=${place.exportLeft} 초기화=칩줄${place.resetInChips}/띄움${place.resetSpaced} 즐겨찾기 ${place.favs}개일 때 도크간격=${place.dockGaps}px 라벨겹침=${place.labelHitsReset}`);
   await ctx.close();
 }
 

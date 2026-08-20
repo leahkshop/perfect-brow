@@ -49,7 +49,6 @@ const I18N = {
     editor_export: "사진저장",
     editor_change_photo: "사진변경",
     editor_rotate: "화면가로",
-    editor_eyeguide: "눈가이드",
     editor_rotate_off: "가로해제",
     rot_on: "화면을 가로로 고정했습니다",
     rot_off: "기기 방향을 따릅니다",
@@ -102,6 +101,9 @@ const I18N = {
     line_shown: "표시",
     ai_placed: "AI 측정 위치",
     preset_fitted: "프리셋을 고객 얼굴에 맞춰 적용했습니다",
+    fav_max: "즐겨찾기는 3개까지입니다",
+    fav_on: "즐겨찾기에 넣었습니다",
+    fav_off: "즐겨찾기에서 뺐습니다",
     editor_balance_check: "밸런스",
     bal_ref_l: "기준 왼쪽",
     bal_ref_r: "기준 오른쪽",
@@ -165,7 +167,6 @@ const I18N = {
     editor_export: "Save Photo",
     editor_change_photo: "Change Photo",
     editor_rotate: "Landscape",
-    editor_eyeguide: "Eye guide",
     editor_rotate_off: "Auto rotate",
     rot_on: "Locked to landscape",
     rot_off: "Following device orientation",
@@ -218,6 +219,9 @@ const I18N = {
     line_shown: "shown",
     ai_placed: "AI-measured",
     preset_fitted: "Preset fitted to this face",
+    fav_max: "Up to 3 favourites",
+    fav_on: "Added to favourites",
+    fav_off: "Removed from favourites",
     editor_balance_check: "Balance",
     bal_ref_l: "Ref: Left",
     bal_ref_r: "Ref: Right",
@@ -592,7 +596,9 @@ function renderGuides() {
     /* 왼쪽 위 오버레이 칩(all line · AI 안내)을 가리지 않도록 그 사각형을 피해 배치한다.
        회전(rot90) 때문에 getBoundingClientRect 는 쓰지 않고 레이아웃 좌표로 계산한다. */
     const blocks = [];
-    for (const el of [$("btnAllLine"), $("aiStatus")]) {
+    /* v1.28.0 — 초기화 칩도 같은 줄에 있으므로 함께 피한다.
+       빼면 `이너` 라벨이 초기화 글자 위에 겹쳐 둘 다 안 읽힙니다. */
+    for (const el of [$("btnAllLine"), $("aiStatus"), $("btnReset")]) {
       if (!el || !el.offsetWidth) continue;
       const par = el.offsetParent;
       const bx = (par && par !== stage ? par.offsetLeft : 0) + el.offsetLeft;
@@ -1072,7 +1078,6 @@ function updateButtons() {
   $("btnVAngle").classList.toggle("on", isSelected("outerAngle") && S.g.baseStructureVisible);
   $("btnAllLine").classList.toggle("on", !!S.hiddenSnapshot);
   setLockIcon(S.locked);
-  $("btnEyeGuide").classList.toggle("eyeon", S.g.eyeGuideVisible);
   $("btnPresetLoad").classList.toggle("preset-on", !!S.activePreset);
   $("btnBalance").classList.toggle("on", S.balOn);
   const rs = $("btnRefSide");
@@ -1211,6 +1216,50 @@ const BUILTINS = () => [
   { id: "b:arch", frame: BUILTIN_FRAME(),    name: t("p_arch"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.28, h2Visible: true, archThickness: 0.345, archThicknessVisible: true, h3: 0.44, h3Visible: true, v2: 0.36, v4: 0.17, v4Visible: true, baseStructureVisible: true, innerAngle: 0.44, outerAngle: 0.58 } },
 ];
 
+/* ═══ 즐겨찾기 (v1.28.0) ══════════════════════════════════════
+   시술 중 자주 쓰는 프리셋은 모달을 열고 → 찾고 → 로드하는 세 단계가 번거롭습니다.
+   ★ 로 지정한 것만 **캔버스 왼쪽 아래에 버튼으로 꺼내** 한 번에 올립니다.
+   · 최대 3개 — 그 이상은 화면 아래가 버튼으로 가득 차 사진을 가립니다
+   · 지정한 개수만큼만 나옵니다. 하나도 없으면 `프리셋` 버튼만 있습니다 (빈 자리를 만들지 않음)
+   · **id 만 저장**합니다. 프리셋 내용을 복사해 두면 원본을 수정했을 때 따로 놀게 됩니다. */
+const FAV_KEY = "pb_favs_v1";
+const FAV_MAX = 3;
+function favIds() {
+  try {
+    const v = JSON.parse(localStorage.getItem(FAV_KEY) || "[]");
+    return Array.isArray(v) ? v.slice(0, FAV_MAX) : [];
+  } catch { return []; }
+}
+function writeFavs(list) { localStorage.setItem(FAV_KEY, JSON.stringify(list.slice(0, FAV_MAX))); }
+const isFav = (id) => favIds().includes(id);
+/* 켜면 true, 3개가 차서 못 넣으면 false */
+function toggleFav(id) {
+  const list = favIds(), i = list.indexOf(id);
+  if (i >= 0) { list.splice(i, 1); writeFavs(list); buildFavBar(); toast(t("fav_off")); return true; }
+  if (list.length >= FAV_MAX) { toast(t("fav_max")); return false; }
+  list.push(id); writeFavs(list); buildFavBar(); toast(t("fav_on"));
+  return true;
+}
+
+const FAV_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"/></svg>';
+
+/* 즐겨찾기 버튼 줄 — 지워진 프리셋을 가리키는 id 는 조용히 걸러낸다. */
+function buildFavBar() {
+  const row = $("favRow");
+  if (!row) return;
+  const all = allPresets();
+  const items = favIds().map((id) => all.find((p) => p.id === id)).filter(Boolean);
+  row.replaceChildren(...items.map((p) => {
+    const b = document.createElement("button");
+    b.className = "favbtn";
+    b.dataset.preset = p.id;
+    b.innerHTML = `<i>${FAV_SVG}</i><em></em>`;
+    b.querySelector("em").textContent = p.name;      // 프리셋 이름은 사용자 입력이므로 textContent
+    b.addEventListener("click", () => applyPreset(p));
+    return b;
+  }));
+}
+
 function userPresets() {
   try { return JSON.parse(localStorage.getItem(PKEY) || "[]"); } catch { return []; }
 }
@@ -1270,6 +1319,15 @@ function renderPresetList() {
   box.replaceChildren(...list.map((p) => {
     const row = document.createElement("div");
     row.className = "pitem";
+    /* ★ 즐겨찾기 토글 (v1.28.0) — 켜면 캔버스 왼쪽 아래에 버튼으로 나옵니다.
+       내장 프리셋도 지정할 수 있습니다(자연·강한·아치가 실제로 제일 자주 쓰입니다). */
+    const st = document.createElement("button");
+    st.className = "star"; st.dataset.star = p.id;
+    st.innerHTML = FAV_SVG;
+    const paintStar = () => st.classList.toggle("on", isFav(p.id));
+    paintStar();
+    st.onclick = () => { toggleFav(p.id); renderPresetList(); };
+    row.appendChild(st);
     const nm = document.createElement("span");
     nm.className = "nm"; nm.textContent = p.name;
     row.appendChild(nm);
@@ -1289,7 +1347,11 @@ function renderPresetList() {
       row.appendChild(ed);
       const del = document.createElement("button");
       del.className = "del"; del.textContent = t("editor_delete");
-      del.onclick = () => { writeUserPresets(userPresets().filter((x) => x.id !== p.id)); renderPresetList(); toast(t("preset_deleted")); };
+      del.onclick = () => {
+        writeUserPresets(userPresets().filter((x) => x.id !== p.id));
+        writeFavs(favIds().filter((id) => id !== p.id));   /* 지운 프리셋은 즐겨찾기에서도 뺀다 */
+        buildFavBar(); renderPresetList(); toast(t("preset_deleted"));
+      };
       row.appendChild(del);
     }
     return row;
@@ -1709,6 +1771,7 @@ function applyI18n() {
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isAndroid = /Android/.test(ua);
   $("installTip").innerHTML = isIOS ? t("install_ios") : isAndroid ? t("install_android") : t("install_desktop");
+  buildFavBar();
   updateButtons();
   updatePanels();
 }
@@ -1812,7 +1875,6 @@ $("btnVAngle").onclick = () => step(() => {
   else { noteSel("outerAngle"); S.g.baseStructureVisible = true; }
   render();
 });
-$("btnEyeGuide").onclick = () => step(() => { S.g.eyeGuideVisible = !S.g.eyeGuideVisible; render(); });
 
 /* 여러라인 — 켜면 선을 누를 때마다 선택에 쌓이고, 선택된 선들이 함께 움직인다 (v1.18.0)
    `전체라인` 은 여러라인의 **후속 버튼**이라 여러라인이 꺼져 있으면 화면에 없다 (v1.19.0). */
@@ -1981,6 +2043,7 @@ $("doSave").onclick = () => {
   const n = $("saveName").value.trim();
   if (!n) return;
   savePreset(n);
+  buildFavBar();
   closeMask("mSave");
 };
 $("btnPresetLoad").onclick = () => { renderPresetList(); openMask("mLoad"); };
@@ -1991,6 +2054,7 @@ $("doRename").onclick = () => {
   writeUserPresets(list);
   S.renamingId = null;
   closeMask("mRename");
+  buildFavBar();
   renderPresetList();
 };
 
@@ -2098,6 +2162,7 @@ window.addEventListener("orientationchange", () => setTimeout(applyLayout, 250))
 
 /* ═══════════ init ═══════════ */
 buildLineButtons();
+buildFavBar();
 applyI18n();
 applyLayout();
 tryOrientationLock();
@@ -2112,5 +2177,5 @@ if ("serviceWorker" in navigator) {
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
-  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels,
+  faceFrame, applyPreset, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds,
   applyLayout, openPicker, endPicking };
