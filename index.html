@@ -272,9 +272,11 @@ body.land.compact .rgap{height:11px}
 body:not(.land) .ldock{bottom:calc(var(--safe-b) + 56px)}
 /* 가운데 아래 도크 — `사진잠금` 의 **가로 중심이 캔버스 한가운데**에 오도록 놓습니다 (v1.28.0).
    left:50% 로 묶음을 놓고 잠금 버튼의 절반만큼 되돌리는 방식이라 버튼 개수가 바뀌어도 중심이 유지됩니다. */
+/* v1.43.0 — 사진저장·사진잠금·사진변경 3버튼 행. 잠금(가운데)이 캔버스 중앙에 오도록
+   행 자체를 중앙 정렬한다 (양옆 버튼 폭이 같아 잠금이 한가운데) */
 .cdock{position:absolute;left:50%;bottom:calc(var(--safe-b) + 8px);z-index:30;display:flex;align-items:flex-end;
-  transform:translateX(-100%) translateX(34px)}
-body.land.compact .cdock{transform:translateX(-100%) translateX(26px)}
+  transform:translateX(-50%)}
+body.land.compact .cdock{transform:translateX(-50%)}
 /* 세로 폴백은 폭이 좁아 가운데 도크가 왼쪽 도크 위로 올라탑니다.
    유지보수 대상은 아니지만 **버튼이 서로 가려 눌리지 않으면 안 되므로** 한 줄 위로 올립니다. */
 body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
@@ -289,11 +291,11 @@ body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
   flex-direction:row;gap:4px;padding:0 8px;font-size:9px}
 .menurow.favrow button i, .menurow.favrow button i svg{width:12px;height:12px;color:var(--a2)}
 .menurow.favrow button em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.land.compact #editor .menurow.favrow button{height:30px;min-width:50px;max-width:74px;padding:0 6px;font-size:8.5px}
+body.land.compact #editor .menurow.favrow button{height:30px;min-width:38px;max-width:54px;padding:0 3px;font-size:8px}  /* v1.43.0 — 가운데 도크(3버튼)와 겹치지 않게 더 좁게 */
 body.land.compact #editor .favrow button i, body.land.compact #editor .favrow button i svg{width:11px;height:11px}
 /* 좌우 드래그 바 — 가운데 도크와 겹치지 않는 선까지만 넓힙니다 (v1.28.0).
    넓히면 사진잠금 위로 올라타고, 회귀 83번이 그것을 잡습니다. */
-.posctl.axis-h{flex-direction:row-reverse;width:min(26vw,300px);min-width:140px;height:46px}
+.posctl.axis-h{flex-direction:row-reverse;width:min(31vw,360px);min-width:160px;height:46px}  /* v1.43.0 — 조금 더 길게 */
 .posctl.axis-h .pslot{flex:1;height:34px;min-width:0}
 .posctl.axis-h input[type=range]{width:100%;height:34px}
 /* 가로 바의 라벨은 바 안쪽 왼쪽 끝에 둔다 — 바깥에 두면 왼쪽 아래 메뉴 행과 겹친다 (v1.13.0) */
@@ -537,8 +539,9 @@ body:not(.land) #railLang{display:none}
            위쪽 끝은 시술 중 손이 잘 가지 않는 자리라 실수로 눌릴 일이 적습니다. -->
       <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
       <span class="rgap"></span>
-      <button class="dockbtn" id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
-      <button class="dockbtn" id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
+      <!-- 되돌리기·다시실행 — 위아래 드래그 바 **위** (원장님 지시 2026-08-21) -->
+      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
+      <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
       <div class="posctl axis-v" id="posCtlV">
         <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
         <button class="pbtn" id="posPlusV">▲</button>
@@ -558,8 +561,6 @@ body:not(.land) #railLang{display:none}
       <!-- 좌우 드래그 바 행 (v1.29.0) — 바 **왼쪽**에 `다시 실행` · `되돌리기`.
            되돌리기를 바에 가장 가깝게 둡니다(제일 자주 씁니다). -->
       <div class="barrow">
-      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
-      <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
       <div class="posctl axis-h" id="posCtlH">
         <div class="plabel"><span id="selNameH">Center</span><b id="posValH">50</b></div>
         <button class="pbtn" id="posPlusH">▶</button>
@@ -584,9 +585,12 @@ body:not(.land) #railLang{display:none}
 
     <!-- 가운데 아래 도크 (v1.28.0) — `사진잠금` 이 화면 한가운데, 그 왼쪽에 `사진저장`.
          잠금은 이 앱의 모드 스위치라 손이 늘 같은 자리를 찾아가야 합니다. -->
+    <!-- 가운데 도크 (v1.43.0 · 원장님 지시 2026-08-21) — 사진저장 · 사진잠금 · 사진변경 -->
     <div class="cdock" id="centerDock">
       <div class="menurow">
+        <button class="dockbtn" id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
         <button id="btnLock"><i id="lockIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/></svg></i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
+        <button class="dockbtn" id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
       </div>
     </div>
 

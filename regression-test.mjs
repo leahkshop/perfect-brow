@@ -563,24 +563,23 @@ console.log("[세로 모드 · 기능]");
     dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd,
     `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd}`);
 
-  /* 39. 되돌리기·다시실행 = **좌우 드래그 바 왼쪽, 같은 행** (v1.29.0)
-     되돌리기가 바에 가장 가깝습니다 — 제일 자주 누르는 버튼이라 손이 짧게 움직입니다.
-     v1.28.1 까지는 오른쪽 도크(위아래 바 위)에 있었습니다. */
+  /* 39. 되돌리기·다시실행 = **위아래 드래그 바 위** (v1.43.0 · 원장님 지시 2026-08-21)
+     되돌리기가 바에 가장 가깝습니다 — 제일 자주 누르는 버튼이라 손이 짧게 움직입니다. */
   const placed = await p.evaluate(() => {
     const r = (id) => document.getElementById(id).getBoundingClientRect();
-    const u = r("btnUndo"), rd = r("btnRedo"), h = r("posCtlH");
+    const u = r("btnUndo"), rd = r("btnRedo"), v = r("posCtlV");
     return {
-      leftOfBar: u.right <= h.left + 1 && rd.right <= u.left + 1,
-      sameRow: Math.abs((u.top + u.bottom) / 2 - (h.top + h.bottom) / 2) < 10,
-      undoNearest: Math.abs(h.left - u.right) < Math.abs(h.left - rd.right),
+      aboveBar: u.bottom <= v.top + 1 && rd.bottom <= u.top + 1,
+      inRDock: document.getElementById("rightDock").contains(document.getElementById("btnUndo")),
+      undoNearest: Math.abs(v.top - u.bottom) < Math.abs(v.top - rd.bottom),
       removed: !document.getElementById("btnAlign") && !document.getElementById("btnRotate")
                && !document.getElementById("phSlider") && !document.getElementById("btnLock2")
                && !document.querySelector(".topbar") && !document.querySelector(".panels"),
     };
   });
-  check("39. 되돌리기·다시실행 = 좌우 드래그 바 왼쪽 (되돌리기가 바에 가깝게) · 삭제 버튼 정리",
-    placed.leftOfBar && placed.sameRow && placed.undoNearest && placed.removed,
-    `바왼쪽=${placed.leftOfBar} 같은행=${placed.sameRow} 되돌리기가까움=${placed.undoNearest} 삭제완료=${placed.removed}`);
+  check("39. 되돌리기·다시실행 = 위아래 드래그 바 위 (되돌리기가 바에 가깝게) · 삭제 버튼 정리",
+    placed.aboveBar && placed.inRDock && placed.undoNearest && placed.removed,
+    `바위=${placed.aboveBar} 오른쪽도크=${placed.inRDock} 되돌리기가까움=${placed.undoNearest} 삭제완료=${placed.removed}`);
 
   // 41. 되돌리기 — 직전 작업 1단계씩, 두 번 누르면 그 전 작업까지
   const undoTest = await p.evaluate(async () => {
@@ -1654,13 +1653,15 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     const bal = r("btnBalance"), ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
     const cs = getComputedStyle(el("btnReset"));
     return {
-      photoInRDock: el("rightDock").contains(el("btnChange")) && el("rightDock").contains(el("btnExport")),
-      photoOrder: rst.bottom <= chg.top + 1 && chg.bottom <= exp.top + 1 && exp.bottom <= ctlV.top + 1,
+      /* v1.43.0 — 사진저장·사진잠금·사진변경이 **가운데 도크** 한 행 (저장-잠금-변경 순) */
+      photoInRDock: el("centerDock").contains(el("btnChange")) && el("centerDock").contains(el("btnExport")),
+      photoOrder: exp.right <= lock.left + 1 && lock.right <= chg.left + 1
+                  && Math.abs((exp.top + exp.bottom) / 2 - (lock.top + lock.bottom) / 2) < 12,
       chgSameSize: Math.abs(chg.height - exp.height) < 1 && Math.abs(chg.width - exp.width) < 6,
       chgGrey: !/34, 211, 238|103, 232, 249/.test(getComputedStyle(el("btnChange")).borderTopColor),
       resetTop: Math.abs(rst.top - rd.top) < 2,
       resetDarkRed: cs.color,
-      lockAlone: el("centerDock").querySelectorAll("button").length === 1,
+      lockAlone: el("centerDock").querySelectorAll("button").length === 3,
       lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
       balLeftOfCentre: ((bal.left + bal.right) / 2 - st.left) / st.width,
       favs: document.querySelectorAll("#favRow .favbtn").length,
@@ -1688,7 +1689,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       dockGaps: [Math.round(cd.left - ld.right), Math.round(bd.left - cd.right)],
     };
   });
-  check(`83. ${dev.n} — 사진 2버튼=오른쪽 도크 · 잠금 단독 정가운데 · 밸런스는 중앙보다 왼쪽`,
+  check(`83. ${dev.n} — 사진 2버튼=오른쪽 도크 · 잠금 3버튼 정가운데 · 밸런스는 중앙보다 왼쪽`,
     place.photoInRDock && place.photoOrder && place.chgSameSize && place.chgGrey
       && place.resetTop && /240, 56, 76/.test(place.resetDarkRed)
       && place.lockAlone && Math.abs(place.lockCentre - 0.5) < 0.02

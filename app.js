@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.42.1";
+const APP_VERSION = "v1.43.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -557,6 +557,9 @@ function renderGuides() {
   const { W, H } = S.dim, g = S.g;
   /* 기본은 짙은 회색 — 고유색은 가이드의 "지금 차례"이거나 선택된 선만 (v1.42.0) */
   const liveColor = (sp) => ((S.guideOn && S.guideCur === sp.key) || isSelected(sp.key)) ? sp.color : GREY_LINE;
+  /* 가이드의 "지금 차례"는 선택과 같은 **굵기 강조**도 받는다 (v1.43.0) — 검정 계열 고유색은
+     회색과 색만으로는 구분이 어려워, 굵기가 없으면 플로우가 안 도는 것처럼 보입니다 */
+  const emph = (sp) => isSelected(sp.key) || (S.guideOn && S.guideCur === sp.key);
   const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
   S.wr = WR;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -590,7 +593,7 @@ function renderGuides() {
     for (const sp of H_SPECS) {
       if (!g[sp.vis]) continue;
       const y = g[sp.key] * H;
-      const sel = isSelected(sp.key);
+      const sel = emph(sp);
       const segs = segPx(sp);
       /* 눈은 원래 좌우를 관통하고, 꼬리는 얇은 실선 없이 토막만 (v1.24.0).
          나머지는 **자기 토막 ↔ 이너 선**을 아주 옅게 이어 준다 — 자가 공중에 떠 보이지 않게. */
@@ -627,7 +630,7 @@ function renderGuides() {
        라벨(캔버스 맨 위)까지는 아주 옅은 연결선만 남겨 라벨이 허공에 뜨지 않게 한다. */
     for (const sp of V_SPECS) {
       if (!g[sp.vis]) continue;
-      const sel = isSelected(sp.key);
+      const sel = emph(sp);
       const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : sp.op;
       const full = sp.key === "v1";
       const band = sp.long ? bandL : bandT;
