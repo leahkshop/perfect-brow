@@ -1742,10 +1742,19 @@ function autoAlignRelayout(lm) {
   const rx = vx * Math.cos(r) - vy * Math.sin(r), ry = vx * Math.sin(r) + vy * Math.cos(r);
   S.p.ox = clamp(-(rx * tr.zoom) / W + (centerX() - 0.5), -OFFSET_MAX, OFFSET_MAX);
   S.p.oy = clamp(-(ry * tr.zoom) / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX);
-  const g = S.g, cv = (x, y) => imgToCanvas(x, y, S.p);
+  placeLines(lm);
+}
+
+/* **지금 화면 변환(S.p)은 그대로 두고** 선만 랜드마크 위치로 올린다 (v1.37.0).
+   사진잠금 상태의 초기화가 씁니다 — 원장님 지시(2026-08-21): 「초기화 버튼은 사진이
+   잠금이 되어있을경우 잠금이된 사진을 제외하고 나머지를 초기화해라」 */
+function placeLines(lm) {
+  const { W, H } = S.dim;
+  const g = S.g, c = eyeCorners(lm), cv = (x, y) => imgToCanvas(x, y, S.p);
+  const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
   const inLc = cv(c.innerL.x, c.innerL.y), inRc = cv(c.innerR.x, c.innerR.y);
   g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
-  g.h1 = clamp(cv(mx, my).y / H, 0.02, 0.98);
+  g.h1 = clamp(cv((a.x + b.x) / 2, (a.y + b.y) / 2).y / H, 0.02, 0.98);
   const halfIn = (Math.abs(inLc.x / W - g.v1) + Math.abs(inRc.x / W - g.v1)) / 2;
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
   const halfOut = browTailHalf(lm, S.p, g.v1);   /* 눈썹 꼬리 기준 (v1.35.0) */
@@ -1849,6 +1858,7 @@ const DRAW_OUTLINE_RATIO = 0.5; // 이 비율 이상의 열이 짝을 이뤄야 
 /* 읽어낸 두께가 랜드마크 눈썹 높이의 이 범위를 벗어나면 **잘못 읽은 것**으로 보고 버린다.
    드로잉은 털보다 도톰하게 그리므로 위쪽은 넉넉히, 아래쪽은 얇은 오독을 막습니다. */
 const DRAW_THICK_MAX = 1.9, DRAW_THICK_MIN = 0.3;
+const DRAW_SIDE_SWITCH = 1.5;   // 반대쪽 잉크가 기준쪽의 이만큼을 넘어야 자동 전환 (v1.37.0)
 
 /* 랜드마크 → 지금 화면 좌표의 **눈썹 탐색 상자** 2개(화면 왼쪽/오른쪽).
    랜드마크가 없으면 null → 아래 fallbackBox() 로 넘어간다. */
@@ -1975,10 +1985,11 @@ function keepBand(pts) {
 
 /* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
    반환: x 오름차순 [{x, top, bot}] — top/bot 은 캔버스 px */
-function readDrawing(img, contrast) {
+function readDrawing(img, contrast, side) {
   const { W, H } = S.dim;
+  const sd = side || S.refSide;
   const boxes = browBoxes();
-  const b = boxes ? (S.refSide === "L" ? boxes.left : boxes.right) : fallbackBox(S.refSide);
+  const b = boxes ? (sd === "L" ? boxes.left : boxes.right) : fallbackBox(sd);
   const x0 = Math.max(0, Math.round(b.x0)), x1 = Math.min(W - 1, Math.round(b.x1));
   const y0 = Math.max(0, Math.round(b.y0)), y1 = Math.min(H - 1, Math.round(b.y1));
   if (x1 - x0 < 16 || y1 - y0 < 8) return null;
@@ -1996,13 +2007,15 @@ function readDrawing(img, contrast) {
   for (const c of cols) { c.pair = outlinePair(c); if (c.pair) paired++; }
   const outline = paired >= cols.length * DRAW_OUTLINE_RATIO;
 
+  let inkSum = 0;
   const pts = cols.map((c) => {
     const r = outline && c.pair ? c.pair : c.runs[c.si];
+    inkSum += c.runs[c.si].ink;                    // 이 쪽 드로잉이 얼마나 짙은가 (좌우 비교용)
     return { x: c.x, top: r.top, bot: r.bot };
   });
   pts.sort((p, q) => p.x - q.x);
   const band = keepBand(pts);
-  if (band) band.refH = b.h;          // 랜드마크 눈썹 높이 — 두께 상식 검사용
+  if (band) { band.refH = b.h; band.ink = inkSum; }   // refH: 두께 상식 검사 · ink: 좌우 비교
   return band;
 }
 
@@ -2016,18 +2029,30 @@ function autoFromDrawing() {
   /* 2패스 (v1.33.0) — ① 그린 드로잉(진한 대비) ② 실패하면 맨 눈썹(옅은 대비).
      원장님 스크린샷(2026-08-20)에서 맨 눈썹 사진이 1차에서 떨어져 랜드마크 배치로
      남았고, 그 배치가 「전혀 프로페셔널하지 못한」 위치였습니다. */
-  let pts = null;
-  for (const contrast of [DRAW_CONTRAST, DRAW_CONTRAST_SOFT]) {
-    const cand = readDrawing(img, contrast);
-    if (!cand || cand.length < DRAW_MIN_HITS) continue;
-    /* ⚠️ **두께 상식 검사** (v1.31.2) — 읽어낸 두께가 랜드마크 눈썹 높이와 너무 다르면
-       눈꺼풀 주름·머리카락을 잘못 읽은 것입니다. 그 패스는 버리고 다음 패스로 넘어갑니다.
-       억지로 올리면 원장님이 다시 다 옮기셔야 합니다. */
+  /* ⚠️ **두께 상식 검사** (v1.31.2) — 읽어낸 두께가 랜드마크 눈썹 높이와 너무 다르면
+     눈꺼풀 주름·머리카락을 잘못 읽은 것입니다. 그 판독은 버립니다. */
+  const sane = (cand) => {
+    if (!cand || cand.length < DRAW_MIN_HITS) return null;
     if (cand.refH) {
       const th = cand.map((p) => p.bot - p.top).sort((a, b) => a - b)[Math.floor(cand.length / 2)];
-      if (th > DRAW_THICK_MAX * cand.refH || th < DRAW_THICK_MIN * cand.refH) continue;
+      if (th > DRAW_THICK_MAX * cand.refH || th < DRAW_THICK_MIN * cand.refH) return null;
     }
-    pts = cand; break;
+    return cand;
+  };
+  /* ⚠️ **기준은 원장님이 고른 쪽** (v1.37.0 — 원장님 지시 2026-08-21):
+     「왼쪽을 선택한상황에서 드로잉이 오른쪽이 더 짙을경우 오토로 오른쪽에 맞춘다.
+     그 이외에 상황을 제외하고 기본에 맞춤한다」
+     → 기본은 선택된 기준쪽(S.refSide)의 드로잉에 맞춘다. 반대쪽 잉크가 **확실히**
+     (DRAW_SIDE_SWITCH 배 이상) 짙을 때만 반대쪽으로 자동 전환한다.
+     문턱을 낮추면 조명 좌우 차이만으로 기준이 뒤집힙니다. */
+  let pts = null;
+  const other = S.refSide === "L" ? "R" : "L";
+  for (const contrast of [DRAW_CONTRAST, DRAW_CONTRAST_SOFT]) {
+    const ref = sane(readDrawing(img, contrast, S.refSide));
+    const opp = sane(readDrawing(img, contrast, other));
+    if (!ref && !opp) continue;
+    pts = !ref ? opp : (opp && opp.ink > ref.ink * DRAW_SIDE_SWITCH ? opp : ref);
+    break;
   }
   if (!pts) return false;
 
@@ -2037,12 +2062,19 @@ function autoFromDrawing() {
   const seq = pts[0].x > cx ? pts : [...pts].reverse();
   const n = seq.length;
 
-  /* 구간 t(0=앞머리 … 1=꼬리) 안 표본들의 중앙값 — 점 하나에 끌려가지 않게 */
-  const at = (a, b, key) => {
+  /* 구간 t(0=앞머리 … 1=꼬리) 안 표본들의 **분위수** (v1.37.0).
+     ⚠️ 중앙값이 아닙니다 — 앞머리는 털이 성글게 시작해서, 중앙값을 쓰면 윗선은 낮게
+     아랫선은 얕게 잡혀 「이보다 더 확실히 보일 수 없는」 드로잉도 빗나갔습니다
+     (원장님 지적 2026-08-21). 윗선(top)은 위쪽 30% 지점, 아랫선(bot)은 아래쪽 70%
+     지점을 씁니다 — 꽉 찬 드로잉에서는 중앙값과 거의 같고, 성근 털에서는 실제 경계에
+     붙습니다. 극값(0%/100%)은 쓰지 마세요 — 점 하나에 끌려갑니다. */
+  const at = (a, b, key, frac) => {
     const i0 = clamp(Math.floor(a * (n - 1)), 0, n - 1);
     const i1 = clamp(Math.ceil(b * (n - 1)), 0, n - 1);
     const v = seq.slice(Math.min(i0, i1), Math.max(i0, i1) + 1).map((p) => p[key]).sort((x, y) => x - y);
-    return v.length ? v[Math.floor(v.length / 2)] : null;
+    if (!v.length) return null;
+    const q = frac !== undefined ? frac : 0.5;
+    return v[clamp(Math.round(q * (v.length - 1)), 0, v.length - 1)];
   };
 
   /* 아치 = 드로잉에서 **제일 높은 곳**. 위치를 미리 정하지 않고 사진에서 찾는다. */
@@ -2052,8 +2084,10 @@ function autoFromDrawing() {
   const pa = clamp(pk - win, 0, n - 1) / (n - 1), pb = clamp(pk + win, 0, n - 1) / (n - 1);
 
   const setY = (key, py) => { if (py !== null && isFinite(py)) setLine(key, clamp(py / H, 0.02, 0.98)); };
-  setY("front", at(0, 0.18, "top"));             // 앞머리   = 머리 쪽 윗선
-  setY("frontThickness", at(0, 0.18, "bot"));    // 앞두께   = 같은 자리 아랫선
+  /* 앞머리 구간만 분위수(위 30% · 아래 70%) — 머리는 털이 성글어 중앙값이 빗나간다.
+     아치·꼬리는 표본이 적어 분위수가 오히려 흔들리므로 중앙값 유지 (회귀 89가 잡음) */
+  setY("front", at(0, 0.18, "top", 0.3));        // 앞머리   = 머리 쪽 윗선
+  setY("frontThickness", at(0, 0.18, "bot", 0.7)); // 앞두께 = 같은 자리 아랫선
   setY("h2", at(pa, pb, "top"));                 // 아치     = 제일 높은 곳 윗선
   setY("archThickness", at(pa, pb, "bot"));      // 아치두께 = 그 자리 아랫선
   setY("h3", at(0.86, 1, "top"));                // 꼬리     = 바깥쪽 끝 윗선
@@ -2229,15 +2263,18 @@ $("fileInput").addEventListener("change", (e) => {
 
 $("btnReset").onclick = () => {
   step(() => {
+    /* 원장님 지시(2026-08-21): 사진잠금 중이면 **사진(위치·배율·회전·잠금)은 그대로** 두고
+       나머지만 초기화한다. 잠금이 없으면 사진까지 함께 초기화한다. */
+    const keepPhoto = S.locked;
     S.g = { ...DEFAULT_GUIDE };
-    S.p = { ...DEFAULT_PHOTO };
+    if (!keepPhoto) S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
     S.balOn = false; S.balance = null;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
     S.pick = [];
-    if (S.landmarks) autoAlign(S.landmarks);
+    if (S.landmarks) { if (keepPhoto) placeLines(S.landmarks); else autoAlign(S.landmarks); }
   });
   render();
   toast(t("reset_done"));

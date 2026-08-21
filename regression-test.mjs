@@ -2024,6 +2024,79 @@ console.log("\n[밸런스 판정]");
       + `잉크사진 반폭 ${halfA.toFixed(3)}→${halfB.toFixed(3)}`);
   }
 
+  /* 98. ⚠️ 드로잉 맞춤의 기준쪽 (v1.37.0) — 원장님 지시(2026-08-21):
+     「기본은 사용자가 밸런스에서 고른 기준쪽 드로잉에 맞춘다. 왼쪽을 선택한 상황에서
+     드로잉이 오른쪽이 더 짙을경우 오토로 오른쪽에 맞춘다」
+     왼쪽엔 옅은 눈썹, 오른쪽엔 훨씬 짙고 **더 낮은** 드로잉을 그려 두고 기준=왼쪽으로
+     맞춤을 돌린다 → 선이 오른쪽(낮은 쪽) 높이로 가야 자동 전환이 작동한 것이다.
+     두 눈썹의 짙기가 비슷하면 전환하지 않는다 (기준쪽 유지). */
+  {
+    const mk98 = (tag, extra) => {
+      const f = path.join(ROOT, `.side-${tag}.svg`);
+      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">`
+        + `<rect width="600" height="600" fill="#e9d8c6"/>${extra}</svg>`);
+      return f;
+    };
+    /* 화면 왼쪽(기준) x 120~230 : 옅은 색 · y 250 근처
+       화면 오른쪽 x 370~480 : 진한 색 · y 280 근처 (뚜렷이 낮음) */
+    const f98 = mk98("a",
+      `<rect x="120" y="244" width="110" height="14" fill="#d8c3ae"/>`
+      + `<rect x="370" y="274" width="110" height="16" fill="#241a12"/>`);
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", f98);
+    await p.waitForTimeout(1000);
+    const r98 = await p.evaluate(() => {
+      const S = window.PB.S, H = S.dim.H;
+      S.landmarks = null; S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.g = { ...window.PB.DEFAULT_GUIDE }; S.refSide = "L";
+      window.PB.render();
+      const ok = window.PB.autoFromDrawing();
+      const cv = (iy) => window.PB.imgToCanvas(300, iy, S.p).y;   // 이미지 y → 캔버스 y
+      return { ok, frontPx: S.g.front * H, refY: cv(244), oppY: cv(274) };
+    });
+    await ctx.close();
+    fs.unlinkSync(f98);
+    check("98. 드로잉 맞춤 기준쪽 — 반대쪽이 확실히 짙으면 자동으로 그쪽에 맞춘다",
+      r98.ok === true && Math.abs(r98.frontPx - r98.oppY) < Math.abs(r98.frontPx - r98.refY),
+      `앞머리 ${r98.frontPx.toFixed(0)} — 기준쪽 ${r98.refY.toFixed(0)} / 짙은 반대쪽 ${r98.oppY.toFixed(0)}`);
+  }
+
+  /* 99. ⚠️ 초기화 × 사진잠금 (v1.37.0) — 원장님 지시(2026-08-21):
+     「초기화 버튼은 사진이 잠금이 되어있을경우 잠금이된 사진을 제외하고 나머지를
+     초기화해라. 사진 잠금 없을경우 사진도 함께 초기화 한다」 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+    const r99 = await p.evaluate(() => {
+      const S = window.PB.S;
+      S.landmarks = null;
+      /* 잠금 상태에서 초기화 → 사진 유지 · 선은 기본값 */
+      S.p = { zoom: 3.3, rot: 7, ox: 0.11, oy: -0.07 };
+      S.g = { ...window.PB.DEFAULT_GUIDE, h2: 0.11 };
+      S.locked = true;
+      document.getElementById("btnReset").click();
+      const locked = { p: { ...S.p }, h2: S.g.h2, still: S.locked };
+      /* 잠금 해제 상태에서 초기화 → 사진도 초기화 */
+      S.locked = false;
+      S.p = { zoom: 3.3, rot: 7, ox: 0.11, oy: -0.07 };
+      document.getElementById("btnReset").click();
+      return { locked, after: { ...S.p } };
+    });
+    await ctx.close();
+    const kept = r99.locked.p.zoom === 3.3 && r99.locked.p.rot === 7 && Math.abs(r99.locked.p.ox - 0.11) < 1e-9;
+    const wiped = r99.after.zoom === 1 && r99.after.rot === 0 && r99.after.ox === 0;
+    check("99. 초기화 — 사진잠금 중엔 사진 유지(잠금도 유지) · 잠금 없으면 사진까지 초기화",
+      kept && r99.locked.still === true && Math.abs(r99.locked.h2 - 0.11) > 1e-9 && wiped,
+      `잠금: zoom ${r99.locked.p.zoom} rot ${r99.locked.p.rot} 유지=${kept} 선초기화=${Math.abs(r99.locked.h2 - 0.11) > 1e-9} · 해제 후: zoom ${r99.after.zoom} rot ${r99.after.rot}`);
+  }
+
   /* 96. ⚠️ 시작 배치 규칙 (v1.34.0) — 원장님 판정(2026-08-21):
      「초기화 눌렀을때 올라온 선들이 맞다. 이것을 내가 사진을 입력하는 순간부터 적용하고싶다」
      사진을 넣으면 **초기화와 동일한 랜드마크 배치**로 시작한다. 드로잉 판독(autoFromDrawing)은
