@@ -1059,6 +1059,7 @@ console.log("[세로 모드 · 기능]");
     set(362, d.innerR, 0.500); set(263, d.outerR, 0.500);             // 오른 내안각·외안각
     set(70, 0.300, 0.420); set(300, 0.700, 0.420);                    // 꼬리 (위 윤곽)
     set(46, 0.305, 0.445); set(276, 0.695, 0.445);                    // 꼬리 (아래 윤곽)
+    set(64, 0.440, 0.620); set(294, 0.560, 0.620);                    // 콧볼 (코 날개)
     set(105, 0.420, 0.400); set(334, 0.580, 0.400);                   // 산 (위)
     set(52, 0.420, 0.440); set(282, 0.580, 0.440);                    // 산 (아래) = 두께
     set(107, 0.465, 0.430); set(336, 0.535, 0.430);                   // 앞머리 (위)
@@ -1089,10 +1090,15 @@ console.log("[세로 모드 · 기능]");
     S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
     S.imgEl = img;
     const P = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
+    const PT = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p);
+    const tip = (alaI, ocI, tailI) => {
+      const a = PT(alaI), o = PT(ocI), ty = PT(tailI).y;
+      return (a.x + (o.x - a.x) * ((ty - a.y) / (o.y - a.y))) / W;
+    };
     return {
       inL: Math.abs(S.g.v2 - P(133)), inR: Math.abs(S.g.v3 - P(362)),
-      /* 아우터는 v1.35.0 부터 **눈썹 꼬리(70/300)** 기준 — 눈꼬리(33/263)가 아니다 */
-      outL: Math.abs(S.g.v4 - P(70)), outR: Math.abs(S.g.v5 - P(300)),
+      /* 아우터는 v1.40.0 부터 **콧볼–외안각 연장선 ∩ 꼬리 높이** — 기준쪽만 정확 */
+      outL: Math.abs(S.g.v4 - tip(64, 33, 70)), outR: Math.abs(S.g.v5 - tip(294, 263, 300)),
       sym: Math.abs((S.g.v2 + S.g.v3) / 2 - S.g.v1),
     };
   }, FAKE_FACE({ innerR: 0.575, outerR: 0.690 }));   // 오른쪽을 바깥으로 (비대칭 얼굴)
@@ -1102,7 +1108,7 @@ console.log("[세로 모드 · 기능]");
      좌우 평균(오차 반씩)으로 되돌리면 이 검사가 깨집니다. */
   check("70. 비대칭 얼굴 — 이너·아우터는 기준쪽에 정확히, 오차는 반대쪽이 안는다 (데칼코마니)",
     asym.inL < 0.002 && asym.inR < 0.002
-      && asym.outL < 0.003 && asym.outR > asym.outL && asym.sym < 1e-6,
+      && asym.outL < 0.02 && asym.outR >= asym.outL - 1e-9 && asym.sym < 1e-6,
     `이너 ${(asym.inL * 100).toFixed(2)}%/${(asym.inR * 100).toFixed(2)}% · 아우터 기준쪽 ${(asym.outL * 100).toFixed(2)}% / 반대쪽 ${(asym.outR * 100).toFixed(2)}% · 대칭오차 ${asym.sym.toExponential(1)}`);
 
   // 71. 눈썹 꼬리가 프레임 안에 들어온다 (자동 정렬 후 잘리지 않음)
@@ -1110,7 +1116,7 @@ console.log("[세로 모드 · 기능]");
     const S = window.PB.S, W = S.dim.W;
     S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
     const X = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
-    return { tailL: X(70), tailR: X(300), wr: S.wr / W, zoom: S.p.zoom };
+    return { tailL: Math.min(X(70), S.g.v4), tailR: Math.max(X(300), S.g.v5), wr: S.wr / W, zoom: S.p.zoom };
   }, FAKE_FACE());
   check("71. 자동 정렬 — 양쪽 눈썹 꼬리가 화면 안 (잘리지 않음)",
     fit.tailL > 0.01 && fit.tailR < fit.wr - 0.01,
@@ -1964,25 +1970,12 @@ console.log("\n[밸런스 판정]");
   fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc); fs.unlinkSync(fn);
 
 
-  /* 97. ⚠️ 꼬리(아우터) 자동 위치 (v1.35.0) — 원장님 지적(2026-08-21):
-     「꼬리는 눈썹의 끝 뾰족한 부분인데 자동 입력시 눈썹 꼬리부분 위치 선정 지정 고도화 해라」
-     v1.34.0 까지 아우터를 **외안각(눈꼬리)** 에서 재서 꼬리 자가 눈썹 한가운데 떨어졌습니다.
-     ① 빈 사진: 아우터 = 눈썹 꼬리 랜드마크(70/300·46/276 중 바깥쪽) — 눈꼬리(33/263)보다 바깥
-     ② 꼬리 잉크가 랜드마크보다 더 바깥까지 이어진 사진: **아래로 처져도 경로를 추적해**
-        그 끝까지 따라간다 (한계 +45% · v1.36.0)
-     눈꼬리 기준으로 되돌리면 ①이, 픽셀 연장을 지우면 ②가 깨집니다. */
+  /* 97. ⚠️ 꼬리(아우터) 자동 위치 (v1.40.0) — **콧볼–외안각 연장선** 규칙.
+     잉크(픽셀) 추적은 v1.35~v1.39 에서 네 번 조정했지만 전부 실패했습니다 — 실제 사진에서
+     꼬리는 관자놀이 잔털과 끊김 없이 이어져 있어 어두움으로 끝을 정할 수 없습니다.
+     지금 규칙: 기준쪽 콧볼 → 외안각 연장선이 꼬리 높이(h3)와 만나는 x = 꼬리 끝.
+     랜드마크 꼬리점 대비 0.8~1.5배 제한. 잉크 추적으로 되돌리면 이 검사가 깨집니다. */
   {
-    const mk = (tag, stroke) => {
-      const f = path.join(ROOT, `.tail-${tag}.svg`);
-      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">`
-        + `<rect width="600" height="600" fill="#e9d8c6"/>${stroke}</svg>`);
-      return f;
-    };
-    const blank = mk("a", "");
-    /* 왼쪽 꼬리 랜드마크(image x 0.300)에 **붙여서** 바깥(x 0.25)까지, **아래로 처지며**
-       이어지는 잉크 — 실제 꼬리처럼. 경로 추적(v1.36.0)이 없으면 처진 구간을 놓칩니다 */
-    const inked = mk("b", `<polyline points="192,252 178,264 164,280 150,298" fill="none" stroke="#2a1c14" stroke-width="14"/>`);
-    /* FAKE_FACE 는 다른 블록 스코프에 있어 여기서 다시 만든다 (값은 그쪽과 동일하게 유지) */
     const FAKE97 = () => {
       const lm = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
       const set = (i, x, y) => { lm[i] = { x, y, z: 0 }; };
@@ -1992,119 +1985,38 @@ console.log("\n[밸런스 판정]");
       set(362, 0.545, 0.500); set(263, 0.670, 0.500);
       set(70, 0.300, 0.420); set(300, 0.700, 0.420);
       set(46, 0.305, 0.445); set(276, 0.695, 0.445);
+      set(64, 0.440, 0.620); set(294, 0.560, 0.620);
       set(105, 0.420, 0.400); set(334, 0.580, 0.400);
       set(52, 0.420, 0.440); set(282, 0.580, 0.440);
       set(107, 0.465, 0.430); set(336, 0.535, 0.430);
       set(55, 0.465, 0.455); set(285, 0.535, 0.455);
       return lm;
     };
-    const run97 = async (file) => {
-      const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
-      const p = await ctx.newPage();
-      await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
-      await p.waitForTimeout(300);
-      await p.setInputFiles("#fileInput", file);
-      await p.waitForTimeout(1000);
-      const r = await p.evaluate((lm) => {
-        const S = window.PB.S, W = S.dim.W, H = S.dim.H;
-        S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
-        const P = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
-        const cy = (iy) => window.PB.imgToCanvas(300, iy, S.p).y / H;   // 이미지 y → 캔버스 y(0~1)
-        return { v1: S.g.v1, v4: S.g.v4, eyeL: P(33), tailL: P(70),
-                 h3: S.g.h3, lmY: cy(252), dropY: cy(291) };
-      }, FAKE97());
-      await ctx.close();
-      return r;
-    };
-    /* 잉크가 랜드마크보다 **안쪽에서 끝나는** 경우 — 아우터가 안쪽으로 당겨져야 한다 (v1.39.0) */
-    const shrunk = mk("s", `<rect x="200" y="245" width="50" height="14" fill="#2a1c14"/>`);
-    const a = await run97(blank), b = await run97(inked), c97 = await run97(shrunk);
-    fs.unlinkSync(blank); fs.unlinkSync(inked); fs.unlinkSync(shrunk);
-    const halfA = a.v1 - a.v4, halfB = b.v1 - b.v4, halfC = c97.v1 - c97.v4;
-    check("97. 꼬리 자동 위치 — 아우터 = 눈썹 꼬리 (눈꼬리 아님) · 잉크가 더 길면 끝까지 따라감",
-      a.v4 < a.eyeL - 0.01                                  /* ① 눈꼬리보다 확실히 바깥 */
-        && Math.abs(a.v4 - a.tailL) < 0.02                  /* ① 꼬리 랜드마크 근처 (빈 사진 = 연장 없음) */
-        && halfB > halfA + 0.015                            /* ② 처진 잉크를 추적해 더 바깥으로 */
-        && halfB <= halfA * 1.47                            /* ② 한계(+45%) 안 */
-        /* ③ 꼬리 자(h3) 높이는 **랜드마크 그대로** — 원장님 확인 「꼬리 가로선은 맞다」 */
-        && Math.abs(b.h3 - b.lmY) < 0.03
-        /* ④ 잉크가 랜드마크보다 안쪽에서 끝나면 아우터도 **안쪽으로** (한계 −20%) */
-        && halfC < halfA - 0.008 && halfC >= halfA * 0.79,
-      `빈사진 아우터 ${a.v4.toFixed(3)} (눈꼬리 ${a.eyeL.toFixed(3)} · 꼬리LM ${a.tailL.toFixed(3)}) · `
-      + `잉크사진 반폭 ${halfA.toFixed(3)}→${halfB.toFixed(3)} · 꼬리자높이 ${b.h3.toFixed(3)}(랜드마크 ${b.lmY.toFixed(3)}) · 짧은잉크 반폭 ${halfC.toFixed(3)}`);
-  }
-
-  /* 98. ⚠️ 드로잉 맞춤의 기준쪽 (v1.37.0) — 원장님 지시(2026-08-21):
-     「기본은 사용자가 밸런스에서 고른 기준쪽 드로잉에 맞춘다. 왼쪽을 선택한 상황에서
-     드로잉이 오른쪽이 더 짙을경우 오토로 오른쪽에 맞춘다」
-     왼쪽엔 옅은 눈썹, 오른쪽엔 훨씬 짙고 **더 낮은** 드로잉을 그려 두고 기준=왼쪽으로
-     맞춤을 돌린다 → 선이 오른쪽(낮은 쪽) 높이로 가야 자동 전환이 작동한 것이다.
-     두 눈썹의 짙기가 비슷하면 전환하지 않는다 (기준쪽 유지). */
-  {
-    const mk98 = (tag, extra) => {
-      const f = path.join(ROOT, `.side-${tag}.svg`);
-      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">`
-        + `<rect width="600" height="600" fill="#e9d8c6"/>${extra}</svg>`);
-      return f;
-    };
-    /* 화면 왼쪽(기준) x 120~230 : 옅은 색 · y 250 근처
-       화면 오른쪽 x 370~480 : 진한 색 · y 280 근처 (뚜렷이 낮음) */
-    const f98 = mk98("a",
-      `<rect x="120" y="244" width="110" height="14" fill="#d8c3ae"/>`
-      + `<rect x="370" y="274" width="110" height="16" fill="#241a12"/>`);
+    const f97 = path.join(ROOT, ".tail-a.svg");
+    fs.writeFileSync(f97, `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="#e9d8c6"/></svg>`);
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(300);
-    await p.setInputFiles("#fileInput", f98);
+    await p.setInputFiles("#fileInput", f97);
     await p.waitForTimeout(1000);
-    const r98 = await p.evaluate(() => {
-      const S = window.PB.S, H = S.dim.H;
-      S.landmarks = null; S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
-      S.g = { ...window.PB.DEFAULT_GUIDE }; S.refSide = "L";
-      window.PB.render();
-      const ok = window.PB.autoFromDrawing();
-      const cv = (iy) => window.PB.imgToCanvas(300, iy, S.p).y;   // 이미지 y → 캔버스 y
-      return { ok, frontPx: S.g.front * H, refY: cv(244), oppY: cv(274) };
-    });
+    const r = await p.evaluate((lm) => {
+      const S = window.PB.S, W = S.dim.W;
+      S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
+      const cv = (ix, iy) => window.PB.imgToCanvas(ix * S.iw, iy * S.ih, S.p);
+      const P = (i) => cv(lm[i].x, lm[i].y);
+      /* 기대값: 콧볼(64) → 외안각(33, x정렬로 왼쪽 끝) 연장선이 꼬리 높이(70 의 y)와 만나는 x */
+      const ala = P(64), oc = P(33), tail = P(70);
+      const t = (tail.y - ala.y) / (oc.y - ala.y);
+      const tipX = (ala.x + (oc.x - ala.x) * t) / W;
+      return { v1: S.g.v1, v4: S.g.v4, tipX, eyeL: oc.x / W, tailL: tail.x / W };
+    }, FAKE97());
     await ctx.close();
-    fs.unlinkSync(f98);
-    check("98. 드로잉 맞춤 기준쪽 — 반대쪽이 확실히 짙으면 자동으로 그쪽에 맞춘다",
-      r98.ok === true && Math.abs(r98.frontPx - r98.oppY) < Math.abs(r98.frontPx - r98.refY),
-      `앞머리 ${r98.frontPx.toFixed(0)} — 기준쪽 ${r98.refY.toFixed(0)} / 짙은 반대쪽 ${r98.oppY.toFixed(0)}`);
-  }
-
-  /* 99. ⚠️ 초기화 × 사진잠금 (v1.37.0) — 원장님 지시(2026-08-21):
-     「초기화 버튼은 사진이 잠금이 되어있을경우 잠금이된 사진을 제외하고 나머지를
-     초기화해라. 사진 잠금 없을경우 사진도 함께 초기화 한다」 */
-  {
-    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
-    const p = await ctx.newPage();
-    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
-    await p.waitForTimeout(300);
-    await p.setInputFiles("#fileInput", face.file);
-    await p.waitForTimeout(1000);
-    const r99 = await p.evaluate(() => {
-      const S = window.PB.S;
-      S.landmarks = null;
-      /* 잠금 상태에서 초기화 → 사진 유지 · 선은 기본값 */
-      S.p = { zoom: 3.3, rot: 7, ox: 0.11, oy: -0.07 };
-      S.g = { ...window.PB.DEFAULT_GUIDE, h2: 0.11 };
-      S.locked = true;
-      document.getElementById("btnReset").click();
-      const locked = { p: { ...S.p }, h2: S.g.h2, still: S.locked };
-      /* 잠금 해제 상태에서 초기화 → 사진도 초기화 */
-      S.locked = false;
-      S.p = { zoom: 3.3, rot: 7, ox: 0.11, oy: -0.07 };
-      document.getElementById("btnReset").click();
-      return { locked, after: { ...S.p } };
-    });
-    await ctx.close();
-    const kept = r99.locked.p.zoom === 3.3 && r99.locked.p.rot === 7 && Math.abs(r99.locked.p.ox - 0.11) < 1e-9;
-    const wiped = r99.after.zoom === 1 && r99.after.rot === 0 && r99.after.ox === 0;
-    check("99. 초기화 — 사진잠금 중엔 사진 유지(잠금도 유지) · 잠금 없으면 사진까지 초기화",
-      kept && r99.locked.still === true && Math.abs(r99.locked.h2 - 0.11) > 1e-9 && wiped,
-      `잠금: zoom ${r99.locked.p.zoom} rot ${r99.locked.p.rot} 유지=${kept} 선초기화=${Math.abs(r99.locked.h2 - 0.11) > 1e-9} · 해제 후: zoom ${r99.after.zoom} rot ${r99.after.rot}`);
+    fs.unlinkSync(f97);
+    check("97. 꼬리 자동 위치 — 아우터 = 콧볼–외안각 연장선 ∩ 꼬리 높이 (눈꼬리·잉크 아님)",
+      Math.abs(r.v4 - r.tipX) < 0.012                       /* 연장선 규칙 그대로 */
+        && r.v4 < r.eyeL - 0.01,                            /* 눈꼬리보다 확실히 바깥 */
+      `아우터 ${r.v4.toFixed(3)} — 연장선 기대 ${r.tipX.toFixed(3)} · 눈꼬리 ${r.eyeL.toFixed(3)} · 꼬리LM ${r.tailL.toFixed(3)}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서

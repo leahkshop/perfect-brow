@@ -289,7 +289,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.39.2";
+const APP_VERSION = "v1.40.0";
 
 const H_SPECS = [
 /* ⚠️ `anchor` — 가로 자는 **자기 묶음의 세로선 위에** 올라간다 (v1.32.0)
@@ -1547,76 +1547,51 @@ function eyeCorners(lm) {
   return { outerL: c[0], innerL: c[1], innerR: c[2], outerR: c[3] };
 }
 
-/* ═══ 꼬리(아우터) 위치 — 눈꼬리가 아니라 **눈썹 꼬리** ═══════════════ (v1.35.0)
-   ⚠️ v1.34.0 까지 아우터를 **외안각(눈꼬리)** 에서 쟀습니다. 눈썹 꼬리는 눈꼬리보다
-   훨씬 바깥까지 뻗으므로 꼬리 자가 눈썹 한가운데에 떨어졌습니다 — 원장님 지적(2026-08-21):
-   「꼬리는 눈썹의 끝 뾰족한 부분인데」. 기준은 두 단계입니다:
-   ① 눈썹 꼬리 랜드마크(위 70/300 · 아래 46/276) 중 **더 바깥쪽**
-   ② 사진에서 털·드로잉이 실제로 더 바깥까지 이어지면 **어두운 열이 끊길 때까지** 따라간다
-      (렌드마크는 종종 실제 꼬리보다 안쪽에서 끝납니다)
-   ②는 반드시 ①에서 **바깥 방향으로만**, 최대 +TAIL_EXT_MAX 까지. 안쪽으로 당기거나
-   한계를 풀면 관자놀이 머리카락을 꼬리로 잡습니다 (columnRuns 의 폭 제한이 1차 방어). */
+/* 눈썹 꼬리 랜드마크 (위 70/300 · 아래 46/276) — browTail 의 안전망·상한선 기준.
+   ⚠️ 아우터를 외안각(눈꼬리 33/263)에서 재면 안 됩니다 — 눈썹 꼬리는 눈꼬리보다
+   훨씬 바깥입니다 (v1.34.0 의 실패, 원장님 지적 2026-08-21). */
 const BROW_TAIL_L = [70, 46], BROW_TAIL_R = [300, 276];
-const TAIL_EXT_MAX = 0.45;   // 랜드마크 반폭의 이만큼까지만 바깥으로 연장
-const TAIL_GAP = 5;          // 어두운 열이 이만큼(표본) 연속으로 끊기면 거기가 끝
-const TAIL_JUMP = 0.6;       // 띠의 중심이 창의 이 비율보다 크게 튀면 다른 것(머리카락)으로 본다
-/* v1.39.1 — 0.15 로는 끝의 **성근 잔털**까지 눈썹으로 인정해 아우터가 넘쳤습니다
-   (원장님 빨간 표시 2026-08-21). 그린 드로잉의 뾰족한 끝은 가늘어도 **아주 진해서**
-   0.30 을 넘고, 잔털은 가늘고 옅어서 못 넘습니다. */
-const TAIL_TIP_INK = 0.30;   // 최고 잉크의 이만큼은 돼야 "눈썹 끝"으로 인정 (그림자·잔털 방지)
-const TAIL_SHRINK_MAX = 0.20;// 랜드마크보다 안쪽으로 당길 수 있는 한계
 
-/* 기준쪽 눈썹 꼬리의 반폭 — **잉크가 실제로 끝나는 지점** (v1.39.0)
-   원장님 지적(2026-08-21): 「세로선이 안맞으니 꼬리에 붙어있는 아우터선 프롬포트 다시
-   설정해라」 — 아우터는 눈썹의 **뾰족한 끝**에 정확히 서야 합니다.
-   ① 랜드마크 꼬리(기준쪽)로 대략 위치를 잡고
-   ② 눈썹 몸통 안쪽(70%)부터 바깥으로 잉크 경로를 추적하며, **탄탄한 잉크**가 있는
-      마지막 열을 끝으로 삼는다 — 옅은 그림자·잔털(TAIL_TIP_INK 미만)로는 전진하지 않는다
-   ③ 랜드마크가 잉크 끝보다 바깥이면 **안쪽으로 당겨** 온다 (최대 −20%까지)
-   좌우 평균 금지(데칼코마니) · 경로 추적 유지(처진 꼬리) — 둘 다 이전 실패에서 배운 것 */
+/* ═══ 꼬리 끝 = 콧볼–외안각 연장선 (v1.40.0) ═══════════════════════════
+   ⚠️ **픽셀(잉크) 추적으로 되돌리지 마세요.** v1.35~v1.39 에서 잉크 문턱을 네 번
+   조였지만 전부 실패했습니다. 실제 사진(원장님 빨간 표시 2026-08-21)에서 눈썹 꼬리는
+   관자놀이 잔털과 **끊김 없이 이어져** 있어, 어두움으로는 "디자인상의 꼬리 끝"을
+   정할 수 없습니다.
+   업계 표준 규칙을 씁니다: **꼬리 끝은 콧볼(코 날개)에서 눈꼬리(외안각)를 지나는
+   연장선이 눈썹 꼬리 높이와 만나는 점.** 털이 아니라 얼굴 비율로 정해지므로
+   고객마다 일관되고, 원장님이 손으로 잡는 기준과 같습니다.
+   기준쪽만 잽니다 (데칼코마니 · 1-19). 랜드마크 꼬리점 대비 0.8~1.5배로 제한 —
+   고개를 튼 사진에서 연장선이 폭주하는 것을 막습니다. */
+const NOSE_ALA = [64, 294];   // 콧볼(코 날개) 좌/우 랜드마크
+
 function browTail(lm, tr, v1frac) {
-  const { W } = S.dim;
-  const xOf = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr).x / W;
+  const { W, H } = S.dim;
+  const pt = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr);
+  const xOf = (i) => pt(i).x / W;
+  /* 랜드마크 꼬리(안전망 + 상한선의 기준) — 기준쪽만 */
   const all = [...BROW_TAIL_L, ...BROW_TAIL_R];
   const refXs = all.map(xOf).filter((x) => (refIsLeft() ? x < v1frac : x > v1frac));
-  let half = refXs.length ? Math.max(...refXs.map((x) => Math.abs(x - v1frac)))
-                          : Math.max(...all.map((i) => Math.abs(xOf(i) - v1frac)));
+  const lmHalf = refXs.length ? Math.max(...refXs.map((x) => Math.abs(x - v1frac)))
+                              : Math.max(...all.map((i) => Math.abs(xOf(i) - v1frac)));
 
-  const img = photoPixels();
-  const boxes = img && browBoxes();
-  if (boxes) {
-    const { H } = S.dim;
-    const ext = (b, dir, h0) => {
-      const bh = Math.max(12, b.h ? b.h * 1.0 : (b.y1 - b.y0) / 4);   // 추적 창 반높이
-      const maxHalf = h0 * (1 + TAIL_EXT_MAX);
-      let got = null, gap = 0, cy = b.cy, inkRef = 0, prevSolid = false;
-      for (let f = h0 * 0.70; f <= maxHalf; f += 0.006) {   // 몸통 안쪽에서 출발 — 안쪽 당김도 가능하게
-        const x = Math.round((v1frac + dir * f) * W);
-        if (x < 0 || x >= W) break;
-        const y0 = Math.max(0, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) - bh));
-        const y1 = Math.min(H - 1, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) + bh));
-        if (y1 - y0 < 8) break;
-        const c = columnRuns(img, x, y0, y1, cy, DRAW_CONTRAST_SOFT);
-        const r = c && c.runs[c.si];
-        const mid = r ? (r.top + r.bot) / 2 : null;
-        if (r && (cy === null || Math.abs(mid - cy) <= bh * TAIL_JUMP)) {
-          inkRef = Math.max(inkRef, r.ink);
-          /* 탄탄한 잉크가 **2열 연속**일 때만 "여기까지가 눈썹"으로 인정 (v1.39.1)
-             — 한 열짜리 점(잔털·점·그림자 얼룩)으로는 전진하지 않는다 */
-          const solid = r.ink >= inkRef * TAIL_TIP_INK && r.bot - r.top >= 2;
-          if (solid && prevSolid) got = f;
-          prevSolid = solid;
-          cy = mid; gap = 0;
-        } else { prevSolid = false; if (f > h0 * 0.9 && ++gap > TAIL_GAP) break; }
-        /* ⚠️ 랜드마크 안쪽(f < 0.9·h0)에서는 끊김으로 중단하지 않는다 — 몸통 구간의
-           빈 열은 조명·화장 때문일 수 있고, 여기서 멈추면 바깥 잉크를 아예 못 봅니다 */
-      }
-      /* 잉크를 아예 못 읽으면 랜드마크 유지. 읽었으면 그 끝 — 단 안쪽 당김은 −20%까지 */
-      return got === null ? h0 : clamp(got, h0 * (1 - TAIL_SHRINK_MAX), maxHalf);
-    };
-    half = refIsLeft() ? ext(boxes.left, -1, half) : ext(boxes.right, 1, half);
+  /* 기준쪽 콧볼 · 외안각 · 꼬리 높이 */
+  const alaL = pt(NOSE_ALA[0]), alaR = pt(NOSE_ALA[1]);
+  const ala = (refIsLeft() ? (alaL.x <= alaR.x ? alaL : alaR) : (alaL.x <= alaR.x ? alaR : alaL));
+  const c = eyeCorners(lm);
+  const oc = refIsLeft() ? c.outerL : c.outerR;
+  const occ = imgToCanvas(oc.x, oc.y, tr);
+  const tailY = refOfPair(lm, tr, AI_LM.h3, v1frac).y;
+
+  let half = lmHalf;
+  const dy = occ.y - ala.y;
+  if (Math.abs(dy) > 4) {                       // 연장선이 설 수 있을 때만
+    const t = (tailY - ala.y) / dy;
+    const tipX = ala.x + (occ.x - ala.x) * t;
+    if (isFinite(tipX)) half = clamp(Math.abs(tipX / W - v1frac), lmHalf * 0.8, lmHalf * 1.5);
   }
-  return { half: clamp(half, 0.02, 0.96), tipY: null };
+  /* ⚠️ 여기서 0~1 로 자르지 않는다 — 화면 밖이면 fitBrowsInFrame 이 배율을 낮춰야
+     하는데, 잘라 버리면 "이미 들어와 있다"고 착각합니다 (v1.40.0 에서 실제로 겪음) */
+  return { half, tipY: null };
 }
 
 /* 예전 이름 호환 — 반폭만 필요할 때 */
@@ -1730,8 +1705,13 @@ const FRAME_PAD = 0.06;          // 좌우 여백 (작업 영역 폭 기준)
 function fitBrowsInFrame(lm) {
   if (!lm || !S.dim.W) return;
   const { W } = S.dim, WRn = workRight();
-  const xs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
-  const lo = Math.min(...xs), hi = Math.max(...xs);
+  /* **랜드마크 꼬리와 아우터 선(연장선 끝) 둘 다** 들어와야 한다 (v1.40.0).
+     연장선 끝은 랜드마크보다 바깥일 수 있고, g.v4 는 0~1 로 잘려 있어 진짜 위치를
+     못 보므로 반폭을 다시 계산해서 잰다. */
+  const g = S.g;
+  const lmXs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
+  const half = browTailHalf(lm, S.p, g.v1);
+  const lo = Math.min(...lmXs, g.v1 - half), hi = Math.max(...lmXs, g.v1 + half);
   const left = FRAME_PAD * WRn, right = WRn - FRAME_PAD * WRn;
   const c = S.g.v1;
   const need = Math.max((c - lo) / Math.max(c - left, 1e-6), (hi - c) / Math.max(right - c, 1e-6));
