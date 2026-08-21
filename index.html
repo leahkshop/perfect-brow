@@ -284,6 +284,7 @@ body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
    그대로 두면 왼쪽 묶음이 가운데까지 밀고 들어옵니다 (회귀 83번). */
 .favrow{align-items:flex-end}
 /* `.menurow button` 이 뒤에 선언되므로 특이도를 한 단계 올립니다 */
+#btnGuide.on{background:rgba(34,211,238,.16);border-color:rgba(34,211,238,.55);color:#fff}
 .menurow.favrow button{height:34px;min-width:58px;max-width:88px;border-radius:10px;
   flex-direction:row;gap:4px;padding:0 8px;font-size:9px}
 .menurow.favrow button i, .menurow.favrow button i svg{width:12px;height:12px;color:var(--a2)}
@@ -574,6 +575,9 @@ body:not(.land) #railLang{display:none}
     <div class="ldock" id="leftDock">
       <div class="menurow" id="menuRow">
         <button id="btnPresetLoad"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"/></svg></i><em data-i18n="editor_preset">프리셋</em></button>
+        <!-- 가이드 플로우 (v1.42.0) — 켜면 이너→앞두께→앞머리→아치두께→아치→꼬리 순서로
+             "지금 차례"인 선만 고유색으로 켜진다. 스킵 가능(안 켜면 이전과 동일) -->
+        <button id="btnGuide"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h10M14 12l-4-4M14 12l-4 4M18 5v14"/></svg></i><em data-i18n="editor_guide">가이드</em></button>
       </div>
       <div class="menurow favrow" id="favRow"></div>
     </div>

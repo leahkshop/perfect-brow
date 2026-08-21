@@ -41,6 +41,7 @@ const I18N = {
     undo_none: "되돌릴 작업이 없습니다",
     editor_align: "동공정렬",
     editor_preset: "프리셋",
+    editor_guide: "가이드",
     editor_preset_save: "현재 설정 저장",
     editor_load_preset: "프리셋",
     editor_preset_load: "프리셋",
@@ -289,7 +290,18 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.41.0";
+const APP_VERSION = "v1.42.0";
+
+/* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
+   선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
+   선택됐을 때만 켜진다. 가이드 순서: 이너 → 앞두께 → 앞머리 → 아치두께 → 아치 → 꼬리.
+   · 가이드는 **처음 움직인 선에서 시작**하고, 움직임이 끝나면 다음 순서가 켜진다
+   · 다른 선을 다시 움직이면 그 선이 켜지고, 끝나면 **그 선의 다음** 순서가 켜진다
+   · 어떤 선이든 순서와 무관하게 자유롭게 움직일 수 있다
+   · 꼬리(마지막) 뒤로는 **처음으로 돌아가지 않는다** — 플로우 종료
+   · 가이드를 끄면 즉시 종료 */
+const GUIDE_FLOW = ["v2", "frontThickness", "front", "archThickness", "h2", "h3"];
+const GREY_LINE = "#3A414E";   // 모든 선의 기본색 (짙은 회색)
 
 const H_SPECS = [
 /* ⚠️ `anchor` — 가로 자는 **자기 묶음의 세로선 위에** 올라간다 (v1.32.0)
@@ -300,22 +312,22 @@ const H_SPECS = [
      꼬리            → 아우터(v4/v5)    · 보라
    v1.31.x 까지는 자 위치가 frac 상수로 박혀 있어, **아치 자가 아우터를 따라 움직였습니다**
    (원장님이 직접 찾아내신 문제). 상수를 되살리지 말고 anchor 를 쓰세요. */
-  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.2, op: 0.5, anchor: null },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 1.4, op: 0.9, anchor: "v2" },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 1.4, op: 0.9, anchor: "v2" },
-  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.4, op: 0.95, anchor: "v6" },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 1.4, op: 0.95, anchor: "v6" },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 1.4, op: 0.95, anchor: "v4" },
+  { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.0, op: 0.5, anchor: null },
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 1.15, op: 0.9, anchor: "v2" },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 1.15, op: 0.9, anchor: "v2" },
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 1.15, op: 0.95, anchor: "v4" },
 ];
 
 const V_SPECS = [
-  { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.3, op: 1,   mirror: null },
+  { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.1, op: 1,   mirror: null },
   /* 이너만 길게(눈까지) 남긴다 — 콧방울·내안각과 맞춰 보는 기준선이기 때문 (원장님 지시 2026-08-20) */
-  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#14161B", dot: "#C9D1E0", w: 1.6, op: 0.6, mirror: "v3", long: true },
+  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#14161B", dot: "#C9D1E0", w: 1.35, op: 0.6, mirror: "v3", long: true },
   /* 아치선 (v1.32.0) — 아치·아치두께가 올라가는 기둥. 아우터보다 **얇게** 그려 소속을 표시한다 */
-  { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 0.9, op: 0.9, mirror: "v7" },
+  { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 0.75, op: 0.9, mirror: "v7" },
   /* 아우터는 **보라** — 꼬리와 한 묶음이라 색으로 묶어 준다 (원장님 지시 2026-08-20) */
-  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#A855F7", dot: "#A855F7", w: 1.1, op: 1,   mirror: "v5" },
+  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#A855F7", dot: "#A855F7", w: 0.95, op: 1,   mirror: "v5" },
 ];
 
 const ALL_VIS = [
@@ -413,6 +425,7 @@ const S = {
   selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
   photoMode: "zoom",
   locked: false,
+  guideOn: false, guideCur: null,   // 가이드 플로우 (v1.42.0)
   dim: { W: 0, H: 0 },
   iw: 0, ih: 0, s0: 1, fitW: 0, fitH: 0,
   hiddenSnapshot: null,
@@ -545,6 +558,8 @@ function browBandY(tight) {
 
 function renderGuides() {
   const { W, H } = S.dim, g = S.g;
+  /* 기본은 짙은 회색 — 고유색은 가이드의 "지금 차례"이거나 선택된 선만 (v1.42.0) */
+  const liveColor = (sp) => ((S.guideOn && S.guideCur === sp.key) || isSelected(sp.key)) ? sp.color : GREY_LINE;
   const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
   S.wr = WR;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -600,7 +615,7 @@ function renderGuides() {
         if (xb - xa < 2) return;                       // 세로선이 화면 밖으로 밀리면 그리지 않는다
         const bad = offBy && idx === badIdx;
         drawLine(frag, xa, y, xb, y,
-          bad ? BAL_RED : sp.color,
+          bad ? BAL_RED : liveColor(sp),
           bad ? sp.w + 2.2 : (sel ? sp.w + 1.6 : sp.w),
           bad ? 1 : (sel ? 1 : sp.op));
       });
@@ -620,13 +635,14 @@ function renderGuides() {
       const full = sp.key === "v1";
       const band = sp.long ? bandL : bandT;
       const by0 = band.y0 * H, by1 = band.y1 * H;
+      const lc = liveColor(sp);
       const draw = (x) => {
-        if (full) { drawLine(frag, x, 0, x, H, sp.color, w, op); return; }
+        if (full) { drawLine(frag, x, 0, x, H, lc, w, op); return; }
         frag.appendChild(mk("line", {                       // 라벨 ↔ 선 연결 (헤일로 없음)
-          x1: x, y1: 0, x2: x, y2: H, stroke: sp.color,
+          x1: x, y1: 0, x2: x, y2: H, stroke: lc,
           "stroke-width": 1, "stroke-opacity": 0.16,
         }));
-        drawLine(frag, x, by0, x, by1, sp.color, w, op);    // 실제로 읽는 구간
+        drawLine(frag, x, by0, x, by1, lc, w, op);    // 실제로 읽는 구간
       };
       const x = g[sp.key] * W;
       draw(x);
@@ -926,6 +942,8 @@ touch.addEventListener("pointermove", (e) => {
       gDrag.moved = true;
       /* 끌기 시작 = 잡은 선을 선택에 합류 (여러라인 모드) */
       if (S.multi && gDrag.tapKey && !S.selSet.includes(gDrag.tapKey)) S.selSet.push(gDrag.tapKey);
+      /* 가이드: 움직이기 시작한 선이 "지금 차례"가 된다 — 예약돼 있던 다음 선은 꺼진다 (v1.42.0) */
+      if (S.guideOn && GUIDE_FLOW.includes(gDrag.key)) S.guideCur = gDrag.key;
     }
     const dxN = (sp.x - gDrag.x0) / W, dyN = (sp.y - gDrag.y0) / H;
     if (S.multi && gDrag.keys.length > 1) {
@@ -979,8 +997,22 @@ function endPointer(e) {
       }
     }
   }
+  const guideKey = gMode === "line" && gDrag && gDrag.moved ? gDrag.key : null;
   if (pts.size < 2) { gMode = pts.size === 1 ? null : null; gDrag = null; }
-  if (pts.size === 0) commitEdit();   /* 손을 다 떼면 한 작업으로 확정 */
+  if (pts.size === 0) {
+    commitEdit();   /* 손을 다 떼면 한 작업으로 확정 */
+    if (guideKey) guideAdvance(guideKey);
+  }
+}
+
+/* 가이드: 이 선의 움직임이 끝났다 → **그 선의 다음** 순서가 켜진다.
+   마지막(꼬리) 뒤로는 처음으로 돌아가지 않는다 — 플로우 종료 (원장님 지시 2026-08-21) */
+function guideAdvance(key) {
+  if (!S.guideOn) return;
+  const i = GUIDE_FLOW.indexOf(key);
+  if (i < 0) return;                                   // 플로우 밖의 선은 순서에 영향 없음
+  S.guideCur = i + 1 < GUIDE_FLOW.length ? GUIDE_FLOW[i + 1] : null;
+  render();
 }
 touch.addEventListener("pointerup", endPointer);
 touch.addEventListener("pointercancel", endPointer);
@@ -1154,6 +1186,7 @@ function updateButtons() {
   $("btnRefL").classList.toggle("on", S.refSide === "L");
   $("btnRefR").classList.toggle("on", S.refSide === "R");
   $("btnLock").classList.toggle("on", S.locked);
+  $("btnGuide").classList.toggle("on", !!S.guideOn);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
   updateUndoBtn();
 }
@@ -2495,6 +2528,14 @@ $("btnSnap").onclick = () => {
   render();
   showHud(ok ? t("ai_drawn") : t("ai_redraw_fail"), 1600);
 };
+/* 가이드 켜고 끄기 — 끄면 플로우 즉시 종료. 켠 직후엔 아무 선도 켜지 않는다:
+   **처음 움직이는 선**이 플로우의 시작이다 (원장님 지시 2026-08-21) */
+$("btnGuide").onclick = () => {
+  S.guideOn = !S.guideOn;
+  S.guideCur = null;
+  updateButtons();
+  render();
+};
 $("btnRefL").onclick = () => setRefSide("L");
 $("btnRefR").onclick = () => setRefSide("R");
 
@@ -2520,12 +2561,18 @@ histSlider(posSliderV);
 histSlider(posSliderH);
 
 /* 세로 조절자 — 위아래로 움직이는 가로선(S.selUD) 전담 */
-posSliderV.addEventListener("input", (e) => { beginEdit(); noteSel(S.selUD); applyPos(parseFloat(e.target.value), S.selUD); });
+posSliderV.addEventListener("input", (e) => { beginEdit(); noteSel(S.selUD);
+  if (S.guideOn && GUIDE_FLOW.includes(S.selUD)) S.guideCur = S.selUD;
+  applyPos(parseFloat(e.target.value), S.selUD); });
+posSliderV.addEventListener("change", () => guideAdvance(S.selUD));
 $("posMinusV").onclick = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); });
 $("posPlusV").onclick  = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); });
 
 /* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
-posSliderH.addEventListener("input", (e) => { beginEdit(); if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(e.target.value)); });
+posSliderH.addEventListener("input", (e) => { beginEdit(); if (!hIsPhoto()) noteSel(S.selLR);
+  if (!hIsPhoto() && S.guideOn && GUIDE_FLOW.includes(S.selLR)) S.guideCur = S.selLR;
+  applyH(parseFloat(e.target.value)); });
+posSliderH.addEventListener("change", () => { if (!hIsPhoto()) guideAdvance(S.selLR); });
 $("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) - hConfig().step); });
 $("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) + hConfig().step); });
 

@@ -1635,7 +1635,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
 
   check(`40. ${dev.n} — 왼쪽 아래는 프리셋(+즐겨찾기) · 좌우 바와 겹치지 않음`,
     menuPos.leftBottom && menuPos.noOverlap && menuPos.gone
-      && menuPos.ids === "btnPresetLoad",
+      && menuPos.ids === "btnPresetLoad,btnGuide",   /* v1.42.0 — 프리셋 옆 가이드 버튼 */
     `왼쪽아래=${menuPos.leftBottom} 겹침없음=${menuPos.noOverlap} 눈가이드제거=${menuPos.gone} [${menuPos.ids}]`);
 
   /* 83. 버튼 자리 (v1.29.0) — 원장님이 정하신 자리
@@ -2030,6 +2030,70 @@ console.log("\n[밸런스 판정]");
         && Math.abs(b.v4 - b.inkEnd) < 0.03                 /* ① 보이는 잉크의 끝 */
         && Math.abs(b.v4 - b.tipX) > 0.02,                  /* ①이 ②를 이긴다 */
       `빈사진 ${a.v4.toFixed(3)}(연장선 ${a.tipX.toFixed(3)}) · 잉크사진 ${b.v4.toFixed(3)}(잉크끝 ${b.inkEnd.toFixed(3)} / 연장선 ${b.tipX.toFixed(3)})`);
+  }
+
+  /* 101. ⚠️ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21)
+     · 기본색은 전부 짙은 회색 — 고유색은 "지금 차례"거나 선택된 선만
+     · 순서: 이너 → 앞두께 → 앞머리 → 아치두께 → 아치 → 꼬리
+     · 처음 움직인 선에서 시작 · 움직임이 끝나면 그 선의 **다음**이 켜짐
+     · 다른 선을 움직이면 그 선이 켜지고, 끝나면 그 선의 다음
+     · 마지막(꼬리) 뒤로는 돌아가지 않음 · 가이드 끄면 즉시 종료 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+    const g101 = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = []; S.selUD = "front"; PBx.render();
+      const lineColorOf = (key) => {
+        const sp = PBx.H_SPECS.concat(PBx.V_SPECS).find((x) => x.key === key);
+        const x = key.startsWith("v") ? S.g[key] * S.dim.W : null;
+        const y = key.startsWith("v") ? null : S.g[key] * S.dim.H;
+        const ls = [...document.getElementById("guides").querySelectorAll("line")]
+          .filter((l) => +(l.getAttribute("stroke-opacity") || 1) > 0.4
+            && (x !== null ? Math.abs(+l.getAttribute("x1") - x) < 1 && Math.abs(+l.getAttribute("x1") - +l.getAttribute("x2")) < 0.5
+                           : Math.abs(+l.getAttribute("y1") - y) < 1 && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5));
+        return { own: ls.some((l) => l.getAttribute("stroke") === sp.color && sp.color !== "#3A414E"),
+                 grey: ls.some((l) => l.getAttribute("stroke") === "#3A414E") };
+      };
+      const greyByDefault = lineColorOf("h2").grey && !lineColorOf("h2").own && lineColorOf("v4").grey;
+      document.getElementById("btnGuide").click();          // 가이드 ON — 아직 아무 선도 안 켜짐
+      const noneAtStart = S.guideCur === null && S.guideOn === true;
+      /* 앞머리(front) 를 슬라이더로 움직인다 → 움직이는 동안 front 가 켜지고, 끝나면 다음(아치두께) */
+      S.selUD = "front";
+      const sl = document.getElementById("posSliderV") || document.querySelector(".posctl.axis-v input");
+      sl.dispatchEvent(new Event("input", { bubbles: true }));
+      const duringFront = S.guideCur === "front";
+      sl.dispatchEvent(new Event("change", { bubbles: true }));
+      const afterFront = S.guideCur === "archThickness";
+      PBx.render();
+      const atLit = lineColorOf("archThickness").own;
+      /* 이너(v2) 를 다시 움직이면 이너가 켜지고, 끝나면 이너의 다음(앞두께) */
+      S.selUD = "v2";   // v2 는 세로선 — 좌우 슬라이더 담당이지만 guide 훅 검증은 가로 슬라이더 방식과 동일하므로 selLR 로
+      S.selLR = "v2"; S.hMode = "line";
+      const sh = document.getElementById("posSliderH") || document.querySelector(".posctl.axis-h input");
+      sh.dispatchEvent(new Event("input", { bubbles: true }));
+      const duringInner = S.guideCur === "v2";
+      sh.dispatchEvent(new Event("change", { bubbles: true }));
+      const afterInner = S.guideCur === "frontThickness";
+      /* 꼬리(h3) 끝나면 플로우 종료 (처음으로 돌아가지 않음) */
+      S.selUD = "h3";
+      sl.dispatchEvent(new Event("input", { bubbles: true }));
+      sl.dispatchEvent(new Event("change", { bubbles: true }));
+      const endsAfterTail = S.guideCur === null && S.guideOn === true;
+      /* 가이드 끄면 즉시 종료 */
+      document.getElementById("btnGuide").click();
+      const offEnds = S.guideOn === false && S.guideCur === null;
+      return { greyByDefault, noneAtStart, duringFront, afterFront, atLit, duringInner, afterInner, endsAfterTail, offEnds };
+    });
+    await ctx.close();
+    check("101. 가이드 플로우 — 기본 회색 · 움직인 선이 켜지고 끝나면 다음 순서 · 꼬리 뒤 종료 · 끄면 종료",
+      g101.greyByDefault && g101.noneAtStart && g101.duringFront && g101.afterFront && g101.atLit
+        && g101.duringInner && g101.afterInner && g101.endsAfterTail && g101.offEnds,
+      Object.entries(g101).map(([k, v]) => `${k}=${v}`).join(" "));
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
