@@ -557,11 +557,13 @@ console.log("[세로 모드 · 기능]");
       rightEnd: st.right - h.right > st.width * 0.04 && st.right - h.right < st.width * 0.10
                 && Math.abs(m.right - h.right) < 2,
       bottomEnd: st.bottom - h.bottom < 20,
+      /* v1.44.1 — 바 폭 = 줌~밸런스 행 폭, 양쪽 끝 모두 일치 (원장님: "안길어 졌다" 재발 방지) */
+      spansRow: Math.abs(m.width - h.width) < 2 && Math.abs(m.left - h.left) < 2,
     };
   });
-  check("38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 바가 오른쪽에서 5% 떨어져 맨 아래",
-    dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd,
-    `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd}`);
+  check("38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 바 = 줌~밸런스 행과 같은 폭·정렬",
+    dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd && dockOrder.spansRow,
+    `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd} 폭일치=${dockOrder.spansRow}`);
 
   /* 39. 되돌리기·다시실행 = **위아래 드래그 바 위** (v1.43.0 · 원장님 지시 2026-08-21)
      되돌리기가 바에 가장 가깝습니다 — 제일 자주 누르는 버튼이라 손이 짧게 움직입니다. */
