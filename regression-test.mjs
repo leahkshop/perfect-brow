@@ -1992,15 +1992,22 @@ console.log("\n[밸런스 판정]");
       set(55, 0.465, 0.455); set(285, 0.535, 0.455);
       return lm;
     };
-    const f97 = path.join(ROOT, ".tail-a.svg");
-    fs.writeFileSync(f97, `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="#e9d8c6"/></svg>`);
-    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
-    const p = await ctx.newPage();
-    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
-    await p.waitForTimeout(300);
-    await p.setInputFiles("#fileInput", f97);
-    await p.waitForTimeout(1000);
-    const r = await p.evaluate((lm) => {
+    const mk97 = (tag, extra) => {
+      const f = path.join(ROOT, `.tail-${tag}.svg`);
+      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="#e9d8c6"/>${extra}</svg>`);
+      return f;
+    };
+    const f97 = mk97("a", "");
+    /* 보이는 꼬리: 랜드마크 꼬리(image x 180)에 붙여 x150 까지 **진한** 잉크 */
+    const f97v = mk97("v", `<rect x="120" y="245" width="110" height="14" fill="#241a12"/>`);
+    const run97 = async (file, lm) => {
+      const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+      const p = await ctx.newPage();
+      await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+      await p.waitForTimeout(300);
+      await p.setInputFiles("#fileInput", file);
+      await p.waitForTimeout(1000);
+      const r = await p.evaluate((lm) => {
       const S = window.PB.S, W = S.dim.W;
       S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
       const cv = (ix, iy) => window.PB.imgToCanvas(ix * S.iw, iy * S.ih, S.p);
@@ -2009,14 +2016,20 @@ console.log("\n[밸런스 판정]");
       const ala = P(64), oc = P(33), tail = P(70);
       const t = (tail.y - ala.y) / (oc.y - ala.y);
       const tipX = (ala.x + (oc.x - ala.x) * t) / W;
-      return { v1: S.g.v1, v4: S.g.v4, tipX, eyeL: oc.x / W, tailL: tail.x / W };
-    }, FAKE97());
-    await ctx.close();
-    fs.unlinkSync(f97);
-    check("97. 꼬리 자동 위치 — 아우터 = 콧볼–외안각 연장선 ∩ 꼬리 높이 (눈꼬리·잉크 아님)",
-      Math.abs(r.v4 - r.tipX) < 0.012                       /* 연장선 규칙 그대로 */
-        && r.v4 < r.eyeL - 0.01,                            /* 눈꼬리보다 확실히 바깥 */
-      `아우터 ${r.v4.toFixed(3)} — 연장선 기대 ${r.tipX.toFixed(3)} · 눈꼬리 ${r.eyeL.toFixed(3)} · 꼬리LM ${r.tailL.toFixed(3)}`);
+      return { v1: S.g.v1, v4: S.g.v4, tipX, eyeL: oc.x / W, tailL: tail.x / W,
+               inkEnd: cv(120 / 600, 0).x / W };
+      }, lm);
+      await ctx.close();
+      return r;
+    };
+    const a = await run97(f97, FAKE97()), b = await run97(f97v, FAKE97());
+    fs.unlinkSync(f97); fs.unlinkSync(f97v);
+    check("97. 꼬리 2단계 — 안 보이면 콧볼–외안각 연장선 · 보이는 진한 꼬리는 그 잉크 끝",
+      Math.abs(a.v4 - a.tipX) < 0.012                       /* ② 연장선 규칙 그대로 */
+        && a.v4 < a.eyeL - 0.01                             /* 눈꼬리보다 확실히 바깥 */
+        && Math.abs(b.v4 - b.inkEnd) < 0.03                 /* ① 보이는 잉크의 끝 */
+        && Math.abs(b.v4 - b.tipX) > 0.02,                  /* ①이 ②를 이긴다 */
+      `빈사진 ${a.v4.toFixed(3)}(연장선 ${a.tipX.toFixed(3)}) · 잉크사진 ${b.v4.toFixed(3)}(잉크끝 ${b.inkEnd.toFixed(3)} / 연장선 ${b.tipX.toFixed(3)})`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서

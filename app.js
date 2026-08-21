@@ -289,7 +289,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.40.0";
+const APP_VERSION = "v1.41.0";
 
 const H_SPECS = [
 /* ⚠️ `anchor` — 가로 자는 **자기 묶음의 세로선 위에** 올라간다 (v1.32.0)
@@ -1552,45 +1552,74 @@ function eyeCorners(lm) {
    훨씬 바깥입니다 (v1.34.0 의 실패, 원장님 지적 2026-08-21). */
 const BROW_TAIL_L = [70, 46], BROW_TAIL_R = [300, 276];
 
-/* ═══ 꼬리 끝 = 콧볼–외안각 연장선 (v1.40.0) ═══════════════════════════
-   ⚠️ **픽셀(잉크) 추적으로 되돌리지 마세요.** v1.35~v1.39 에서 잉크 문턱을 네 번
-   조였지만 전부 실패했습니다. 실제 사진(원장님 빨간 표시 2026-08-21)에서 눈썹 꼬리는
-   관자놀이 잔털과 **끊김 없이 이어져** 있어, 어두움으로는 "디자인상의 꼬리 끝"을
-   정할 수 없습니다.
-   업계 표준 규칙을 씁니다: **꼬리 끝은 콧볼(코 날개)에서 눈꼬리(외안각)를 지나는
-   연장선이 눈썹 꼬리 높이와 만나는 점.** 털이 아니라 얼굴 비율로 정해지므로
-   고객마다 일관되고, 원장님이 손으로 잡는 기준과 같습니다.
-   기준쪽만 잽니다 (데칼코마니 · 1-19). 랜드마크 꼬리점 대비 0.8~1.5배로 제한 —
-   고개를 튼 사진에서 연장선이 폭주하는 것을 막습니다. */
+/* ═══ 꼬리(아우터) 위치 — 2단계 규칙 (v1.41.0 · 원장님 지시 2026-08-21) ═══════
+   「1. 사진에 보이는 꼬리에 선을 올린다. 2. 보이지 않을경우 얇은 눈썹은 드로잉이라고
+    처리하지 않는다. 얼굴의 기본 꼬리위치를 계산하여 …눈꼬리의 평균 지점에 위치한다」
+
+   ① **보이는 꼬리** — 강한 대비(DRAW_CONTRAST)로만 잉크를 찾는다. 그려졌거나 또렷한
+      꼬리는 통과하고, 옅은 잔털·관자놀이 솜털은 못 넘는다. 충분한 표본(TAIL_VIS_MIN)이
+      나와야 "보인다"로 인정 → 그 잉크의 끝에 아우터를 세운다.
+   ② **안 보이면** — 얼굴 표준 위치: **콧볼–외안각 연장선이 꼬리 높이(h3)와 만나는 점.**
+      얇은 눈썹을 억지로 읽지 않는다.
+   ⚠️ ①을 약한 대비(SOFT)로 바꾸지 마세요 — v1.35~v1.39 에서 네 번 실패했습니다:
+   옅은 잔털이 눈썹과 끊김 없이 이어져 있어 약한 대비로는 끝을 정할 수 없습니다.
+   기준쪽만 잽니다 (데칼코마니 · 1-19). 랜드마크 꼬리점 대비 0.8~1.5배 제한. */
 const NOSE_ALA = [64, 294];   // 콧볼(코 날개) 좌/우 랜드마크
+const TAIL_VIS_MIN = 6;       // 강한 대비 표본이 이만큼은 나와야 "보이는 꼬리"
+const TAIL_TIP_INK = 0.30;    // 최고 잉크의 이만큼 + 2열 연속이어야 끝으로 인정
 
 function browTail(lm, tr, v1frac) {
   const { W, H } = S.dim;
   const pt = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr);
   const xOf = (i) => pt(i).x / W;
-  /* 랜드마크 꼬리(안전망 + 상한선의 기준) — 기준쪽만 */
   const all = [...BROW_TAIL_L, ...BROW_TAIL_R];
   const refXs = all.map(xOf).filter((x) => (refIsLeft() ? x < v1frac : x > v1frac));
   const lmHalf = refXs.length ? Math.max(...refXs.map((x) => Math.abs(x - v1frac)))
                               : Math.max(...all.map((i) => Math.abs(xOf(i) - v1frac)));
 
-  /* 기준쪽 콧볼 · 외안각 · 꼬리 높이 */
+  /* ① 보이는 꼬리 — 강한 대비 잉크의 끝 */
+  const img = photoPixels();
+  const boxes = img && browBoxes();
+  if (boxes) {
+    const b = refIsLeft() ? boxes.left : boxes.right, dir = refIsLeft() ? -1 : 1;
+    const bh = Math.max(12, b.h ? b.h : (b.y1 - b.y0) / 4);
+    let got = null, gap = 0, cy = b.cy, inkRef = 0, prevSolid = false, solids = 0;
+    for (let f = lmHalf * 0.70; f <= lmHalf * 1.5; f += 0.006) {
+      const x = Math.round((v1frac + dir * f) * W);
+      if (x < 0 || x >= W) break;
+      const y0 = Math.max(0, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) - bh));
+      const y1 = Math.min(H - 1, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) + bh));
+      if (y1 - y0 < 8) break;
+      const c = columnRuns(img, x, y0, y1, cy, DRAW_CONTRAST);   // ⚠️ 강한 대비 — SOFT 금지
+      const r = c && c.runs[c.si];
+      const mid = r ? (r.top + r.bot) / 2 : null;
+      if (r && (cy === null || Math.abs(mid - cy) <= bh * 0.6)) {
+        inkRef = Math.max(inkRef, r.ink);
+        const solid = r.ink >= inkRef * TAIL_TIP_INK && r.bot - r.top >= 2;
+        if (solid) { solids++; if (prevSolid) got = f; }
+        prevSolid = solid;
+        cy = mid; gap = 0;
+      } else { prevSolid = false; if (f > lmHalf * 0.9 && ++gap > 5) break; }
+    }
+    if (got !== null && solids >= TAIL_VIS_MIN)
+      return { half: clamp(got, lmHalf * 0.8, lmHalf * 1.5), tipY: null };
+  }
+
+  /* ② 얼굴 표준 위치 — 콧볼–외안각 연장선 ∩ 꼬리 높이 */
+  let half = lmHalf;
   const alaL = pt(NOSE_ALA[0]), alaR = pt(NOSE_ALA[1]);
   const ala = (refIsLeft() ? (alaL.x <= alaR.x ? alaL : alaR) : (alaL.x <= alaR.x ? alaR : alaL));
-  const c = eyeCorners(lm);
-  const oc = refIsLeft() ? c.outerL : c.outerR;
+  const c2 = eyeCorners(lm);
+  const oc = refIsLeft() ? c2.outerL : c2.outerR;
   const occ = imgToCanvas(oc.x, oc.y, tr);
   const tailY = refOfPair(lm, tr, AI_LM.h3, v1frac).y;
-
-  let half = lmHalf;
   const dy = occ.y - ala.y;
-  if (Math.abs(dy) > 4) {                       // 연장선이 설 수 있을 때만
+  if (Math.abs(dy) > 4) {
     const t = (tailY - ala.y) / dy;
     const tipX = ala.x + (occ.x - ala.x) * t;
     if (isFinite(tipX)) half = clamp(Math.abs(tipX / W - v1frac), lmHalf * 0.8, lmHalf * 1.5);
   }
-  /* ⚠️ 여기서 0~1 로 자르지 않는다 — 화면 밖이면 fitBrowsInFrame 이 배율을 낮춰야
-     하는데, 잘라 버리면 "이미 들어와 있다"고 착각합니다 (v1.40.0 에서 실제로 겪음) */
+  /* 0~1 로 자르지 않는다 — fitBrowsInFrame 이 화면 밖 여부를 봐야 한다 */
   return { half, tipY: null };
 }
 
@@ -1708,18 +1737,22 @@ function fitBrowsInFrame(lm) {
   /* **랜드마크 꼬리와 아우터 선(연장선 끝) 둘 다** 들어와야 한다 (v1.40.0).
      연장선 끝은 랜드마크보다 바깥일 수 있고, g.v4 는 0~1 로 잘려 있어 진짜 위치를
      못 보므로 반폭을 다시 계산해서 잰다. */
-  const g = S.g;
-  const lmXs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
-  const half = browTailHalf(lm, S.p, g.v1);
-  const lo = Math.min(...lmXs, g.v1 - half), hi = Math.max(...lmXs, g.v1 + half);
-  const left = FRAME_PAD * WRn, right = WRn - FRAME_PAD * WRn;
-  const c = S.g.v1;
-  const need = Math.max((c - lo) / Math.max(c - left, 1e-6), (hi - c) / Math.max(right - c, 1e-6));
-  if (need <= 1.001) return;                       // 이미 들어옴
-  const zoom = clamp(S.p.zoom / need, ZOOM_MIN, ZOOM_MAX);
-  if (Math.abs(zoom - S.p.zoom) < 1e-4) return;
-  S.p.zoom = zoom;
-  autoAlignRelayout(lm);
+  /* ⚠️ **수렴할 때까지 반복**한다 (v1.41.0) — 꼬리 잉크가 화면 밖까지 이어지면
+     측정 자체가 화면 끝에서 잘려, 한 번의 축소로는 부족합니다 (실제로 겪음). */
+  for (let pass = 0; pass < 4; pass++) {
+    const g = S.g;
+    const lmXs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
+    const half = browTailHalf(lm, S.p, g.v1);
+    const lo = Math.min(...lmXs, g.v1 - half), hi = Math.max(...lmXs, g.v1 + half);
+    const left = FRAME_PAD * WRn, right = WRn - FRAME_PAD * WRn;
+    const c = g.v1;
+    const need = Math.max((c - lo) / Math.max(c - left, 1e-6), (hi - c) / Math.max(right - c, 1e-6));
+    if (need <= 1.001) return;                     // 들어옴
+    const zoom = clamp(S.p.zoom / need, ZOOM_MIN, ZOOM_MAX);
+    if (Math.abs(zoom - S.p.zoom) < 1e-4) return;
+    S.p.zoom = zoom;
+    autoAlignRelayout(lm);
+  }
 }
 
 /* 배율만 바뀌었으므로 위치·선을 그 배율로 다시 계산 (재귀 없이 한 번만) */
