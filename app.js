@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.42.0";
+const APP_VERSION = "v1.42.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -488,11 +488,8 @@ function mk(tag, attrs) {
 }
 
 function drawLine(frag, x1, y1, x2, y2, color, w, op) {
-  // 흰색 헤일로 → 어떤 피부톤/배경에서도 선이 보이게
-  frag.appendChild(mk("line", {
-    x1, y1, x2, y2, stroke: "#ffffff", "stroke-width": w + 2.4,
-    "stroke-opacity": 0.5, "stroke-linecap": "round",
-  }));
+  /* 흰색 헤일로 없음 (v1.42.1 — 원장님 지시: 「선은 흰색 테두리말고 그냥 짙은회색으로」).
+     헤일로를 되살리면 선이 두꺼워 보여 정교함이 죽습니다. */
   frag.appendChild(mk("line", {
     x1, y1, x2, y2, stroke: color, "stroke-width": w,
     "stroke-opacity": op, "stroke-linecap": "round",
