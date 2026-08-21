@@ -2064,13 +2064,17 @@ console.log("\n[밸런스 판정]");
         const x = key.startsWith("v") ? S.g[key] * S.dim.W : null;
         const y = key.startsWith("v") ? null : S.g[key] * S.dim.H;
         const ls = [...document.getElementById("guides").querySelectorAll("line")]
-          .filter((l) => +(l.getAttribute("stroke-opacity") || 1) > 0.4
+          .filter((l) => +(l.getAttribute("stroke-opacity") || 1) > 0.3
             && (x !== null ? Math.abs(+l.getAttribute("x1") - x) < 1 && Math.abs(+l.getAttribute("x1") - +l.getAttribute("x2")) < 0.5
                            : Math.abs(+l.getAttribute("y1") - y) < 1 && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5));
-        return { own: ls.some((l) => l.getAttribute("stroke") === sp.color && sp.color !== "#3A414E"),
+        /* v1.46.0 — own = 고유색 **진하게**(강조), dim = 고유색 **연하게**(기본) */
+        return { own: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) > 0.9),
+                 dim: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) <= 0.85),
                  grey: ls.some((l) => l.getAttribute("stroke") === "#3A414E") };
       };
-      const greyByDefault = lineColorOf("h2").grey && !lineColorOf("h2").own && lineColorOf("v4").grey;
+      /* v1.46.0 — 기본 = 고유색 연하게 (회색 아님·강조 아님) */
+      const greyByDefault = lineColorOf("h2").dim && !lineColorOf("h2").own && !lineColorOf("h2").grey
+                            && lineColorOf("v4").dim && !lineColorOf("v4").own;
       document.getElementById("btnGuide").click();          // 가이드 ON — **이너부터** 켜짐 (v1.44.0)
       const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
       /* 앞머리(front) 를 슬라이더로 움직인다 → 움직이는 동안 front 가 켜지고, 끝나면 다음(아치두께) */
@@ -2101,7 +2105,7 @@ console.log("\n[밸런스 판정]");
       return { greyByDefault, noneAtStart, duringFront, afterFront, atLit, duringInner, afterInner, endsAfterTail, offEnds };
     });
     await ctx.close();
-    check("101. 가이드 플로우 — 기본 회색 · 움직인 선이 켜지고 끝나면 다음 순서 · 꼬리 뒤 종료 · 끄면 종료",
+    check("101. 가이드 플로우 — 기본 고유색 연하게(v1.46.0) · 움직인 선이 켜지고 끝나면 다음 순서 · 꼬리 뒤 종료 · 끄면 종료",
       g101.greyByDefault && g101.noneAtStart && g101.duringFront && g101.afterFront && g101.atLit
         && g101.duringInner && g101.afterInner && g101.endsAfterTail && g101.offEnds,
       Object.entries(g101).map(([k, v]) => `${k}=${v}`).join(" "));

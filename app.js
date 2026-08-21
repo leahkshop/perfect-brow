@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.45.0";
+const APP_VERSION = "v1.46.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -301,7 +301,9 @@ const APP_VERSION = "v1.45.0";
    · 꼬리(마지막) 뒤로는 **처음으로 돌아가지 않는다** — 플로우 종료
    · 가이드를 끄면 즉시 종료 */
 const GUIDE_FLOW = ["v2", "frontThickness", "front", "archThickness", "h2", "h3"];
-const GREY_LINE = "#3A414E";   // 모든 선의 기본색 (짙은 회색)
+/* v1.46.0 — 기본 회색(GREY_LINE) 폐지 (원장님: 「회색이라 내 드로잉과 겹쳐 잘 안 보인다」).
+   모든 선은 **항상 자기 고유색**: 차례/선택이 아니면 연하게(투명도↓), 차례면 진하게+굵게.
+   색만 봐도 어떤 선인지 알 수 있어 가이드를 모르는 사용자도 위쪽 칩 색과 바로 짝지을 수 있다. */
 
 const H_SPECS = [
 /* ⚠️ `anchor` — 가로 자는 **자기 묶음의 세로선 위에** 올라간다 (v1.32.0)
@@ -313,8 +315,9 @@ const H_SPECS = [
    v1.31.x 까지는 자 위치가 frac 상수로 박혀 있어, **아치 자가 아우터를 따라 움직였습니다**
    (원장님이 직접 찾아내신 문제). 상수를 되살리지 말고 anchor 를 쓰세요. */
   { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.0, op: 0.5, anchor: null },
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#14161B", dot: "#C9D1E0", w: 1.15, op: 0.9, anchor: "v2" },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#14161B", dot: "#C9D1E0", w: 1.15, op: 0.9, anchor: "v2" },
+  /* v1.46.0 — 이너 묶음은 검정 → **앰버(주황)** (원장님 승인): 검정은 드로잉 위에서 안 보인다 */
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#F59E0B", dot: "#FCD34D", w: 1.15, op: 0.9, anchor: "v2" },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#F59E0B", dot: "#FCD34D", w: 1.15, op: 0.9, anchor: "v2" },
   { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
   { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
   { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 1.15, op: 0.95, anchor: "v4" },
@@ -323,7 +326,7 @@ const H_SPECS = [
 const V_SPECS = [
   { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.1, op: 1,   mirror: null },
   /* 이너만 길게(눈까지) 남긴다 — 콧방울·내안각과 맞춰 보는 기준선이기 때문 (원장님 지시 2026-08-20) */
-  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#14161B", dot: "#C9D1E0", w: 1.35, op: 0.6, mirror: "v3", long: true },
+  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#F59E0B", dot: "#FCD34D", w: 1.35, op: 0.6, mirror: "v3", long: true },
   /* 아치선 (v1.32.0) — 아치·아치두께가 올라가는 기둥. 아우터보다 **얇게** 그려 소속을 표시한다 */
   { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 0.75, op: 0.9, mirror: "v7" },
   /* 아우터는 **보라** — 꼬리와 한 묶음이라 색으로 묶어 준다 (원장님 지시 2026-08-20) */
@@ -555,12 +558,12 @@ function browBandY(tight) {
 
 function renderGuides() {
   const { W, H } = S.dim, g = S.g;
-  /* 기본은 짙은 회색 — 고유색은 가이드의 "지금 차례"이거나 선택된 선만 (v1.42.0) */
-  /* 가이드 중에는 **지금 차례(guideCur) 하나만** 켠다 — 다음 단계로 넘어가면 이전 단계
-     선은 표시가 꺼진다 (v1.44.0 원장님 지시). 가이드 밖에서는 선택된 선이 켜진다.
-     굵기 강조 필수 (v1.43.0) — 검정 계열 고유색은 회색과 색만으로 구분이 안 됩니다. */
+  /* v1.46.0 — 모든 선은 **항상 고유색**: 강조(차례/선택)가 아니면 연하게(투명도 60%),
+     강조면 진하게(불투명)+굵게(+1.6). 회색 기본은 드로잉 위에서 사라져 폐지 (원장님 지시).
+     가이드 중에는 지금 차례(guideCur) 하나만 강조 (v1.44.0). */
   const emph = (sp) => S.guideOn ? S.guideCur === sp.key : isSelected(sp.key);
-  const liveColor = (sp) => emph(sp) ? sp.color : GREY_LINE;
+  const liveColor = (sp) => sp.color;
+  const dimOp = (sp) => Math.max(0.4, sp.op * 0.6);
   const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
   S.wr = WR;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -590,7 +593,7 @@ function renderGuides() {
   /* 가로 라인 — 세로 이너 선과 **같은 방식**: 재는 구간만 두껍게, 이너까지는 얇은 실선 (v1.23.0)
      얇은 선 색은 이너 선과 같은 중성색으로 통일한다. 이 선이 없으면 자가 공중에 떠 보인다. */
   {
-    const HAIR = V_SPECS[1].color;                     // 이너 선 색 (중성)
+    const HAIR = "#14161B";   // 옅은 연결선용 중성색 (v1.46.0 — 이너가 앰버가 되어 분리)
     for (const sp of H_SPECS) {
       if (!g[sp.vis]) continue;
       const y = g[sp.key] * H;
@@ -618,7 +621,7 @@ function renderGuides() {
         drawLine(frag, xa, y, xb, y,
           bad ? BAL_RED : liveColor(sp),
           bad ? sp.w + 2.2 : (sel ? sp.w + 1.6 : sp.w),
-          bad ? 1 : (sel ? 1 : sp.op));
+          bad ? 1 : (sel ? 1 : dimOp(sp)));
       });
     }
   }
@@ -632,7 +635,7 @@ function renderGuides() {
     for (const sp of V_SPECS) {
       if (!g[sp.vis]) continue;
       const sel = emph(sp);
-      const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : sp.op;
+      const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : dimOp(sp);
       const full = sp.key === "v1";
       const band = sp.long ? bandL : bandT;
       const by0 = band.y0 * H, by1 = band.y1 * H;
@@ -2775,7 +2778,7 @@ if ("serviceWorker" in navigator) {
 { const el = document.getElementById("verTag"); if (el) el.textContent = "Perfect Brow " + APP_VERSION; }
 
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
-  LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
+  LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", inner: "#F59E0B", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
