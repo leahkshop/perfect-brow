@@ -1058,6 +1058,7 @@ console.log("[세로 모드 · 기능]");
     set(33, 0.330, 0.500); set(133, 0.455, 0.500);                    // 왼 외안각·내안각
     set(362, d.innerR, 0.500); set(263, d.outerR, 0.500);             // 오른 내안각·외안각
     set(70, 0.300, 0.420); set(300, 0.700, 0.420);                    // 꼬리 (위 윤곽)
+    set(46, 0.305, 0.445); set(276, 0.695, 0.445);                    // 꼬리 (아래 윤곽)
     set(105, 0.420, 0.400); set(334, 0.580, 0.400);                   // 산 (위)
     set(52, 0.420, 0.440); set(282, 0.580, 0.440);                    // 산 (아래) = 두께
     set(107, 0.465, 0.430); set(336, 0.535, 0.430);                   // 앞머리 (위)
@@ -1082,11 +1083,16 @@ console.log("[세로 모드 · 기능]");
   // 70. 비대칭 얼굴 — 이너 바 오차를 좌·우에 고르게 나눈다 (대칭은 유지)
   const asym = await p.evaluate((lm) => {
     const S = window.PB.S, W = S.dim.W;
+    /* 랜드마크 수학만 검증한다 — 꼬리 픽셀 연장(v1.35.0)은 사진 잉크에 따라 좌우가
+       달라질 수 있어, 이 검사에서는 사진을 잠시 치워 연장을 끈다 */
+    const img = S.imgEl; S.imgEl = null;
     S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
+    S.imgEl = img;
     const P = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
     return {
       inL: Math.abs(S.g.v2 - P(133)), inR: Math.abs(S.g.v3 - P(362)),
-      outL: Math.abs(S.g.v4 - P(33)), outR: Math.abs(S.g.v5 - P(263)),
+      /* 아우터는 v1.35.0 부터 **눈썹 꼬리(70/300)** 기준 — 눈꼬리(33/263)가 아니다 */
+      outL: Math.abs(S.g.v4 - P(70)), outR: Math.abs(S.g.v5 - P(300)),
       sym: Math.abs((S.g.v2 + S.g.v3) / 2 - S.g.v1),
     };
   }, FAKE_FACE({ innerR: 0.575, outerR: 0.690 }));   // 오른쪽을 바깥으로 (비대칭 얼굴)
@@ -1955,6 +1961,66 @@ console.log("\n[밸런스 판정]");
   check("94. 맨 눈썹 — 드로잉이 없어도 저대비 2차 패스가 털을 읽어 배치한다", judge(o94), say(o94));
   fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc); fs.unlinkSync(fn);
 
+
+  /* 97. ⚠️ 꼬리(아우터) 자동 위치 (v1.35.0) — 원장님 지적(2026-08-21):
+     「꼬리는 눈썹의 끝 뾰족한 부분인데 자동 입력시 눈썹 꼬리부분 위치 선정 지정 고도화 해라」
+     v1.34.0 까지 아우터를 **외안각(눈꼬리)** 에서 재서 꼬리 자가 눈썹 한가운데 떨어졌습니다.
+     ① 빈 사진: 아우터 = 눈썹 꼬리 랜드마크(70/300·46/276 중 바깥쪽) — 눈꼬리(33/263)보다 바깥
+     ② 꼬리 잉크가 랜드마크보다 더 바깥까지 이어진 사진: 그 끝까지 따라간다 (한계 +30%)
+     눈꼬리 기준으로 되돌리면 ①이, 픽셀 연장을 지우면 ②가 깨집니다. */
+  {
+    const mk = (tag, stroke) => {
+      const f = path.join(ROOT, `.tail-${tag}.svg`);
+      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">`
+        + `<rect width="600" height="600" fill="#e9d8c6"/>${stroke}</svg>`);
+      return f;
+    };
+    const blank = mk("a", "");
+    /* 왼쪽 꼬리 랜드마크(image x 0.300)에 **붙여서** 바깥(x 0.25)까지 잉크를 잇는다 */
+    const inked = mk("b", `<rect x="150" y="243" width="36" height="18" fill="#2a1c14"/>`);
+    /* FAKE_FACE 는 다른 블록 스코프에 있어 여기서 다시 만든다 (값은 그쪽과 동일하게 유지) */
+    const FAKE97 = () => {
+      const lm = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+      const set = (i, x, y) => { lm[i] = { x, y, z: 0 }; };
+      [468, 469, 470, 471, 472].forEach((i) => set(i, 0.400, 0.500));
+      [473, 474, 475, 476, 477].forEach((i) => set(i, 0.600, 0.500));
+      set(33, 0.330, 0.500); set(133, 0.455, 0.500);
+      set(362, 0.545, 0.500); set(263, 0.670, 0.500);
+      set(70, 0.300, 0.420); set(300, 0.700, 0.420);
+      set(46, 0.305, 0.445); set(276, 0.695, 0.445);
+      set(105, 0.420, 0.400); set(334, 0.580, 0.400);
+      set(52, 0.420, 0.440); set(282, 0.580, 0.440);
+      set(107, 0.465, 0.430); set(336, 0.535, 0.430);
+      set(55, 0.465, 0.455); set(285, 0.535, 0.455);
+      return lm;
+    };
+    const run97 = async (file) => {
+      const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+      const p = await ctx.newPage();
+      await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+      await p.waitForTimeout(300);
+      await p.setInputFiles("#fileInput", file);
+      await p.waitForTimeout(1000);
+      const r = await p.evaluate((lm) => {
+        const S = window.PB.S, W = S.dim.W;
+        S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
+        const P = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
+        return { v1: S.g.v1, v4: S.g.v4, eyeL: P(33), tailL: P(70) };
+      }, FAKE97());
+      await ctx.close();
+      return r;
+    };
+    const a = await run97(blank), b = await run97(inked);
+    fs.unlinkSync(blank); fs.unlinkSync(inked);
+    const halfA = a.v1 - a.v4, halfB = b.v1 - b.v4;
+    check("97. 꼬리 자동 위치 — 아우터 = 눈썹 꼬리 (눈꼬리 아님) · 잉크가 더 길면 끝까지 따라감",
+      a.v4 < a.eyeL - 0.01                                  /* ① 눈꼬리보다 확실히 바깥 */
+        && Math.abs(a.v4 - a.tailL) < 0.02                  /* ① 꼬리 랜드마크 근처 (빈 사진 = 연장 없음) */
+        && halfB > halfA + 0.015                            /* ② 잉크를 따라 더 바깥으로 */
+        && halfB <= halfA * 1.32,                           /* ② 한계(+30%) 안 */
+      `빈사진 아우터 ${a.v4.toFixed(3)} (눈꼬리 ${a.eyeL.toFixed(3)} · 꼬리LM ${a.tailL.toFixed(3)}) · `
+      + `잉크사진 반폭 ${halfA.toFixed(3)}→${halfB.toFixed(3)}`);
+  }
 
   /* 96. ⚠️ 시작 배치 규칙 (v1.34.0) — 원장님 판정(2026-08-21):
      「초기화 눌렀을때 올라온 선들이 맞다. 이것을 내가 사진을 입력하는 순간부터 적용하고싶다」

@@ -1543,6 +1543,50 @@ function eyeCorners(lm) {
   return { outerL: c[0], innerL: c[1], innerR: c[2], outerR: c[3] };
 }
 
+/* ═══ 꼬리(아우터) 위치 — 눈꼬리가 아니라 **눈썹 꼬리** ═══════════════ (v1.35.0)
+   ⚠️ v1.34.0 까지 아우터를 **외안각(눈꼬리)** 에서 쟀습니다. 눈썹 꼬리는 눈꼬리보다
+   훨씬 바깥까지 뻗으므로 꼬리 자가 눈썹 한가운데에 떨어졌습니다 — 원장님 지적(2026-08-21):
+   「꼬리는 눈썹의 끝 뾰족한 부분인데」. 기준은 두 단계입니다:
+   ① 눈썹 꼬리 랜드마크(위 70/300 · 아래 46/276) 중 **더 바깥쪽**
+   ② 사진에서 털·드로잉이 실제로 더 바깥까지 이어지면 **어두운 열이 끊길 때까지** 따라간다
+      (렌드마크는 종종 실제 꼬리보다 안쪽에서 끝납니다)
+   ②는 반드시 ①에서 **바깥 방향으로만**, 최대 +TAIL_EXT_MAX 까지. 안쪽으로 당기거나
+   한계를 풀면 관자놀이 머리카락을 꼬리로 잡습니다 (columnRuns 의 폭 제한이 1차 방어). */
+const BROW_TAIL_L = [70, 46], BROW_TAIL_R = [300, 276];
+const TAIL_EXT_MAX = 0.30;   // 랜드마크 반폭의 이만큼까지만 바깥으로 연장
+const TAIL_GAP = 3;          // 어두운 열이 이만큼(표본) 연속으로 끊기면 거기가 끝
+
+function browTailHalf(lm, tr, v1frac) {
+  const { W } = S.dim;
+  const xOf = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr).x / W;
+  const sideHalf = (idx) => Math.max(...idx.map((i) => Math.abs(xOf(i) - v1frac)));
+  let hL = sideHalf(BROW_TAIL_L), hR = sideHalf(BROW_TAIL_R);
+
+  /* ② 픽셀 연장 — 각 쪽을 **자기 랜드마크 꼬리에서부터** 따로 잰 뒤 평균
+     (평균 지점에서 시작하면 랜드마크가 더 안쪽인 쪽의 잉크를 놓칩니다) */
+  const img = photoPixels();
+  const boxes = img && browBoxes();
+  if (boxes) {
+    const { H } = S.dim;
+    const ext = (b, dir, h0) => {
+      const y0 = Math.max(0, Math.round(b.y0)), y1 = Math.min(H - 1, Math.round(b.y1));
+      if (y1 - y0 < 8) return h0;
+      const maxHalf = h0 * (1 + TAIL_EXT_MAX);
+      let got = h0, gap = 0;
+      for (let f = h0 * 0.96; f <= maxHalf; f += 0.006) {   // 살짝 안쪽에서 출발 — 랜드마크가 잉크 끝을 지나쳐 있어도 잡는다
+        const x = Math.round((v1frac + dir * f) * W);
+        if (x < 0 || x >= W) break;
+        const c = columnRuns(img, x, y0, y1, b.cy, DRAW_CONTRAST_SOFT);
+        if (c) { if (f > got) got = f; gap = 0; } else if (++gap > TAIL_GAP) break;
+      }
+      return got;
+    };
+    hL = ext(boxes.left, -1, hL);
+    hR = ext(boxes.right, 1, hR);
+  }
+  return clamp((hL + hR) / 2, 0.02, 0.96);
+}
+
 /* 지금 화면 변환(S.p) 기준으로 그 선이 있어야 할 값(0~1). 랜드마크가 없으면 null. */
 function aiValueFor(key) {
   const lm = S.landmarks;
@@ -1564,9 +1608,10 @@ function aiValueFor(key) {
     if (key === "v1") return clamp(cx, 0.02, 0.98);
     /* 아치선은 **눈썹 산(105/334)** 의 x — 눈이 아니라 눈썹에서 잽니다 (v1.32.0) */
     const xOf = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr).x / W;
-    const pair = key === "v2" ? [c.innerL, c.innerR] : key === "v4" ? [c.outerL, c.outerR] : null;
-    const half = pair
-      ? (Math.abs(imgToCanvas(pair[0].x, pair[0].y, tr).x / W - cx) + Math.abs(imgToCanvas(pair[1].x, pair[1].y, tr).x / W - cx)) / 2
+    /* 아우터는 **눈썹 꼬리** 기준 (v1.35.0 — browTailHalf 의 주석 참고) */
+    const half = key === "v2"
+      ? (Math.abs(imgToCanvas(c.innerL.x, c.innerL.y, tr).x / W - cx) + Math.abs(imgToCanvas(c.innerR.x, c.innerR.y, tr).x / W - cx)) / 2
+      : key === "v4" ? browTailHalf(lm, tr, S.g.v1)
       : (Math.abs(xOf(AI_LM.h2[0]) - cx) + Math.abs(xOf(AI_LM.h2[1]) - cx)) / 2;
     return clamp(S.g.v1 - half, 0.02, 0.98);
   }
@@ -1628,10 +1673,10 @@ function autoAlign(lm) {
 
   /* 좌·우 실측 거리의 **평균** — 한쪽만 재서 거울상을 만들면 비대칭 얼굴에서 한쪽이 크게 뜬다.
      평균을 쓰면 양쪽이 똑같이 아주 조금씩만 뜬다 (BASELINE 1-2 대칭 유지). */
-  const outLc = cx(outerL.x, outerL.y), outRc = cx(outerR.x, outerR.y);
   const halfIn = (Math.abs(inLc.x / W - g.v1) + Math.abs(inRc.x / W - g.v1)) / 2;
-  const halfOut = (Math.abs(outLc.x / W - g.v1) + Math.abs(outRc.x / W - g.v1)) / 2;
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
+  /* 아우터 = **눈썹 꼬리** (눈꼬리 아님 — 원장님 지적 2026-08-21, browTailHalf 참고) */
+  const halfOut = browTailHalf(lm, tr, g.v1);
   g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
 
   /* 아치선 — 눈썹 산(105/334)의 x. 아치·아치두께 자가 이 기둥 위에 올라간다 (v1.32.0) */
@@ -1686,12 +1731,11 @@ function autoAlignRelayout(lm) {
   S.p.oy = clamp(-(ry * tr.zoom) / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX);
   const g = S.g, cv = (x, y) => imgToCanvas(x, y, S.p);
   const inLc = cv(c.innerL.x, c.innerL.y), inRc = cv(c.innerR.x, c.innerR.y);
-  const outLc = cv(c.outerL.x, c.outerL.y), outRc = cv(c.outerR.x, c.outerR.y);
   g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
   g.h1 = clamp(cv(mx, my).y / H, 0.02, 0.98);
   const halfIn = (Math.abs(inLc.x / W - g.v1) + Math.abs(inRc.x / W - g.v1)) / 2;
-  const halfOut = (Math.abs(outLc.x / W - g.v1) + Math.abs(outRc.x / W - g.v1)) / 2;
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
+  const halfOut = browTailHalf(lm, S.p, g.v1);   /* 눈썹 꼬리 기준 (v1.35.0) */
   g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
 
   /* 아치선 — 눈썹 산(105/334)의 x (v1.32.0) */
