@@ -1556,7 +1556,10 @@ const BROW_TAIL_L = [70, 46], BROW_TAIL_R = [300, 276];
 const TAIL_EXT_MAX = 0.45;   // 랜드마크 반폭의 이만큼까지만 바깥으로 연장
 const TAIL_GAP = 5;          // 어두운 열이 이만큼(표본) 연속으로 끊기면 거기가 끝
 const TAIL_JUMP = 0.6;       // 띠의 중심이 창의 이 비율보다 크게 튀면 다른 것(머리카락)으로 본다
-const TAIL_TIP_INK = 0.15;   // 최고 잉크의 이만큼은 돼야 "눈썹 끝"으로 인정 (그림자·잔털 방지)
+/* v1.39.1 — 0.15 로는 끝의 **성근 잔털**까지 눈썹으로 인정해 아우터가 넘쳤습니다
+   (원장님 빨간 표시 2026-08-21). 그린 드로잉의 뾰족한 끝은 가늘어도 **아주 진해서**
+   0.30 을 넘고, 잔털은 가늘고 옅어서 못 넘습니다. */
+const TAIL_TIP_INK = 0.30;   // 최고 잉크의 이만큼은 돼야 "눈썹 끝"으로 인정 (그림자·잔털 방지)
 const TAIL_SHRINK_MAX = 0.20;// 랜드마크보다 안쪽으로 당길 수 있는 한계
 
 /* 기준쪽 눈썹 꼬리의 반폭 — **잉크가 실제로 끝나는 지점** (v1.39.0)
@@ -1582,7 +1585,7 @@ function browTail(lm, tr, v1frac) {
     const ext = (b, dir, h0) => {
       const bh = Math.max(12, b.h ? b.h * 1.0 : (b.y1 - b.y0) / 4);   // 추적 창 반높이
       const maxHalf = h0 * (1 + TAIL_EXT_MAX);
-      let got = null, gap = 0, cy = b.cy, inkRef = 0;
+      let got = null, gap = 0, cy = b.cy, inkRef = 0, prevSolid = false;
       for (let f = h0 * 0.70; f <= maxHalf; f += 0.006) {   // 몸통 안쪽에서 출발 — 안쪽 당김도 가능하게
         const x = Math.round((v1frac + dir * f) * W);
         if (x < 0 || x >= W) break;
@@ -1594,10 +1597,13 @@ function browTail(lm, tr, v1frac) {
         const mid = r ? (r.top + r.bot) / 2 : null;
         if (r && (cy === null || Math.abs(mid - cy) <= bh * TAIL_JUMP)) {
           inkRef = Math.max(inkRef, r.ink);
-          /* 탄탄한 잉크일 때만 "여기까지가 눈썹"으로 인정 — 그림자·잔털 방지 */
-          if (r.ink >= inkRef * TAIL_TIP_INK && r.bot - r.top >= 2) got = f;
+          /* 탄탄한 잉크가 **2열 연속**일 때만 "여기까지가 눈썹"으로 인정 (v1.39.1)
+             — 한 열짜리 점(잔털·점·그림자 얼룩)으로는 전진하지 않는다 */
+          const solid = r.ink >= inkRef * TAIL_TIP_INK && r.bot - r.top >= 2;
+          if (solid && prevSolid) got = f;
+          prevSolid = solid;
           cy = mid; gap = 0;
-        } else if (f > h0 * 0.9 && ++gap > TAIL_GAP) break;
+        } else { prevSolid = false; if (f > h0 * 0.9 && ++gap > TAIL_GAP) break; }
         /* ⚠️ 랜드마크 안쪽(f < 0.9·h0)에서는 끊김으로 중단하지 않는다 — 몸통 구간의
            빈 열은 조명·화장 때문일 수 있고, 여기서 멈추면 바깥 잉크를 아예 못 봅니다 */
       }
