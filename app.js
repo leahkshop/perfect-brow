@@ -1730,11 +1730,13 @@ async function runFaceAI() {
     }
     S.landmarks = res.faceLandmarks[0];
     autoAlign(S.landmarks);
-    render();
-    /* 얼굴 정렬이 끝난 뒤 **그려진 드로잉 위로** 선을 다시 올린다 (v1.30.0).
-       그린 선이 없거나 못 읽으면 조용히 얼굴 기준 배치 그대로 둔다. */
-    const drawn = autoFromDrawing();
-    setAI(drawn ? t("ai_drawn") : t("ai_ok"), "ok");
+    /* ⚠️ 여기서 autoFromDrawing() 을 **자동으로 부르지 마세요** (v1.34.0).
+       v1.30.0~v1.33.0 은 사진을 넣자마자 드로잉 판독까지 돌렸는데, 실제 고객 사진에서
+       판독이 어긋나면 선이 엉뚱하게 벌어진 채 시작됐습니다. 원장님 판정(2026-08-21):
+       「초기화 눌렀을때 올라온 선들이 맞다. 이것을 내가 사진을 입력하는 순간부터
+       적용하고싶다」 — 즉 시작 배치는 **초기화와 동일한 랜드마크 배치**입니다.
+       드로잉 판독은 `드로잉 맞춤` 버튼을 눌렀을 때만 돕니다. */
+    setAI(t("ai_ok"), "ok");
     render();
   } catch (err) {
     console.warn("[PerfectBrow] face AI unavailable:", err);

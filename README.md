@@ -5,11 +5,11 @@ PMU 아티스트용 눈썹 대칭·밸런스 가이드 도구.
 
 ### 🔗 https://leahkshop.github.io/perfect-brow/
 
-> **현재 v1.33.0 · 회귀 테스트 105항목 전부 통과**
+> **현재 v1.34.0 · 회귀 테스트 106항목 전부 통과**
 >
 > 📌 **코드를 고치기 전에 반드시 [`BASELINE.md`](./BASELINE.md) 를 읽으세요.**
 > 지키지 않으면 조용히 깨지는 규칙(좌표계·대칭·프리셋 저장소)이 정리돼 있습니다.
-> 고친 뒤에는 `node regression-test.mjs` 로 **전 항목(105개)** 을 자동 검증하세요.
+> 고친 뒤에는 `node regression-test.mjs` 로 **전 항목(106개)** 을 자동 검증하세요.
 >
 > 🤖 **AI 에게 이 프로젝트를 맡길 때는** [`클로드-시작-명령서.md`](./클로드-시작-명령서.md) 한 파일만 읽히면 됩니다.
 > 작업 규칙·배포 절차·하지 말아야 할 것이 전부 그 안에 있습니다.
@@ -41,7 +41,7 @@ PMU 아티스트용 눈썹 대칭·밸런스 가이드 도구.
 ## 2. 수정한 내용을 반영하기
 
 1. 파일 수정 (`index.html` / `app.js`)
-2. `node regression-test.mjs` → **105항목 전부 통과 확인**
+2. `node regression-test.mjs` → **106항목 전부 통과 확인**
 3. `sw.js` 의 `VERSION` 올리기 (안 올리면 기기에 옛 화면이 그대로 남습니다)
 4. 백업 zip + SHA-256 먼저 만들기
 5. GitHub 저장소에서 `Add file` → `Upload files` → 해당 파일 덮어쓰기 → Commit
@@ -209,7 +209,7 @@ perfect-brow/
 ├── apple-touch-icon.png
 ├── BASELINE.md             🔒 잠금 사양 · 복구 방법  ← 작업 전 필독
 ├── 클로드-시작-명령서.md      🤖 AI 에게 내리는 작업 지시서 (새 창 시작용)
-├── regression-test.mjs     ✅ 자동 회귀 테스트 (105항목)
+├── regression-test.mjs     ✅ 자동 회귀 테스트 (106항목)
 └── README.md               이 문서
 ```
 

@@ -1955,6 +1955,25 @@ console.log("\n[밸런스 판정]");
   check("94. 맨 눈썹 — 드로잉이 없어도 저대비 2차 패스가 털을 읽어 배치한다", judge(o94), say(o94));
   fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc); fs.unlinkSync(fn);
 
+
+  /* 96. ⚠️ 시작 배치 규칙 (v1.34.0) — 원장님 판정(2026-08-21):
+     「초기화 눌렀을때 올라온 선들이 맞다. 이것을 내가 사진을 입력하는 순간부터 적용하고싶다」
+     사진을 넣으면 **초기화와 동일한 랜드마크 배치**로 시작한다. 드로잉 판독(autoFromDrawing)은
+     `드로잉 맞춤` 버튼에서만 돈다. runFaceAI 안에 자동 호출을 되살리면 이 검사가 깨집니다 —
+     실제 고객 사진에서 판독이 어긋나면 선이 엉뚱하게 벌어진 채 시작됐습니다 (v1.30.0~v1.33.0 의 실패). */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+    const m = src.match(/async function runFaceAI\(\)[\s\S]*?\n}/);
+    /* 주석은 걷어내고 실제 코드만 본다 — 함수 안 주석이 이 규칙 자체를 설명하고 있어서 */
+    const code = m && m[0].replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    const auto = m && /autoFromDrawing\s*\(/.test(code);
+    const snapSrc = src.match(/\$\("btnSnap"\)\.onclick[\s\S]*?};/);
+    const manual = snapSrc && /autoFromDrawing\s*\(/.test(snapSrc[0]);
+    check("96. 시작 배치 = 랜드마크(초기화와 동일) · 드로잉 판독은 버튼에서만",
+      !!m && auto === false && manual === true,
+      `runFaceAI에 자동호출 ${auto ? "있음(잘못)" : "없음"} · 드로잉맞춤 버튼 호출 ${manual ? "있음" : "없음(잘못)"}`);
+  }
+
   /* 95. 세로선 길이·굵기 (v1.33.0) — 원장님 지시:
      「세로 라인은 이너라인 빼고 더 얇게 짧게 · 아래 눈 위치까지 내려오지 않아도 된다」
      · 아치선·아우터의 진한 구간은 눈 기준선(h1)에 **닿지 않는다**
