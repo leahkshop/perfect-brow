@@ -1560,8 +1560,12 @@ const TAIL_JUMP = 0.6;       // 띠의 중심이 창의 이 비율보다 크게 
 function browTailHalf(lm, tr, v1frac) {
   const { W } = S.dim;
   const xOf = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr).x / W;
-  const sideHalf = (idx) => Math.max(...idx.map((i) => Math.abs(xOf(i) - v1frac)));
-  let hL = sideHalf(BROW_TAIL_L), hR = sideHalf(BROW_TAIL_R);
+  /* **기준쪽 꼬리만** 잰다 (데칼코마니 · v1.38.0) — 좌우 평균으로 되돌리면
+     기준쪽조차 어긋나고 반대쪽 넘침도 생깁니다 (원장님 채점 6점의 원인). */
+  const all = [...BROW_TAIL_L, ...BROW_TAIL_R];
+  const refXs = all.map(xOf).filter((x) => (refIsLeft() ? x < v1frac : x > v1frac));
+  let half = refXs.length ? Math.max(...refXs.map((x) => Math.abs(x - v1frac)))
+                          : Math.max(...all.map((i) => Math.abs(xOf(i) - v1frac)));
 
   /* ② 픽셀 연장 — 각 쪽을 **자기 랜드마크 꼬리에서부터** 따로 잰 뒤 평균
      (평균 지점에서 시작하면 랜드마크가 더 안쪽인 쪽의 잉크를 놓칩니다) */
@@ -1570,15 +1574,14 @@ function browTailHalf(lm, tr, v1frac) {
   if (boxes) {
     const { H } = S.dim;
     /* ⚠️ **경로 추적** (v1.36.0) — 창을 고정하면 안 됩니다. 꼬리는 바깥으로 갈수록
-       **아래로 처지며** 옅어지므로, 고정 창은 처진 꼬리를 중간에 놓칩니다 (원장님
-       스크린샷 2026-08-21 — 아우터가 실제 꼬리 끝보다 한참 안쪽에 섰습니다).
+       **아래로 처지며** 옅어지므로, 고정 창은 처진 꼬리를 중간에 놓칩니다.
        어두운 띠의 중심(cy)을 따라 창을 옮기고, 중심이 갑자기 크게 튀면 머리카락으로
        보고 잇지 않습니다 (TAIL_JUMP). columnRuns 의 폭 제한이 2차 방어입니다. */
     const ext = (b, dir, h0) => {
       const bh = Math.max(12, b.h ? b.h * 1.0 : (b.y1 - b.y0) / 4);   // 추적 창 반높이
       const maxHalf = h0 * (1 + TAIL_EXT_MAX);
       let got = h0, gap = 0, cy = b.cy;
-      for (let f = h0 * 0.96; f <= maxHalf; f += 0.006) {   // 살짝 안쪽에서 출발 — 랜드마크가 잉크 끝을 지나쳐 있어도 잡는다
+      for (let f = h0 * 0.96; f <= maxHalf; f += 0.006) {   // 살짝 안쪽에서 출발
         const x = Math.round((v1frac + dir * f) * W);
         if (x < 0 || x >= W) break;
         const y0 = Math.max(0, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) - bh));
@@ -1594,38 +1597,56 @@ function browTailHalf(lm, tr, v1frac) {
       }
       return got;
     };
-    hL = ext(boxes.left, -1, hL);
-    hR = ext(boxes.right, 1, hR);
+    /* 기준쪽만 연장한다 — 반대쪽 잉크는 기준이 아니다 (데칼코마니) */
+    half = refIsLeft() ? ext(boxes.left, -1, half) : ext(boxes.right, 1, half);
   }
-  return clamp((hL + hR) / 2, 0.02, 0.96);
+  return clamp(half, 0.02, 0.96);
 }
 
 /* 지금 화면 변환(S.p) 기준으로 그 선이 있어야 할 값(0~1). 랜드마크가 없으면 null. */
+/* ═══ 데칼코마니 원칙 (v1.38.0 — 원장님 설명 2026-08-21) ══════════════════
+   이 앱은 **한쪽(기준쪽) 드로잉/눈썹에만 정확히** 선을 맞추고, 센터 대칭으로 반대쪽에
+   기준이 저절로 생기게 하는 도구입니다. 반대쪽의 오차는 평균으로 나누는 것이 아니라
+   **원장님이 갭을 보고 교정**합니다.
+   「선들의 기준점은 오른쪽왼쪽 드로잉의 평균 밸런스가 아닌 단 한쪽에만 정확히 선을
+   맞추고 반대쪽의 밸런스만 교정하는 방식이다」
+   ⚠️ 좌·우 평균으로 되돌리지 마세요 — v1.37.0 까지 그랬고, 기준쪽조차 어긋난 채
+   양쪽이 반씩 뜨는 배치가 나왔습니다. 회귀 70·97 이 기준쪽 정확 일치를 검사합니다.
+   센터(v1)·눈(h1)만 양쪽에서 잡습니다 — 대칭 축 자체이기 때문입니다. */
+function refIsLeft() { return S.refSide !== "R"; }
+
+/* 랜드마크 쌍 [i, j] 중 **기준쪽**(센터에서 화면 왼/오른쪽)에 있는 점의 캔버스 좌표 */
+function refOfPair(lm, tr, pair, v1frac) {
+  const { W } = S.dim;
+  const p0 = imgToCanvas(lm[pair[0]].x * S.iw, lm[pair[0]].y * S.ih, tr);
+  const p1 = imgToCanvas(lm[pair[1]].x * S.iw, lm[pair[1]].y * S.ih, tr);
+  const left = p0.x <= p1.x ? p0 : p1, right = p0.x <= p1.x ? p1 : p0;
+  return refIsLeft() ? left : right;
+}
+
 function aiValueFor(key) {
   const lm = S.landmarks;
   if (!lm || !S.dim.H) return null;
   const { W, H } = S.dim, tr = S.p;
-  const yOf = (idx) => { const p = lmAvg(lm, idx); return clamp(imgToCanvas(p.x, p.y, tr).y / H, 0.02, 0.98); };
 
   if (key === "h1") {
     const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
     return clamp(imgToCanvas((a.x + b.x) / 2, (a.y + b.y) / 2, tr).y / H, 0.02, 0.98);
   }
-  if (AI_LM[key]) return yOf(AI_LM[key]);
+  /* 가로선 — **기준쪽 눈썹의 높이** (데칼코마니: 반대쪽과 평균하지 않는다) */
+  if (AI_LM[key]) return clamp(refOfPair(lm, tr, AI_LM[key], S.g.v1).y / H, 0.02, 0.98);
 
-  /* 세로선 — 대칭을 지켜야 하므로 좌·우 실측값의 **평균 거리**를 쓴다 (BASELINE 1-2).
-     한쪽만 재서 거울상을 만들면 비대칭 얼굴에서 한쪽이 크게 뜬다. */
   if (key === "v1" || key === "v2" || key === "v4" || key === "v6") {
     const c = eyeCorners(lm);
-    const cx = (imgToCanvas(c.innerL.x, c.innerL.y, tr).x + imgToCanvas(c.innerR.x, c.innerR.y, tr).x) / 2 / W;
+    const inL = imgToCanvas(c.innerL.x, c.innerL.y, tr).x / W;
+    const inR = imgToCanvas(c.innerR.x, c.innerR.y, tr).x / W;
+    const cx = (inL + inR) / 2;
     if (key === "v1") return clamp(cx, 0.02, 0.98);
-    /* 아치선은 **눈썹 산(105/334)** 의 x — 눈이 아니라 눈썹에서 잽니다 (v1.32.0) */
-    const xOf = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr).x / W;
-    /* 아우터는 **눈썹 꼬리** 기준 (v1.35.0 — browTailHalf 의 주석 참고) */
+    /* 세로선도 **기준쪽 실측** — 대칭은 setLine 거울상이 만든다 (1-2) */
     const half = key === "v2"
-      ? (Math.abs(imgToCanvas(c.innerL.x, c.innerL.y, tr).x / W - cx) + Math.abs(imgToCanvas(c.innerR.x, c.innerR.y, tr).x / W - cx)) / 2
+      ? Math.abs((refIsLeft() ? inL : inR) - cx)
       : key === "v4" ? browTailHalf(lm, tr, S.g.v1)
-      : (Math.abs(xOf(AI_LM.h2[0]) - cx) + Math.abs(xOf(AI_LM.h2[1]) - cx)) / 2;
+      : Math.abs(refOfPair(lm, tr, AI_LM.h2, S.g.v1).x / W - cx);
     return clamp(S.g.v1 - half, 0.02, 0.98);
   }
   return null;
@@ -1674,39 +1695,8 @@ function autoAlign(lm) {
   const tr = { zoom, rot, ox: clamp(-(rx * zoom) / W + (centerX() - 0.5), -OFFSET_MAX, OFFSET_MAX), oy: clamp(-(ry * zoom) / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX) };
   S.p = tr;
 
-  /* 라인 자동 배치 */
-  const g = S.g;
-  const cx = (x, y) => imgToCanvas(x, y, tr);
-
-  /* 중심축은 **동공 중점이 아니라 양쪽 내안각의 중점** (v1.22.0).
-     이너 바가 좌우 내안각에 고르게 닿으려면 이 축이 기준이어야 한다. */
-  const inLc = cx(innerL.x, innerL.y), inRc = cx(innerR.x, innerR.y);
-  g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
-  g.h1 = clamp(cx(mx, my).y / H, 0.02, 0.98);
-
-  /* 좌·우 실측 거리의 **평균** — 한쪽만 재서 거울상을 만들면 비대칭 얼굴에서 한쪽이 크게 뜬다.
-     평균을 쓰면 양쪽이 똑같이 아주 조금씩만 뜬다 (BASELINE 1-2 대칭 유지). */
-  const halfIn = (Math.abs(inLc.x / W - g.v1) + Math.abs(inRc.x / W - g.v1)) / 2;
-  g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
-  /* 아우터 = **눈썹 꼬리** (눈꼬리 아님 — 원장님 지적 2026-08-21, browTailHalf 참고) */
-  const halfOut = browTailHalf(lm, tr, g.v1);
-  g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
-
-  /* 아치선 — 눈썹 산(105/334)의 x. 아치·아치두께 자가 이 기둥 위에 올라간다 (v1.32.0) */
-  const arL = cx(P(AI_LM.h2[0]).x, P(AI_LM.h2[0]).y), arR = cx(P(AI_LM.h2[1]).x, P(AI_LM.h2[1]).y);
-  const halfArch = (Math.abs(arL.x / W - g.v1) + Math.abs(arR.x / W - g.v1)) / 2;
-  g.v6 = clamp(g.v1 - halfArch, 0.02, 0.98); g.v7 = 2 * g.v1 - g.v6;
-
-  /* 눈썹 기준선 — 두께 선은 **눈썹 아래 윤곽을 실측**한다 (고정 오프셋 아님, v1.22.0) */
-  const yAt = (idx) => { const p = avg(idx); return clamp(cx(p.x, p.y).y / H, 0.02, 0.98); };
-  g.h2 = yAt(AI_LM.h2);
-  g.h3 = yAt(AI_LM.h3);
-  g.front = yAt(AI_LM.front);
-  g.archThickness = yAt(AI_LM.archThickness);
-  g.frontThickness = yAt(AI_LM.frontThickness);
-
-  /* Base Structure pivot 을 코끝 높이에 */
-  g.innerAngle = clamp(g.h1 + 0.16, 0.05, 0.95);
+  /* 라인 자동 배치 — **기준쪽 실측만** 쓴다 (데칼코마니 · placeLines 의 주석 참고) */
+  placeLines(lm);
 
   fitBrowsInFrame(lm);   // 눈썹 꼬리가 잘리면 배율을 낮춘다
 }
@@ -1752,15 +1742,16 @@ function placeLines(lm) {
   const { W, H } = S.dim;
   const g = S.g, c = eyeCorners(lm), cv = (x, y) => imgToCanvas(x, y, S.p);
   const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
+  /* 센터·눈만 양쪽에서 — 대칭 축 자체이므로. 나머지는 전부 **기준쪽 실측** (데칼코마니) */
   const inLc = cv(c.innerL.x, c.innerL.y), inRc = cv(c.innerR.x, c.innerR.y);
   g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
   g.h1 = clamp(cv((a.x + b.x) / 2, (a.y + b.y) / 2).y / H, 0.02, 0.98);
-  const halfIn = (Math.abs(inLc.x / W - g.v1) + Math.abs(inRc.x / W - g.v1)) / 2;
+  const halfIn = Math.abs((refIsLeft() ? inLc : inRc).x / W - g.v1);
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
-  const halfOut = browTailHalf(lm, S.p, g.v1);   /* 눈썹 꼬리 기준 (v1.35.0) */
+  const halfOut = browTailHalf(lm, S.p, g.v1);   /* 기준쪽 눈썹 꼬리 (v1.35.0/v1.38.0) */
   g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
 
-  /* 아치선 — 눈썹 산(105/334)의 x (v1.32.0) */
+  /* 아치선·가로선 — aiValueFor 가 기준쪽 랜드마크를 쓴다 (v1.38.0) */
   { const v = aiValueFor("v6"); if (v !== null) { g.v6 = v; g.v7 = 2 * g.v1 - v; } }
   for (const k of ["h2", "h3", "front", "archThickness", "frontThickness"]) {
     const v = aiValueFor(k);

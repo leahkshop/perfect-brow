@@ -1096,12 +1096,14 @@ console.log("[세로 모드 · 기능]");
       sym: Math.abs((S.g.v2 + S.g.v3) / 2 - S.g.v1),
     };
   }, FAKE_FACE({ innerR: 0.575, outerR: 0.690 }));   // 오른쪽을 바깥으로 (비대칭 얼굴)
-  /* 중심축을 **내안각 중점**으로 잡으므로 이너 바는 좌우 모두 정확히 닿는다.
-     비대칭의 오차는 아우터로 옮겨가고, 그건 좌우에 **똑같이** 나뉘어야 한다. */
-  check("70. 비대칭 얼굴 — 이너는 양쪽 다 닿고, 아우터 오차는 좌우 균등",
+  /* ⚠️ 데칼코마니 (v1.38.0 — 원장님 설명 2026-08-21): 「단 한쪽에만 정확히 선을 맞추고
+     반대쪽의 밸런스만 교정하는 방식이다」. 기준쪽(왼쪽) 아우터는 **정확히** 닿고,
+     비대칭 오차는 전부 반대쪽이 안는다 — 그 갭을 원장님이 교정한다.
+     좌우 평균(오차 반씩)으로 되돌리면 이 검사가 깨집니다. */
+  check("70. 비대칭 얼굴 — 이너·아우터는 기준쪽에 정확히, 오차는 반대쪽이 안는다 (데칼코마니)",
     asym.inL < 0.002 && asym.inR < 0.002
-      && Math.abs(asym.outL - asym.outR) < 0.004 && asym.sym < 1e-6,
-    `이너 ${(asym.inL * 100).toFixed(2)}%/${(asym.inR * 100).toFixed(2)}% · 아우터 ${(asym.outL * 100).toFixed(2)}%/${(asym.outR * 100).toFixed(2)}% · 대칭오차 ${asym.sym.toExponential(1)}`);
+      && asym.outL < 0.003 && asym.outR > asym.outL && asym.sym < 1e-6,
+    `이너 ${(asym.inL * 100).toFixed(2)}%/${(asym.inR * 100).toFixed(2)}% · 아우터 기준쪽 ${(asym.outL * 100).toFixed(2)}% / 반대쪽 ${(asym.outR * 100).toFixed(2)}% · 대칭오차 ${asym.sym.toExponential(1)}`);
 
   // 71. 눈썹 꼬리가 프레임 안에 들어온다 (자동 정렬 후 잘리지 않음)
   const fit = await p.evaluate((lm) => {
