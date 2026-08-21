@@ -1556,32 +1556,34 @@ const BROW_TAIL_L = [70, 46], BROW_TAIL_R = [300, 276];
 const TAIL_EXT_MAX = 0.45;   // 랜드마크 반폭의 이만큼까지만 바깥으로 연장
 const TAIL_GAP = 5;          // 어두운 열이 이만큼(표본) 연속으로 끊기면 거기가 끝
 const TAIL_JUMP = 0.6;       // 띠의 중심이 창의 이 비율보다 크게 튀면 다른 것(머리카락)으로 본다
+const TAIL_TIP_INK = 0.15;   // 최고 잉크의 이만큼은 돼야 "눈썹 끝"으로 인정 (그림자·잔털 방지)
+const TAIL_SHRINK_MAX = 0.20;// 랜드마크보다 안쪽으로 당길 수 있는 한계
 
-function browTailHalf(lm, tr, v1frac) {
+/* 기준쪽 눈썹 꼬리의 반폭 — **잉크가 실제로 끝나는 지점** (v1.39.0)
+   원장님 지적(2026-08-21): 「세로선이 안맞으니 꼬리에 붙어있는 아우터선 프롬포트 다시
+   설정해라」 — 아우터는 눈썹의 **뾰족한 끝**에 정확히 서야 합니다.
+   ① 랜드마크 꼬리(기준쪽)로 대략 위치를 잡고
+   ② 눈썹 몸통 안쪽(70%)부터 바깥으로 잉크 경로를 추적하며, **탄탄한 잉크**가 있는
+      마지막 열을 끝으로 삼는다 — 옅은 그림자·잔털(TAIL_TIP_INK 미만)로는 전진하지 않는다
+   ③ 랜드마크가 잉크 끝보다 바깥이면 **안쪽으로 당겨** 온다 (최대 −20%까지)
+   좌우 평균 금지(데칼코마니) · 경로 추적 유지(처진 꼬리) — 둘 다 이전 실패에서 배운 것 */
+function browTail(lm, tr, v1frac) {
   const { W } = S.dim;
   const xOf = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, tr).x / W;
-  /* **기준쪽 꼬리만** 잰다 (데칼코마니 · v1.38.0) — 좌우 평균으로 되돌리면
-     기준쪽조차 어긋나고 반대쪽 넘침도 생깁니다 (원장님 채점 6점의 원인). */
   const all = [...BROW_TAIL_L, ...BROW_TAIL_R];
   const refXs = all.map(xOf).filter((x) => (refIsLeft() ? x < v1frac : x > v1frac));
   let half = refXs.length ? Math.max(...refXs.map((x) => Math.abs(x - v1frac)))
                           : Math.max(...all.map((i) => Math.abs(xOf(i) - v1frac)));
 
-  /* ② 픽셀 연장 — 각 쪽을 **자기 랜드마크 꼬리에서부터** 따로 잰 뒤 평균
-     (평균 지점에서 시작하면 랜드마크가 더 안쪽인 쪽의 잉크를 놓칩니다) */
   const img = photoPixels();
   const boxes = img && browBoxes();
   if (boxes) {
     const { H } = S.dim;
-    /* ⚠️ **경로 추적** (v1.36.0) — 창을 고정하면 안 됩니다. 꼬리는 바깥으로 갈수록
-       **아래로 처지며** 옅어지므로, 고정 창은 처진 꼬리를 중간에 놓칩니다.
-       어두운 띠의 중심(cy)을 따라 창을 옮기고, 중심이 갑자기 크게 튀면 머리카락으로
-       보고 잇지 않습니다 (TAIL_JUMP). columnRuns 의 폭 제한이 2차 방어입니다. */
     const ext = (b, dir, h0) => {
       const bh = Math.max(12, b.h ? b.h * 1.0 : (b.y1 - b.y0) / 4);   // 추적 창 반높이
       const maxHalf = h0 * (1 + TAIL_EXT_MAX);
-      let got = h0, gap = 0, cy = b.cy;
-      for (let f = h0 * 0.96; f <= maxHalf; f += 0.006) {   // 살짝 안쪽에서 출발
+      let got = null, gap = 0, cy = b.cy, inkRef = 0;
+      for (let f = h0 * 0.70; f <= maxHalf; f += 0.006) {   // 몸통 안쪽에서 출발 — 안쪽 당김도 가능하게
         const x = Math.round((v1frac + dir * f) * W);
         if (x < 0 || x >= W) break;
         const y0 = Math.max(0, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) - bh));
@@ -1591,17 +1593,24 @@ function browTailHalf(lm, tr, v1frac) {
         const r = c && c.runs[c.si];
         const mid = r ? (r.top + r.bot) / 2 : null;
         if (r && (cy === null || Math.abs(mid - cy) <= bh * TAIL_JUMP)) {
-          if (f > got) got = f;
+          inkRef = Math.max(inkRef, r.ink);
+          /* 탄탄한 잉크일 때만 "여기까지가 눈썹"으로 인정 — 그림자·잔털 방지 */
+          if (r.ink >= inkRef * TAIL_TIP_INK && r.bot - r.top >= 2) got = f;
           cy = mid; gap = 0;
-        } else if (++gap > TAIL_GAP) break;
+        } else if (f > h0 * 0.9 && ++gap > TAIL_GAP) break;
+        /* ⚠️ 랜드마크 안쪽(f < 0.9·h0)에서는 끊김으로 중단하지 않는다 — 몸통 구간의
+           빈 열은 조명·화장 때문일 수 있고, 여기서 멈추면 바깥 잉크를 아예 못 봅니다 */
       }
-      return got;
+      /* 잉크를 아예 못 읽으면 랜드마크 유지. 읽었으면 그 끝 — 단 안쪽 당김은 −20%까지 */
+      return got === null ? h0 : clamp(got, h0 * (1 - TAIL_SHRINK_MAX), maxHalf);
     };
-    /* 기준쪽만 연장한다 — 반대쪽 잉크는 기준이 아니다 (데칼코마니) */
     half = refIsLeft() ? ext(boxes.left, -1, half) : ext(boxes.right, 1, half);
   }
-  return clamp(half, 0.02, 0.96);
+  return { half: clamp(half, 0.02, 0.96), tipY: null };
 }
+
+/* 예전 이름 호환 — 반폭만 필요할 때 */
+function browTailHalf(lm, tr, v1frac) { return browTail(lm, tr, v1frac).half; }
 
 /* 지금 화면 변환(S.p) 기준으로 그 선이 있어야 할 값(0~1). 랜드마크가 없으면 null. */
 /* ═══ 데칼코마니 원칙 (v1.38.0 — 원장님 설명 2026-08-21) ══════════════════
@@ -1633,6 +1642,8 @@ function aiValueFor(key) {
     const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
     return clamp(imgToCanvas((a.x + b.x) / 2, (a.y + b.y) / 2, tr).y / H, 0.02, 0.98);
   }
+  /* 꼬리 자(h3)의 높이는 **랜드마크 그대로** — 원장님 확인(2026-08-21): 「꼬리 가로선은
+     맞다」. 잉크 끝 높이로 바꿨다가 되돌렸습니다. 다시 바꾸지 마세요. */
   /* 가로선 — **기준쪽 눈썹의 높이** (데칼코마니: 반대쪽과 평균하지 않는다) */
   if (AI_LM[key]) return clamp(refOfPair(lm, tr, AI_LM[key], S.g.v1).y / H, 0.02, 0.98);
 

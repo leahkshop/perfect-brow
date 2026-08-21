@@ -2006,24 +2006,32 @@ console.log("\n[밸런스 판정]");
       await p.setInputFiles("#fileInput", file);
       await p.waitForTimeout(1000);
       const r = await p.evaluate((lm) => {
-        const S = window.PB.S, W = S.dim.W;
+        const S = window.PB.S, W = S.dim.W, H = S.dim.H;
         S.landmarks = lm; window.PB.autoAlign(lm); window.PB.render();
         const P = (i) => window.PB.imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W;
-        return { v1: S.g.v1, v4: S.g.v4, eyeL: P(33), tailL: P(70) };
+        const cy = (iy) => window.PB.imgToCanvas(300, iy, S.p).y / H;   // 이미지 y → 캔버스 y(0~1)
+        return { v1: S.g.v1, v4: S.g.v4, eyeL: P(33), tailL: P(70),
+                 h3: S.g.h3, lmY: cy(252), dropY: cy(291) };
       }, FAKE97());
       await ctx.close();
       return r;
     };
-    const a = await run97(blank), b = await run97(inked);
-    fs.unlinkSync(blank); fs.unlinkSync(inked);
-    const halfA = a.v1 - a.v4, halfB = b.v1 - b.v4;
+    /* 잉크가 랜드마크보다 **안쪽에서 끝나는** 경우 — 아우터가 안쪽으로 당겨져야 한다 (v1.39.0) */
+    const shrunk = mk("s", `<rect x="200" y="245" width="50" height="14" fill="#2a1c14"/>`);
+    const a = await run97(blank), b = await run97(inked), c97 = await run97(shrunk);
+    fs.unlinkSync(blank); fs.unlinkSync(inked); fs.unlinkSync(shrunk);
+    const halfA = a.v1 - a.v4, halfB = b.v1 - b.v4, halfC = c97.v1 - c97.v4;
     check("97. 꼬리 자동 위치 — 아우터 = 눈썹 꼬리 (눈꼬리 아님) · 잉크가 더 길면 끝까지 따라감",
       a.v4 < a.eyeL - 0.01                                  /* ① 눈꼬리보다 확실히 바깥 */
         && Math.abs(a.v4 - a.tailL) < 0.02                  /* ① 꼬리 랜드마크 근처 (빈 사진 = 연장 없음) */
         && halfB > halfA + 0.015                            /* ② 처진 잉크를 추적해 더 바깥으로 */
-        && halfB <= halfA * 1.47,                           /* ② 한계(+45%) 안 */
+        && halfB <= halfA * 1.47                            /* ② 한계(+45%) 안 */
+        /* ③ 꼬리 자(h3) 높이는 **랜드마크 그대로** — 원장님 확인 「꼬리 가로선은 맞다」 */
+        && Math.abs(b.h3 - b.lmY) < 0.03
+        /* ④ 잉크가 랜드마크보다 안쪽에서 끝나면 아우터도 **안쪽으로** (한계 −20%) */
+        && halfC < halfA - 0.008 && halfC >= halfA * 0.79,
       `빈사진 아우터 ${a.v4.toFixed(3)} (눈꼬리 ${a.eyeL.toFixed(3)} · 꼬리LM ${a.tailL.toFixed(3)}) · `
-      + `잉크사진 반폭 ${halfA.toFixed(3)}→${halfB.toFixed(3)}`);
+      + `잉크사진 반폭 ${halfA.toFixed(3)}→${halfB.toFixed(3)} · 꼬리자높이 ${b.h3.toFixed(3)}(랜드마크 ${b.lmY.toFixed(3)}) · 짧은잉크 반폭 ${halfC.toFixed(3)}`);
   }
 
   /* 98. ⚠️ 드로잉 맞춤의 기준쪽 (v1.37.0) — 원장님 지시(2026-08-21):
