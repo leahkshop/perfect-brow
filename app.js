@@ -1553,8 +1553,9 @@ function eyeCorners(lm) {
    ②는 반드시 ①에서 **바깥 방향으로만**, 최대 +TAIL_EXT_MAX 까지. 안쪽으로 당기거나
    한계를 풀면 관자놀이 머리카락을 꼬리로 잡습니다 (columnRuns 의 폭 제한이 1차 방어). */
 const BROW_TAIL_L = [70, 46], BROW_TAIL_R = [300, 276];
-const TAIL_EXT_MAX = 0.30;   // 랜드마크 반폭의 이만큼까지만 바깥으로 연장
-const TAIL_GAP = 3;          // 어두운 열이 이만큼(표본) 연속으로 끊기면 거기가 끝
+const TAIL_EXT_MAX = 0.45;   // 랜드마크 반폭의 이만큼까지만 바깥으로 연장
+const TAIL_GAP = 5;          // 어두운 열이 이만큼(표본) 연속으로 끊기면 거기가 끝
+const TAIL_JUMP = 0.6;       // 띠의 중심이 창의 이 비율보다 크게 튀면 다른 것(머리카락)으로 본다
 
 function browTailHalf(lm, tr, v1frac) {
   const { W } = S.dim;
@@ -1568,16 +1569,28 @@ function browTailHalf(lm, tr, v1frac) {
   const boxes = img && browBoxes();
   if (boxes) {
     const { H } = S.dim;
+    /* ⚠️ **경로 추적** (v1.36.0) — 창을 고정하면 안 됩니다. 꼬리는 바깥으로 갈수록
+       **아래로 처지며** 옅어지므로, 고정 창은 처진 꼬리를 중간에 놓칩니다 (원장님
+       스크린샷 2026-08-21 — 아우터가 실제 꼬리 끝보다 한참 안쪽에 섰습니다).
+       어두운 띠의 중심(cy)을 따라 창을 옮기고, 중심이 갑자기 크게 튀면 머리카락으로
+       보고 잇지 않습니다 (TAIL_JUMP). columnRuns 의 폭 제한이 2차 방어입니다. */
     const ext = (b, dir, h0) => {
-      const y0 = Math.max(0, Math.round(b.y0)), y1 = Math.min(H - 1, Math.round(b.y1));
-      if (y1 - y0 < 8) return h0;
+      const bh = Math.max(12, b.h ? b.h * 1.0 : (b.y1 - b.y0) / 4);   // 추적 창 반높이
       const maxHalf = h0 * (1 + TAIL_EXT_MAX);
-      let got = h0, gap = 0;
+      let got = h0, gap = 0, cy = b.cy;
       for (let f = h0 * 0.96; f <= maxHalf; f += 0.006) {   // 살짝 안쪽에서 출발 — 랜드마크가 잉크 끝을 지나쳐 있어도 잡는다
         const x = Math.round((v1frac + dir * f) * W);
         if (x < 0 || x >= W) break;
-        const c = columnRuns(img, x, y0, y1, b.cy, DRAW_CONTRAST_SOFT);
-        if (c) { if (f > got) got = f; gap = 0; } else if (++gap > TAIL_GAP) break;
+        const y0 = Math.max(0, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) - bh));
+        const y1 = Math.min(H - 1, Math.round((cy === null ? (b.y0 + b.y1) / 2 : cy) + bh));
+        if (y1 - y0 < 8) break;
+        const c = columnRuns(img, x, y0, y1, cy, DRAW_CONTRAST_SOFT);
+        const r = c && c.runs[c.si];
+        const mid = r ? (r.top + r.bot) / 2 : null;
+        if (r && (cy === null || Math.abs(mid - cy) <= bh * TAIL_JUMP)) {
+          if (f > got) got = f;
+          cy = mid; gap = 0;
+        } else if (++gap > TAIL_GAP) break;
       }
       return got;
     };
