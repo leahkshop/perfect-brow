@@ -2107,6 +2107,22 @@ console.log("\n[밸런스 판정]");
       `잠금: zoom ${r99.locked.p.zoom} rot ${r99.locked.p.rot} 유지=${kept} 선초기화=${Math.abs(r99.locked.h2 - 0.11) > 1e-9} · 해제 후: zoom ${r99.after.zoom} rot ${r99.after.rot}`);
   }
 
+  /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
+     「반영이 안 됐다」와 「판독이 실패했다」를 구분할 방법이 이것뿐입니다.
+     APP_VERSION 은 릴리스 때 sw.js 의 VERSION 과 함께 올립니다. */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+    const av = (src.match(/const APP_VERSION = "(v[\d.]+)"/) || [])[1];
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 } });
+    const pg = await ctx.newPage();
+    await pg.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await pg.waitForTimeout(300);
+    const shown = await pg.evaluate(() => (document.getElementById("verTag") || {}).textContent || "");
+    await ctx.close();
+    check("100. 홈 화면 버전 표시 — APP_VERSION 이 그대로 보인다",
+      !!av && shown.includes(av), `APP_VERSION=${av} · 화면="${shown}"`);
+  }
+
   /* 96. ⚠️ 시작 배치 규칙 (v1.34.0) — 원장님 판정(2026-08-21):
      「초기화 눌렀을때 올라온 선들이 맞다. 이것을 내가 사진을 입력하는 순간부터 적용하고싶다」
      사진을 넣으면 **초기화와 동일한 랜드마크 배치**로 시작한다. 드로잉 판독(autoFromDrawing)은

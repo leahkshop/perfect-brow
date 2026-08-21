@@ -287,6 +287,10 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 /* ═══════════ 2. 라인 정의 · 기본값 ═══════════ */
 /* 색상/기본위치는 원본 editor.tsx + BASELINE_CONFIG.md 를 그대로 계승 */
 
+/* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
+   폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
+const APP_VERSION = "v1.39.2";
+
 const H_SPECS = [
 /* ⚠️ `anchor` — 가로 자는 **자기 묶음의 세로선 위에** 올라간다 (v1.32.0)
    원장님 지시(2026-08-20): 「아우터 세로라인은 꼬리와 함께 움직임 / 이너라인은 앞머리
@@ -2705,6 +2709,8 @@ if ("serviceWorker" in navigator) {
 }
 
 /* 개발/디버깅용 */
+{ const el = document.getElementById("verTag"); if (el) el.textContent = "Perfect Brow " + APP_VERSION; }
+
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
