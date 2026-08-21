@@ -188,8 +188,10 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
 .chip.warn{background:rgba(255,107,122,.16);border-color:var(--danger-b);color:var(--danger)}
 /* 초기화 (v1.28.1) — 위험 등급. **오른쪽 도크 맨 위**, `다시 실행` 과 한 칸 띄웁니다.
    붙여 두면 되돌리려다 전부 지웁니다. 색도 한 단계 짙은 빨강으로 분리합니다. */
-.dockbtn.danger{color:var(--danger-d);border-color:var(--danger-db);background:rgba(240,56,76,.12)}
-.dockbtn.danger:active{background:rgba(240,56,76,.22)}
+/* v1.44.0 원장님 지시 — 「초기화 버튼 더 크게, 위로 조금 더, 배경은 더 붉게 글자 흰색」 */
+.dockbtn.danger{color:#fff;border-color:rgba(240,56,76,.8);background:rgba(214,32,54,.85);
+  width:58px;height:58px;margin-top:-14px}
+.dockbtn.danger:active{background:rgba(240,56,76,.95)}
 .rgap{flex:0 0 auto;height:16px}
 body.land.compact .rgap{height:11px}
 
@@ -295,7 +297,10 @@ body.land.compact #editor .menurow.favrow button{height:30px;min-width:38px;max-
 body.land.compact #editor .favrow button i, body.land.compact #editor .favrow button i svg{width:11px;height:11px}
 /* 좌우 드래그 바 — 가운데 도크와 겹치지 않는 선까지만 넓힙니다 (v1.28.0).
    넓히면 사진잠금 위로 올라타고, 회귀 83번이 그것을 잡습니다. */
-.posctl.axis-h{flex-direction:row-reverse;width:min(31vw,360px);min-width:160px;height:46px}  /* v1.43.0 — 조금 더 길게 */
+/* v1.44.0 — 좌우 바의 폭을 **줌~밸런스 버튼 행과 같게** 맞춘다 (원장님 지시).
+   .bdock 폭은 photoModes 행이 정하고, barrow·바가 그 폭을 100% 채운다 */
+.barrow{width:100%}
+.posctl.axis-h{flex-direction:row-reverse;width:100%;min-width:160px;height:46px}
 .posctl.axis-h .pslot{flex:1;height:34px;min-width:0}
 .posctl.axis-h input[type=range]{width:100%;height:34px}
 /* 가로 바의 라벨은 바 안쪽 왼쪽 끝에 둔다 — 바깥에 두면 왼쪽 아래 메뉴 행과 겹친다 (v1.13.0) */

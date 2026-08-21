@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.43.0";
+const APP_VERSION = "v1.44.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -556,10 +556,11 @@ function browBandY(tight) {
 function renderGuides() {
   const { W, H } = S.dim, g = S.g;
   /* 기본은 짙은 회색 — 고유색은 가이드의 "지금 차례"이거나 선택된 선만 (v1.42.0) */
-  const liveColor = (sp) => ((S.guideOn && S.guideCur === sp.key) || isSelected(sp.key)) ? sp.color : GREY_LINE;
-  /* 가이드의 "지금 차례"는 선택과 같은 **굵기 강조**도 받는다 (v1.43.0) — 검정 계열 고유색은
-     회색과 색만으로는 구분이 어려워, 굵기가 없으면 플로우가 안 도는 것처럼 보입니다 */
-  const emph = (sp) => isSelected(sp.key) || (S.guideOn && S.guideCur === sp.key);
+  /* 가이드 중에는 **지금 차례(guideCur) 하나만** 켠다 — 다음 단계로 넘어가면 이전 단계
+     선은 표시가 꺼진다 (v1.44.0 원장님 지시). 가이드 밖에서는 선택된 선이 켜진다.
+     굵기 강조 필수 (v1.43.0) — 검정 계열 고유색은 회색과 색만으로 구분이 안 됩니다. */
+  const emph = (sp) => S.guideOn ? S.guideCur === sp.key : isSelected(sp.key);
+  const liveColor = (sp) => emph(sp) ? sp.color : GREY_LINE;
   const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
   S.wr = WR;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -914,7 +915,7 @@ touch.addEventListener("pointerdown", (e) => {
     gDrag = { key, mirrored, tapKey, wasSel, keys, baseAll: { ...S.g }, base: S.g[key], x0: sp.x, y0: sp.y };
     render();
     const c0 = posConfig();
-    showHud(`${c0.name} ${t("sel_line")}<br>${c0.axis === "v" ? "▲▼" : "◀▶"} ${c0.disp}`);
+    /* 값 HUD 없음 (v1.44.0) — 바 라벨의 숫자로 충분합니다 */
   } else if (pts.size === 2 && !S.locked) {
     const [a, b] = [...pts.values()];
     gMode = "xform";
@@ -952,10 +953,9 @@ touch.addEventListener("pointermove", (e) => {
       dragLineBy(gDrag.key, gDrag.base, dxN, dyN, gDrag.mirrored);
     }
     render();
-    const cd = posConfig();
-    showHud(S.multi && gDrag.keys.length > 1
-      ? `${gDrag.keys.length}${t("sel_count")}`
-      : `${cd.name}<br>${cd.axis === "v" ? "▲▼" : "◀▶"} ${cd.disp}`);
+    /* 값 네모칸(HUD)은 띄우지 않는다 (v1.44.0 원장님 지시) — 드래그 바 라벨에 숫자가
+       이미 있어 중복이고 사진을 가립니다. 여러라인 개수 안내만 유지. */
+    if (S.multi && gDrag.keys.length > 1) showHud(`${gDrag.keys.length}${t("sel_count")}`);
   } else if (gMode === "pan" && gDrag) {
     /* 손가락 이동량을 1:1 로 따라간다. 확대할수록 더 멀리 밀 수 있어야 하므로
        한계도 배율에 비례시킨다 (panLimit). */
@@ -2532,7 +2532,10 @@ $("btnSnap").onclick = () => {
    **처음 움직이는 선**이 플로우의 시작이다 (원장님 지시 2026-08-21) */
 $("btnGuide").onclick = () => {
   S.guideOn = !S.guideOn;
-  S.guideCur = null;
+  /* 켜는 순간 **이너부터** 굵게 시작한다 (v1.44.0 원장님 지시 2026-08-21 —
+     「시작 시 가이드 켜진 상태로 시작, 시작의 이너가 먼저 굵은 표시로」).
+     끄면 즉시 종료. */
+  S.guideCur = S.guideOn ? GUIDE_FLOW[0] : null;
   updateButtons();
   render();
 };

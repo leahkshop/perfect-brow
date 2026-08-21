@@ -1659,7 +1659,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
                   && Math.abs((exp.top + exp.bottom) / 2 - (lock.top + lock.bottom) / 2) < 12,
       chgSameSize: Math.abs(chg.height - exp.height) < 1 && Math.abs(chg.width - exp.width) < 6,
       chgGrey: !/34, 211, 238|103, 232, 249/.test(getComputedStyle(el("btnChange")).borderTopColor),
-      resetTop: Math.abs(rst.top - rd.top) < 2,
+      resetTop: rst.top <= rd.top + 2,   /* 도크 맨 위 또는 그보다 위 (v1.44.0 위로 올림) */
       resetDarkRed: cs.color,
       lockAlone: el("centerDock").querySelectorAll("button").length === 3,
       lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
@@ -1691,7 +1691,8 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
   });
   check(`83. ${dev.n} — 사진 2버튼=오른쪽 도크 · 잠금 3버튼 정가운데 · 밸런스는 중앙보다 왼쪽`,
     place.photoInRDock && place.photoOrder && place.chgSameSize && place.chgGrey
-      && place.resetTop && /240, 56, 76/.test(place.resetDarkRed)
+      /* v1.44.0 — 초기화는 도크 위로 살짝 나가고(margin-top:-14) 붉은 배경 + **흰 글자** */
+      && place.resetTop && /255, 255, 255/.test(place.resetDarkRed)
       && place.lockAlone && Math.abs(place.lockCentre - 0.5) < 0.02
       && place.balLeftOfCentre < 0.48 && place.balLeftOfCentre > 0.25
       && place.favs === 3 && place.favShorter > 6
@@ -2061,8 +2062,8 @@ console.log("\n[밸런스 판정]");
                  grey: ls.some((l) => l.getAttribute("stroke") === "#3A414E") };
       };
       const greyByDefault = lineColorOf("h2").grey && !lineColorOf("h2").own && lineColorOf("v4").grey;
-      document.getElementById("btnGuide").click();          // 가이드 ON — 아직 아무 선도 안 켜짐
-      const noneAtStart = S.guideCur === null && S.guideOn === true;
+      document.getElementById("btnGuide").click();          // 가이드 ON — **이너부터** 켜짐 (v1.44.0)
+      const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
       /* 앞머리(front) 를 슬라이더로 움직인다 → 움직이는 동안 front 가 켜지고, 끝나면 다음(아치두께) */
       S.selUD = "front";
       const sl = document.getElementById("posSliderV") || document.querySelector(".posctl.axis-v input");
