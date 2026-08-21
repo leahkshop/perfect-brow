@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.46.1";
+const APP_VERSION = "v1.46.2";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -650,11 +650,12 @@ function renderGuides() {
       };
       const x = g[sp.key] * W;
       draw(x);
-      vBadges.push({ label: t(sp.i18n), color: sp.color, x });
+      /* v1.46.2 — 세로선 이름 배지 전부 숨김 (원장님 지시 「세로선들 이름 배지 모두 숨김」).
+         v1.46.0부터 선이 항상 고유색이라 색이 곧 이름표 — 배지는 화면만 가린다.
+         vBadges.push(...) 를 되살리면 배지가 돌아온다. 회귀 46이 0개를 검사한다. */
       if (sp.mirror) {
         const xm = (2 * g.v1 - g[sp.key]) * W;
         draw(xm);
-        vBadges.push({ label: t(sp.i18n), color: sp.color, x: xm });
       }
     }
   }

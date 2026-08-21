@@ -1629,9 +1629,10 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
 
   check(`45. ${dev.n} — 세로 조절자 값 라벨이 바 오른쪽 · 캔버스 안`,
     lab.rightOfBar && lab.inside, `바 오른쪽=${lab.rightOfBar}(간격 ${lab.gap}px) 캔버스안=${lab.inside}`);
-  check(`46. ${dev.n} — 세로선 라벨이 캔버스 맨 위(갭 6px) · 칩과 겹침 없음`,
-    lab.count >= 3 && lab.top >= 4 && lab.top <= 10 && !lab.hitChip,
-    `개수=${lab.count} 맨위 y=${lab.top}px 칩겹침=${lab.hitChip}`);
+  /* v1.46.2 — 세로선 이름 배지는 **전부 숨김** (원장님 지시). 색이 곧 이름표. */
+  check(`46. ${dev.n} — 세로선 이름 배지 없음 (v1.46.2 숨김)`,
+    lab.count === 0 && !lab.hitChip,
+    `개수=${lab.count} 칩겹침=${lab.hitChip}`);
 
   check(`40. ${dev.n} — 왼쪽 아래는 프리셋(+즐겨찾기) · 좌우 바와 겹치지 않음`,
     menuPos.leftBottom && menuPos.noOverlap && menuPos.gone
