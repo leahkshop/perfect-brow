@@ -565,23 +565,22 @@ console.log("[세로 모드 · 기능]");
     dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd && dockOrder.spansRow,
     `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd} 폭일치=${dockOrder.spansRow}`);
 
-  /* 39. 되돌리기·다시실행 = **위아래 드래그 바 위** (v1.43.0 · 원장님 지시 2026-08-21)
-     되돌리기가 바에 가장 가깝습니다 — 제일 자주 누르는 버튼이라 손이 짧게 움직입니다. */
+  /* 39. 오른쪽 도크 순서 (v1.45.0 · 원장님 지시 2026-08-21)
+     위에서부터 **초기화 → 위아래 조절 바 → 다시실행 → 되돌리기**. */
   const placed = await p.evaluate(() => {
     const r = (id) => document.getElementById(id).getBoundingClientRect();
-    const u = r("btnUndo"), rd = r("btnRedo"), v = r("posCtlV");
+    const u = r("btnUndo"), rd = r("btnRedo"), v = r("posCtlV"), rs = r("btnReset");
     return {
-      aboveBar: u.bottom <= v.top + 1 && rd.bottom <= u.top + 1,
+      order: rs.bottom <= v.top + 1 && v.bottom <= rd.top + 1 && rd.bottom <= u.top + 1,
       inRDock: document.getElementById("rightDock").contains(document.getElementById("btnUndo")),
-      undoNearest: Math.abs(v.top - u.bottom) < Math.abs(v.top - rd.bottom),
       removed: !document.getElementById("btnAlign") && !document.getElementById("btnRotate")
                && !document.getElementById("phSlider") && !document.getElementById("btnLock2")
                && !document.querySelector(".topbar") && !document.querySelector(".panels"),
     };
   });
-  check("39. 되돌리기·다시실행 = 위아래 드래그 바 위 (되돌리기가 바에 가깝게) · 삭제 버튼 정리",
-    placed.aboveBar && placed.inRDock && placed.undoNearest && placed.removed,
-    `바위=${placed.aboveBar} 오른쪽도크=${placed.inRDock} 되돌리기가까움=${placed.undoNearest} 삭제완료=${placed.removed}`);
+  check("39. 오른쪽 도크 순서 = 초기화·위아래 바·다시실행·되돌리기 · 삭제 버튼 정리",
+    placed.order && placed.inRDock && placed.removed,
+    `순서=${placed.order} 오른쪽도크=${placed.inRDock} 삭제완료=${placed.removed}`);
 
   // 41. 되돌리기 — 직전 작업 1단계씩, 두 번 누르면 그 전 작업까지
   const undoTest = await p.evaluate(async () => {
@@ -1663,6 +1662,13 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       chgGrey: !/34, 211, 238|103, 232, 249/.test(getComputedStyle(el("btnChange")).borderTopColor),
       resetTop: rst.top <= rd.top + 2,   /* 도크 맨 위 또는 그보다 위 (v1.44.0 위로 올림) */
       resetDarkRed: cs.color,
+      /* v1.45.0 — 초기화 = 프리셋 버튼과 같은 크기 · 사진저장 = 줌(켜짐) 그라데이션 채움
+         · 되돌리기·다시실행 더 크게(기본 dockbtn 초과) + 채움 배경 */
+      resetPresetSize: Math.abs(rst.height - r("btnPresetLoad").height) < 2,
+      exportFilled: getComputedStyle(el("btnExport")).backgroundImage.includes("gradient"),
+      undoBigger: r("btnUndo").height > 34 && r("btnRedo").height > 34,
+      undoFilled: getComputedStyle(el("btnUndo")).backgroundImage.includes("gradient")
+                  || getComputedStyle(el("btnUndo")).backgroundColor !== "rgba(0, 0, 0, 0)",
       lockAlone: el("centerDock").querySelectorAll("button").length === 3,
       lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
       balLeftOfCentre: ((bal.left + bal.right) / 2 - st.left) / st.width,
@@ -1693,8 +1699,9 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
   });
   check(`83. ${dev.n} — 사진 2버튼=오른쪽 도크 · 잠금 3버튼 정가운데 · 밸런스는 중앙보다 왼쪽`,
     place.photoInRDock && place.photoOrder && place.chgSameSize && place.chgGrey
-      /* v1.44.0 — 초기화는 도크 위로 살짝 나가고(margin-top:-14) 붉은 배경 + **흰 글자** */
-      && place.resetTop && /255, 255, 255/.test(place.resetDarkRed)
+      /* v1.45.0 — 초기화 = 프리셋 크기 · 앱 컨셉 코랄(--danger #FF6B7A) 글자 (원장님: 「빨간색은 앱 컨셉과 비슷하게」) */
+      && place.resetTop && /255, 107, 122/.test(place.resetDarkRed)
+      && place.resetPresetSize && place.exportFilled && place.undoBigger && place.undoFilled
       && place.lockAlone && Math.abs(place.lockCentre - 0.5) < 0.02
       && place.balLeftOfCentre < 0.48 && place.balLeftOfCentre > 0.25
       && place.favs === 3 && place.favShorter > 6

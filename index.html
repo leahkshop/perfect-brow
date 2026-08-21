@@ -188,10 +188,11 @@ body.rot90 .stage{--redge:calc(5% + 8px + env(safe-area-inset-bottom,0px))}
 .chip.warn{background:rgba(255,107,122,.16);border-color:var(--danger-b);color:var(--danger)}
 /* 초기화 (v1.28.1) — 위험 등급. **오른쪽 도크 맨 위**, `다시 실행` 과 한 칸 띄웁니다.
    붙여 두면 되돌리려다 전부 지웁니다. 색도 한 단계 짙은 빨강으로 분리합니다. */
-/* v1.44.0 원장님 지시 — 「초기화 버튼 더 크게, 위로 조금 더, 배경은 더 붉게 글자 흰색」 */
-.dockbtn.danger{color:#fff;border-color:rgba(240,56,76,.8);background:rgba(214,32,54,.85);
-  width:58px;height:58px;margin-top:-14px}
-.dockbtn.danger:active{background:rgba(240,56,76,.95)}
+/* v1.45.0 원장님 지시 — 「초기화는 프리셋 버튼과 같은 크기, 빨간색은 앱 컨셉과 비슷하게」
+   프리셋(.menurow button) = 50×68 · 유리(글래스) 질감 위에 앱 고유 코랄(--danger) 계열 */
+.dockbtn.danger{color:var(--danger);border-color:var(--danger-b);background:rgba(255,107,122,.16);
+  height:50px;min-width:68px;border-radius:13px;margin-top:-14px}
+.dockbtn.danger:active{background:rgba(255,107,122,.30)}
 .rgap{flex:0 0 auto;height:16px}
 body.land.compact .rgap{height:11px}
 
@@ -250,7 +251,8 @@ body.land.compact .rgap{height:11px}
 .posctl:not(.active){opacity:.86}
 
 /* 오른쪽 도크 — 아래 도크 높이(--bdock)를 뺀 영역의 세로 한가운데 */
-.rdock{position:absolute;right:var(--redge);top:0;bottom:var(--bdock,152px);height:56%;min-height:200px;
+/* v1.45.0 — 위아래 조절 바 조금 짧게 (56%→48%) · 순서: 초기화-바-다시실행-되돌리기 (원장님 지시) */
+.rdock{position:absolute;right:var(--redge);top:0;bottom:var(--bdock,152px);height:48%;min-height:185px;
   margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
 .posctl.axis-v .pslot{flex:1;width:34px}
@@ -318,8 +320,11 @@ body.land.compact #editor .favrow button i, body.land.compact #editor .favrow bu
   box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 4px 18px rgba(0,0,0,.35);
   flex:0 0 auto;padding:0 6px}
 .dockbtn:active{background:rgba(255,255,255,.10)}
-/* 되돌리기·다시실행은 쓸 수 있을 때만 액센트로 살아난다 */
-#btnUndo:not(:disabled), #btnRedo:not(:disabled){color:var(--a2);border-color:var(--a2b)}
+/* v1.45.0 원장님 지시 — 되돌리기·다시실행은 「더 행동적인 요소」: 더 크게, 쓸 수 있을 땐
+   짙은 그라데이션(--grad-deep) 채움 + 흰 글자로 "누르는 버튼"임을 드러낸다 */
+#btnUndo, #btnRedo{height:46px;min-width:62px;font-size:10.5px;border-radius:14px;gap:3px}
+#btnUndo:not(:disabled), #btnRedo:not(:disabled){background:var(--grad-deep);border-color:var(--a1);color:#fff}
+#btnUndo:not(:disabled):active, #btnRedo:not(:disabled):active{filter:brightness(1.2)}
 /* 되돌리기 — 자주 쓰는 버튼이라 한 단계 크게 */
 .dockbtn.big{height:48px;min-width:56px;font-size:10.5px;border-radius:14px;gap:3px}
 
@@ -338,7 +343,8 @@ body.land.compact #editor .favrow button i, body.land.compact #editor .favrow bu
 #btnLock{border-color:var(--a2b);color:var(--a2)}
 #btnLock.on{border-color:var(--a1);color:var(--on-accent);background:var(--grad);
   box-shadow:0 0 0 1px var(--a1) inset,0 6px 22px var(--glow)}
-#btnExport{border-color:var(--a2);color:var(--a2)}
+/* v1.45.0 — 사진저장은 `줌`(켜진 모드 버튼)과 같은 느낌: 액센트 그라데이션 채움 (원장님 지시) */
+#btnExport{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800}
 /* 프리셋 적용 중 (v1.25.0) — 지금 화면의 선이 저장된 디자인이라는 표시 */
 #btnPresetLoad.preset-on{border-color:var(--a1);color:var(--on-accent);background:var(--grad);
   box-shadow:0 0 0 1px var(--a1) inset,0 6px 22px var(--glow)}
@@ -466,8 +472,11 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .posctl.axis-h .plabel{min-width:60px;font-size:9.5px}
   body.land.compact #editor .posctl.axis-v .plabel{width:34px;font-size:8.5px;padding:2px 3px}
   body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
-  body.land.compact #editor .rdock{height:66%;min-height:150px;gap:5px}
+  body.land.compact #editor .rdock{height:58%;min-height:135px;gap:5px}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
+  /* v1.45.0 — compact에서도 초기화=프리셋 크기 · 되돌리기·다시실행 더 크게 (기본 .dockbtn 28px 를 이긴다) */
+  body.land.compact #editor .dockbtn.danger{height:46px;min-width:52px;font-size:9px}
+  body.land.compact #editor #btnUndo, body.land.compact #editor #btnRedo{height:38px;min-width:52px;font-size:9px}
   body.land.compact #editor .menurow button{height:46px;min-width:52px;font-size:9px;padding:0 6px}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
   body.land.compact #editor .ldock{bottom:calc(var(--safe-b) + 6px);left:6px}
@@ -549,15 +558,15 @@ body:not(.land) #railLang{display:none}
            위쪽 끝은 시술 중 손이 잘 가지 않는 자리라 실수로 눌릴 일이 적습니다. -->
       <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
       <span class="rgap"></span>
-      <!-- 되돌리기·다시실행 — 위아래 드래그 바 **위** (원장님 지시 2026-08-21) -->
-      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
-      <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
+      <!-- v1.45.0 순서 (원장님 지시) — 초기화 · 위아래 조절 바 · 다시실행 · 되돌리기 -->
       <div class="posctl axis-v" id="posCtlV">
         <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
         <button class="pbtn" id="posPlusV">▲</button>
         <div class="pslot" id="pSlotV"><input type="range" id="posSliderV" min="0" max="1" step="0.0005" value="0.5" /></div>
         <button class="pbtn" id="posMinusV">▼</button>
       </div>
+      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
+      <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
     </div>
 
     <!-- 아래 도크 (v1.11.0) — 사진보정 버튼 / 좌우 드래그 바 / 메뉴 버튼. 모두 오른쪽 정렬 -->
