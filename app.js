@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.50.0";
+const APP_VERSION = "v1.51.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -334,7 +334,8 @@ const H_SPECS = [
      사실상 안 보였습니다.** 이너만 알파를 걷어낸 뒤로 「아치 파랑이 죽어있는 느낌」이 된 이유. */
   { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dimColor: "#A9CFF2", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
   { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dimColor: "#A9CFF2", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dimColor: "#D0B8F0", dot: "#A855F7", w: 1.15, op: 0.95, anchor: "v4" },
+  /* v1.51.0 — 꼬리 자는 **길이 반** (원장님 지시). 아우터를 가운데 두는 것은 그대로 */
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dimColor: "#D0B8F0", dot: "#A855F7", w: 1.15, op: 0.95, anchor: "v4", halfK: 0.5 },
 ];
 
 const V_SPECS = [
@@ -540,6 +541,13 @@ function drawBadge(frag, text, x, y, color, anchor) {
      앞머리·앞두께 → 이너(v2/v3) · 아치·아치두께 → 아치선(v6/v7) · 꼬리 → 아우터(v4/v5)
    자의 폭은 **눈썹 폭(이너~아우터 거리)** 에 비례하므로, 확대하거나 얼굴이 바뀌어도
    자가 관자놀이·코까지 뻗지 않습니다. 눈 기준선(h1)만 좌우를 관통합니다. */
+/* ⚠️ v1.51.0 — 선의 "조용한 부분" (원장님 지시 2026-08-22 · 세 밝기 중 2안 선택)
+   자와 세로선은 **일하는 곳만 굵고 나머지는 얇은 짙은 회색**으로 잇는다.
+   · 가로 자  : 세로선을 경계로 **안쪽(센터 쪽) 절반**이 얇다 — 앞부분은 참고, 뒷부분으로 맞춘다
+   · 세로선   : **두 자 사이(눈썹 몸통)가 얇다** — 굵은 선이 눈썹 속을 가로지르면 드로잉을 가린다
+                (원장님: 「바깥에만 굵은선이고 눈썹 내부는 얇은 회색으로」) */
+const HALF_GREY = "#14161B", HALF_W = 1.0, HALF_OP = 0.5;
+const VOUT = 0.065;              // 세로선이 자 바깥으로 굵게 뻗는 길이 (원장님 선택: 3단계)
 const SEG_HALF = 0.19;           // 자 반폭 (눈썹 폭 기준)
 const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
 const VPAD = 0.045;              // 세로선(긴 것)이 위아래로 더 나가는 여유
@@ -554,7 +562,7 @@ function segPx(sp) {
     return [[cl0(lo), cl0(2 * g.v1 - lo)]];
   }
   const aL = g[sp.anchor], aR = 2 * g.v1 - aL;
-  const half = SEG_HALF * (Math.abs(g.v2 - g.v4) || 0.12);
+  const half = SEG_HALF * (sp.halfK || 1) * (Math.abs(g.v2 - g.v4) || 0.12);
   return [[cl0(aL - half), cl0(aL + half)], [cl0(aR - half), cl0(aR + half)]];
 }
 
@@ -568,6 +576,18 @@ function browBandY(tight) {
   const ys = H_SPECS.filter((sp) => !tight || sp.anchor).map((sp) => g[sp.key]);
   const pad = tight ? VPAD_TIGHT : VPAD;
   return { y0: clamp(Math.min(...ys) - pad, 0, 1), y1: clamp(Math.max(...ys) + pad, 0, 1) };
+}
+
+/* 세로선에서 **굵게 남길 토막**. 나머지는 얇은 회색으로 잇는다 (v1.51.0)
+   자가 둘이면 그 **사이는 비우고**(눈썹 몸통이 보이게) 두 자의 바깥쪽만,
+   자가 하나(꼬리)면 끊지 않고 그 자 위아래로. */
+function vStrongSegs(key) {
+  const g = S.g;
+  const ys = H_SPECS.filter((sp) => sp.anchor === key).map((sp) => g[sp.key]).sort((a, b) => a - b);
+  if (!ys.length) return null;                       // 센터(v1) — 얼굴 축이라 전체 길이 그대로
+  const lo = ys[0], hi = ys[ys.length - 1];
+  if (hi - lo < 0.005) return [[lo - VOUT, hi + VOUT]];
+  return [[lo - VOUT, lo], [hi, hi + VOUT]];
 }
 
 function renderGuides() {
@@ -642,11 +662,21 @@ function renderGuides() {
       segs.forEach(([xa, xb], idx) => {
         if (xb - xa < 2) return;                       // 세로선이 화면 밖으로 밀리면 그리지 않는다
         const bad = offBy && idx === badIdx;
-        drawLine(frag, xa, y, xb, y,
-          bad ? BAL_RED : lineColor(sp, sel),
-          /* v1.47.1 — 기본(비강조) 선도 +0.6 굵게: 선택(+1.6)보단 얇게 (원장님 지시) */
-          bad ? sp.w + 2.2 : (sel ? sp.w + 1.8 : sp.w + 0.6),
-          bad ? 1 : (sel ? 1 : dimOpOf(sp)));
+        const col = bad ? BAL_RED : lineColor(sp, sel);
+        /* v1.47.1 — 기본(비강조) 선도 +0.6 굵게: 선택(+1.6)보단 얇게 (원장님 지시) */
+        const wid = bad ? sp.w + 2.2 : (sel ? sp.w + 1.8 : sp.w + 0.6);
+        const opa = bad ? 1 : (sel ? 1 : dimOpOf(sp));
+        /* v1.51.0 — 자의 **안쪽(센터 쪽) 절반**은 얇은 짙은 회색.
+           ⚠️ 밸런스로 빨갛게 칠하는 토막은 **나누지 않는다** — 판정 표시가 가려지면 안 됩니다. */
+        if (!bad && sp.anchor) {
+          const ax = (idx === 0 ? g[sp.anchor] : 2 * g.v1 - g[sp.anchor]) * W;
+          const inA = idx === 0 ? [ax, xb] : [xa, ax];
+          const outA = idx === 0 ? [xa, ax] : [ax, xb];
+          if (inA[1] - inA[0] > 1) drawLine(frag, inA[0], y, inA[1], y, HALF_GREY, HALF_W, HALF_OP);
+          if (outA[1] - outA[0] > 1) drawLine(frag, outA[0], y, outA[1], y, col, wid, opa);
+          return;
+        }
+        drawLine(frag, xa, y, xb, y, col, wid, opa);
       });
     }
   }
@@ -671,7 +701,14 @@ function renderGuides() {
           x1: x, y1: 0, x2: x, y2: H, stroke: lc,
           "stroke-width": 1, "stroke-opacity": 0.16,
         }));
-        drawLine(frag, x, by0, x, by1, lc, w, op);    // 실제로 읽는 구간
+        const ss = vStrongSegs(sp.key);
+        if (!ss) { drawLine(frag, x, by0, x, by1, lc, w, op); return; }
+        const a0 = Math.min(by0, ...ss.map((q) => q[0] * H));   // 굵은 토막이 잘리지 않게
+        const a1 = Math.max(by1, ...ss.map((q) => q[1] * H));
+        drawLine(frag, x, a0, x, a1, HALF_GREY, HALF_W, HALF_OP);
+        for (const [qa, qb] of ss) {
+          if (qb * H - qa * H > 1) drawLine(frag, x, qa * H, x, qb * H, lc, w, op);
+        }
       };
       const x = g[sp.key] * W;
       draw(x);
@@ -759,6 +796,7 @@ function render() {
   renderGuides();
   updateButtons();
   updatePanels();
+  alignCenterDock();
 }
 
 /* ═══════════ 라인 값 변경 (대칭 로직) ═══════════ */
@@ -1354,12 +1392,11 @@ function updatePanels() {
 /* ═══════════ 7. presets ═══════════ */
 const PKEY = "pb_presets_v1";
 
-const BUILTIN_FRAME = () => faceFrame(DEFAULT_GUIDE);
-const BUILTINS = () => [
-  { id: "b:natural", frame: BUILTIN_FRAME(), name: t("p_natural"), builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.36, h2Visible: true, archThickness: 0.40, archThicknessVisible: true, h3: 0.45, h3Visible: true, v2: 0.38, v2Visible: true } },
-  { id: "b:bold", frame: BUILTIN_FRAME(),    name: t("p_bold"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.30, h2Visible: true, archThickness: 0.375, archThicknessVisible: true, h3: 0.41, h3Visible: true, v2: 0.33, v4: 0.12, v4Visible: true, front: 0.38, frontVisible: true } },
-  { id: "b:arch", frame: BUILTIN_FRAME(),    name: t("p_arch"),    builtin: true, state: { ...DEFAULT_GUIDE, h2: 0.28, h2Visible: true, archThickness: 0.345, archThicknessVisible: true, h3: 0.44, h3Visible: true, v2: 0.36, v4: 0.17, v4Visible: true, baseStructureVisible: true, innerAngle: 0.44, outerAngle: 0.58 } },
-];
+/* ⚠️ v1.51.0 — **내장 프리셋(자연·강한·아치형)을 없앴습니다** (원장님 지시 2026-08-22:
+   「프리셋 유지, 내부에 기본사항 제공 제거. 오로지 사용자의 프리셋 저장만 사용하자」).
+   이유: 드로잉 맞춤이 고객마다 실제 잉크를 읽으므로, 「일자·아치」 같은 고정 비율은
+   근사치일 뿐이고 원장님 작업 흐름(BASELINE 1-19)에 등장하지 않습니다.
+   ⛔ 되살리지 마세요. 프리셋 기능 자체(저장·로드·즐겨찾기·내보내기)는 그대로 둡니다. */
 
 /* ═══ 즐겨찾기 (v1.28.0) ══════════════════════════════════════
    시술 중 자주 쓰는 프리셋은 모달을 열고 → 찾고 → 로드하는 세 단계가 번거롭습니다.
@@ -1411,7 +1448,7 @@ function userPresets() {
 function writeUserPresets(list) {
   localStorage.setItem(PKEY, JSON.stringify(list));
 }
-function allPresets() { return [...BUILTINS(), ...userPresets()]; }
+function allPresets() { return userPresets(); }   /* v1.51.0 — 사용자가 저장한 것만 */
 
 /* ═══ 얼굴 기준틀 (v1.25.0) ═══════════════════════════════════
    프리셋을 화면 좌표 그대로 적용하면 **얼굴 폭·눈썹 높이가 다른 고객에게 안 맞습니다.**
@@ -1477,16 +1514,11 @@ function renderPresetList() {
     const nm = document.createElement("span");
     nm.className = "nm"; nm.textContent = p.name;
     row.appendChild(nm);
-    if (p.builtin) {
-      const bd = document.createElement("span");
-      bd.className = "badge"; bd.textContent = t("preset_builtin");
-      row.appendChild(bd);
-    }
     const load = document.createElement("button");
     load.className = "pri"; load.textContent = t("editor_load");
     load.onclick = () => { applyPreset(p); closeMask("mLoad"); };
     row.appendChild(load);
-    if (!p.builtin) {
+    {
       const ed = document.createElement("button");
       ed.textContent = t("editor_edit");
       ed.onclick = () => { S.renamingId = p.id; $("renameName").value = p.name; openMask("mRename"); };
@@ -2733,6 +2765,24 @@ function placeLineBars() {
      순서는 위에서부터 한/영 → 가로선 → 세로선 → V 기본구조 (v1.19.0). */
   if (document.body.classList.contains("land")) $("lineRail").append(G, L, R, X);
   else stage.append(L, R);
+}
+
+/* ⚠️ v1.51.0 — 사진저장·사진잠금·사진변경 묶음을 **센터 세로선(v1)에 맞춘다**
+   (원장님 지시 2026-08-22: 「사진잠금이 센터 라인과 동일 선상에 있도록」).
+   v1.50.0 까지는 `left:50%` 로 **캔버스 정중앙**이었습니다. 얼굴 중심축은 화면 중앙과
+   다르므로(자동 정렬은 작업 영역 한가운데에 맞춥니다) 잠금이 센터선에서 늘 어긋나 보였습니다.
+   ⚠️ 왼쪽 도크(프리셋)·아래 도크와 겹치지 않게 **클램프**합니다 — 겹치면 버튼이 눌리지 않습니다. */
+function alignCenterDock() {
+  const cd = $("centerDock"), lk = $("btnLock");
+  if (!cd || !lk || !cd.offsetWidth || !S.dim.W) return;
+  const lockMid = lk.offsetLeft + lk.offsetWidth / 2;     // 도크 안에서 잠금 버튼의 중심
+  let x = S.g.v1 * S.dim.W - lockMid;                     // 잠금 중심이 센터선에 오도록
+  const ld = $("leftDock"), bd = $("bottomDock");
+  const loLimit = ld ? ld.offsetLeft + ld.offsetWidth + 10 : 0;
+  const hiLimit = (bd ? bd.offsetLeft - 10 : S.dim.W) - cd.offsetWidth;
+  x = clamp(x, Math.min(loLimit, Math.max(hiLimit, 0)), Math.max(hiLimit, 0));
+  cd.style.left = "0px";
+  cd.style.transform = `translateX(${Math.round(x)}px)`;
 }
 
 /* 오른쪽 도크는 아래 도크와 겹치면 안 되므로 아래 도크 높이를 CSS 변수로 넘긴다 */

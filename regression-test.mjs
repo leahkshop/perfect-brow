@@ -1042,8 +1042,9 @@ console.log("[세로 모드 · 기능]");
     document.getElementById("mLoad").classList.remove("on");
     return { n: opaque.length, labels, rows };
   });
+  /* v1.51.0 — 내장 프리셋을 없앴으므로 목록은 **사용자가 저장한 것만** (여기서는 2줄) */
   check("68. 모달 — 채운 버튼은 주 동작 하나뿐",
-    filled.rows >= 5 && filled.n === 1,
+    filled.rows >= 2 && filled.n === 1,
     `${filled.rows}줄 · 채운 버튼 ${filled.n}개 [${filled.labels}]`);
 
   /* ── v1.22.0 · AI 측정 배치 ─────────────────────────────
@@ -1256,48 +1257,53 @@ console.log("[세로 모드 · 기능]");
   // 84. 즐겨찾기 — 지정한 개수만큼만 버튼으로 나오고, 누르면 그 프리셋이 올라간다
   const fav = await p.evaluate(() => {
     localStorage.removeItem("pb_favs_v1");
-    localStorage.removeItem("pb_presets_v1");
+    /* v1.51.0 — 내장 프리셋을 없앴으므로 **사용자가 저장한 것**으로 검사한다.
+       frame 이 없는 프리셋은 환산 없이 그대로 적용된다 (76번 규칙) */
+    localStorage.setItem("pb_presets_v1", JSON.stringify([
+      { id: "u:p1", name: "디자인A", state: { ...window.PB.DEFAULT_GUIDE, h2: 0.36 } },
+      { id: "u:p2", name: "디자인B", state: { ...window.PB.DEFAULT_GUIDE, h2: 0.28 } },
+    ]));
     const S = window.PB.S;
     S.g = { ...window.PB.DEFAULT_GUIDE }; S.activePreset = null;
     const row = () => [...document.querySelectorAll("#favRow .favbtn")];
     const names = () => row().map((b) => b.querySelector("em").textContent);
     window.PB.buildFavBar();
     const none = row().length;                       // 하나도 없으면 빈 자리도 없어야 한다
-    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:bold"]));
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["u:p1"]));
     window.PB.buildFavBar();
     const one = names();
-    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:bold", "b:arch"]));
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["u:p1", "u:p2"]));
     window.PB.buildFavBar();
     const two = names();
-    /* 눌러서 실제로 적용되는지 — 아치형 프리셋은 h2 가 0.28 */
-    row()[1].click();
+    row()[1].click();                                // 눌러서 실제로 적용되는지
     const applied = { h2: S.g.h2, id: S.activePreset };
     /* 지워진 프리셋 id 는 조용히 걸러낸다 */
-    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:bold", "u:없는것"]));
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["u:p1", "u:없는것"]));
     window.PB.buildFavBar();
     const filtered = row().length;
     return { none, one, two, applied, filtered };
   });
   check("84. 즐겨찾기 — 지정한 개수만큼만 · 누르면 바로 적용 · 없는 id 는 걸러냄",
     fav.none === 0 && fav.one.length === 1 && fav.two.length === 2
-      && fav.applied.id === "b:arch" && Math.abs(fav.applied.h2 - 0.28) < 0.06
+      && fav.applied.id === "u:p2" && Math.abs(fav.applied.h2 - 0.28) < 0.001
       && fav.filtered === 1,
     `0개→${fav.none} 1개→[${fav.one}] 2개→[${fav.two}] · 적용=${fav.applied.id} · 없는id걸러냄=${fav.filtered === 1}`);
 
   // 85. 별표는 3개까지 — 4번째는 들어가지 않고, 다시 누르면 해제된다
   const star = await p.evaluate(() => {
     localStorage.removeItem("pb_favs_v1");
-    localStorage.setItem("pb_presets_v1", JSON.stringify([{ id: "u:t1", name: "테스트A", state: {} }]));
+    localStorage.setItem("pb_presets_v1", JSON.stringify(
+      ["A", "B", "C", "D"].map((n, i) => ({ id: "u:t" + (i + 1), name: "테스트" + n, state: {} }))));
     document.getElementById("btnPresetLoad").click();
     const s = (id) => document.querySelector(`#presetList .star[data-star="${id}"]`);
     const favs = () => JSON.parse(localStorage.getItem("pb_favs_v1") || "[]");
-    s("b:natural").click(); s("b:bold").click(); s("b:arch").click();
+    s("u:t1").click(); s("u:t2").click(); s("u:t3").click();
     const three = favs();
     const litUp = [...document.querySelectorAll("#presetList .star.on")].length;
-    s("u:t1").click();                                  // 4번째 — 거부돼야 한다
+    s("u:t4").click();                                  // 4번째 — 거부돼야 한다
     const stillThree = favs();
     const toastMsg = document.getElementById("toast").textContent;
-    s("b:bold").click();                                // 해제
+    s("u:t2").click();                                  // 해제
     const afterOff = favs();
     const barCount = document.querySelectorAll("#favRow .favbtn").length;
     document.getElementById("mLoad").classList.remove("on");
@@ -1308,9 +1314,9 @@ console.log("[세로 모드 · 기능]");
   });
   check("85. 별표 — 3개까지 · 4번째는 거부 · 다시 누르면 해제",
     star.three.length === 3 && star.litUp === 3
-      && star.stillThree.length === 3 && !star.stillThree.includes("u:t1")
+      && star.stillThree.length === 3 && !star.stillThree.includes("u:t4")
       && /3개까지/.test(star.toastMsg)
-      && star.afterOff.length === 2 && !star.afterOff.includes("b:bold")
+      && star.afterOff.length === 2 && !star.afterOff.includes("u:t2")
       && star.barCount === 2,
     `3개=[${star.three}] 켜진별=${star.litUp} · 4번째거부=${star.stillThree.length === 3}("${star.toastMsg}") · 해제후=[${star.afterOff}] 버튼=${star.barCount}개`);
 
@@ -1641,12 +1647,15 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
 
   /* 83. 버튼 자리 (v1.29.0) — 원장님이 정하신 자리
      · 오른쪽 도크 = `초기화`(짙은 빨강) …띄어서… `사진변경` → `사진저장` → 위아래 바
-     · 가운데 아래 = `사진잠금` 하나. 가로 중심이 캔버스 정중앙
+     · 가운데 아래 = 사진 3버튼. **`사진잠금` 의 가로 중심이 센터 세로선(v1)** 위 (v1.51.0)
      · 좌우 바 왼쪽 = `다시 실행` · `되돌리기`
      · 밸런스 = 위쪽, **중앙보다 약간 왼쪽**
      · 즐겨찾기 3개를 채워도 아래 묶음끼리 겹치지 않는다 */
   const place = await p.evaluate(() => {
-    localStorage.setItem("pb_favs_v1", JSON.stringify(["b:natural", "b:bold", "b:arch"]));
+    /* v1.51.0 — 내장 프리셋을 없앴으므로 즐겨찾기도 **사용자가 저장한 것**으로 채운다 */
+    localStorage.setItem("pb_presets_v1", JSON.stringify(
+      ["A", "B", "C"].map((n, i) => ({ id: "u:f" + (i + 1), name: "즐겨" + n, state: {} }))));
+    localStorage.setItem("pb_favs_v1", JSON.stringify(["u:f1", "u:f2", "u:f3"]));
     window.PB.buildFavBar();
     const el = (id) => document.getElementById(id);
     const r = (id) => el(id).getBoundingClientRect();
@@ -1672,6 +1681,9 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       undoFilled: getComputedStyle(el("btnUndo")).backgroundImage.includes("gradient")
                   || getComputedStyle(el("btnUndo")).backgroundColor !== "rgba(0, 0, 0, 0)",
       lockAlone: el("centerDock").querySelectorAll("button").length === 3,
+      /* v1.51.0 — 잠금 중심은 **캔버스 정중앙이 아니라 센터 세로선(v1)** 위에 온다 (원장님 지시) */
+      lockOnCenterLine: Math.abs((lock.left + lock.right) / 2 - st.left
+                        - window.PB.S.g.v1 * window.PB.S.dim.W) < 4,
       lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
       balLeftOfCentre: ((bal.left + bal.right) / 2 - st.left) / st.width,
       favs: document.querySelectorAll("#favRow .favbtn").length,
@@ -1704,11 +1716,11 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       /* v1.45.0 — 초기화 = 프리셋 크기 · 앱 컨셉 코랄(--danger #FF6B7A) 글자 (원장님: 「빨간색은 앱 컨셉과 비슷하게」) */
       && place.resetTop && /255, 107, 122/.test(place.resetDarkRed)
       && place.resetPresetSize && place.exportQuiet && place.undoBigger && place.undoFilled
-      && place.lockAlone && Math.abs(place.lockCentre - 0.5) < 0.02
+      && place.lockAlone && place.lockOnCenterLine
       && place.balLeftOfCentre < 0.48 && place.balLeftOfCentre > 0.25
       && place.favs === 3 && place.favShorter > 6
       && place.dockGaps.every((g) => g > 8) && place.labelHitsTop === false,
-    `사진2버튼=도크${place.photoInRDock}/순서${place.photoOrder} · 잠금단독=${place.lockAlone}/중심${(place.lockCentre * 100).toFixed(1)}% · 밸런스 ${(place.balLeftOfCentre * 100).toFixed(1)}% · 즐겨찾기가 ${place.favShorter.toFixed(0)}px 낮음 · 도크간격=${place.dockGaps}px · 라벨겹침=${place.labelHitsTop}`);
+    `사진2버튼=도크${place.photoInRDock}/순서${place.photoOrder} · 잠금단독=${place.lockAlone}/센터선일치=${place.lockOnCenterLine}(${(place.lockCentre * 100).toFixed(1)}%) · 밸런스 ${(place.balLeftOfCentre * 100).toFixed(1)}% · 즐겨찾기가 ${place.favShorter.toFixed(0)}px 낮음 · 도크간격=${place.dockGaps}px · 라벨겹침=${place.labelHitsTop}`);
   await ctx.close();
 }
 
@@ -2157,8 +2169,10 @@ console.log("\n[밸런스 판정]");
                         : (Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - t) < 1 && Math.abs(x2 - x1) > 4);
           });
         if (!ls.length) return null;
-        return { c: ls[0].getAttribute("stroke"), op: +(ls[0].getAttribute("stroke-opacity") || 1),
-                 w: +ls[0].getAttribute("stroke-width") };
+        /* v1.51.0 — 한 선이 여러 토막(굵은 부분 + 얇은 회색)으로 그려진다. **가장 굵은 토막**을 본다 */
+        const thick = ls.slice().sort((a, b) => +b.getAttribute("stroke-width") - +a.getAttribute("stroke-width"))[0];
+        return { c: thick.getAttribute("stroke"), op: +(thick.getAttribute("stroke-opacity") || 1),
+                 w: +thick.getAttribute("stroke-width") };
       };
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
       S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = [];
@@ -2220,7 +2234,8 @@ console.log("\n[밸런스 판정]");
             return vert ? (Math.abs(x1 - x2) < 0.5 && Math.abs(x1 - t) < 1)
                         : (Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - t) < 1 && Math.abs(x2 - x1) > 4);
           });
-          if (ls.length && +ls[0].getAttribute("stroke-width") >= sp.w + 1.7) out.push(sp.key);
+          const wmax = ls.length ? Math.max(...ls.map((l) => +l.getAttribute("stroke-width"))) : 0;
+          if (wmax >= sp.w + 1.7) out.push(sp.key);
         }
         return out;
       };
@@ -2260,7 +2275,9 @@ console.log("\n[밸런스 판정]");
           return vert ? (Math.abs(x1 - x2) < 0.5 && Math.abs(x1 - t) < 1)
                       : (Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - t) < 1 && Math.abs(x2 - x1) > 4);
         });
-        return ls.length ? { c: ls[0].getAttribute("stroke"), op: +(ls[0].getAttribute("stroke-opacity") || 1) } : null;
+        if (!ls.length) return null;
+        const thick = ls.slice().sort((a, b) => +b.getAttribute("stroke-width") - +a.getAttribute("stroke-width"))[0];
+        return { c: thick.getAttribute("stroke"), op: +(thick.getAttribute("stroke-opacity") || 1) };
       };
       S.g = { ...PBx.DEFAULT_GUIDE }; S.guideOn = false; S.guideCur = null;
       S.multi = false; S.selSet = []; S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
@@ -2358,6 +2375,78 @@ console.log("\n[밸런스 판정]");
       + `잠금채움=${ui.lockFilled} · 저장조용=${ui.exportQuiet} · 가이드켜짐신호=${ui.guideOnSignal}`);
   }
 
+  /* 106·107. ⚠️ v1.51.0 (원장님 지시 2026-08-22)
+     106 「이너라인이 닿은 앞머리와 앞머리두께 가로라인 사이는 회색 얇은선 처리 …
+          바깥에만 굵은선이고 눈썹 내부는 얇은 회색으로」 + 「자의 앞부분(안쪽) 얇은 회색,
+          뒷부분만 유지」 + 「가로 꼬리 길이 반」.
+          한 줄로: **일하는 곳만 굵고 나머지는 얇은 짙은 회색.**
+          ⛔ 굵은 선이 눈썹 속을 가로지르게 되돌리면 그 자리 드로잉이 가려집니다.
+     107 「프리셋 유지, 내부에 기본사항 제공 제거. 오로지 사용자의 프리셋 저장만 사용하자」 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = []; S.sel = "h1";
+      PBx.render();
+      const all = [...document.getElementById("guides").querySelectorAll("line")].map((l) => ({
+        x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+        y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+        c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+        o: +(l.getAttribute("stroke-opacity") || 1),
+      }));
+      const GREY = "#14161B";
+      /* ① 가로 자 — 세로선(anchor)을 경계로 안쪽은 얇은 회색, 바깥은 굵은 고유색 */
+      const y = S.g.front * H, ax = S.g.v2 * W;
+      const hs = all.filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
+                                && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3);
+      const leftIn = hs.find((l) => Math.min(l.x1, l.x2) >= ax - 2 && Math.max(l.x1, l.x2) < ax + W);
+      const leftOut = hs.find((l) => Math.max(l.x1, l.x2) <= ax + 2);
+      /* ② 세로선 — 두 자 사이(눈썹 속)에는 굵은 선이 없어야 한다 */
+      const midY = ((S.g.front + S.g.frontThickness) / 2) * H;
+      const vx = S.g.v2 * W;
+      const vs = all.filter((l) => Math.abs(l.x1 - l.x2) < 0.5 && Math.abs(l.x1 - vx) < 1 && l.o > 0.3);
+      const crossMid = vs.filter((l) => Math.min(l.y1, l.y2) <= midY && Math.max(l.y1, l.y2) >= midY);
+      const thickInside = crossMid.some((l) => l.w > 1.2);
+      const thickOutside = vs.some((l) => l.w > 1.2);
+      /* ③ 꼬리 자는 아치 자의 절반 길이 */
+      const len = (k) => { const sp = PBx.H_SPECS.find((x) => x.key === k); const q = PBx.segPx(sp)[0]; return q[1] - q[0]; };
+      return {
+        inGrey: !!leftIn && leftIn.c === GREY && leftIn.w <= 1.2,
+        outColor: !!leftOut && leftOut.c !== GREY && leftOut.w > 1.2,
+        thickInside, thickOutside,
+        tailRatio: len("h3") / len("h2"),
+        lockOnCenter: (() => {
+          const st = document.getElementById("stage").getBoundingClientRect();
+          const lk = document.getElementById("btnLock").getBoundingClientRect();
+          return Math.abs((lk.left + lk.right) / 2 - st.left - S.g.v1 * W) < 4;
+        })(),
+      };
+    });
+    const pr = await p.evaluate(() => {
+      localStorage.removeItem("pb_presets_v1"); localStorage.removeItem("pb_favs_v1");
+      document.getElementById("btnPresetLoad").click();
+      const empty = !!document.querySelector("#presetList .empty");
+      const rows = document.querySelectorAll("#presetList .pitem").length;
+      document.getElementById("mLoad").classList.remove("on");
+      return { empty, rows, hasBtn: !!document.getElementById("btnPresetLoad") };
+    });
+    await ctx.close();
+    check("106. 일하는 곳만 굵게 — 자는 바깥 절반만 · 세로선은 자 사이를 비운다 · 꼬리 자 길이 반",
+      r.inGrey && r.outColor && r.thickInside === false && r.thickOutside === true
+        && r.tailRatio > 0.4 && r.tailRatio < 0.6 && r.lockOnCenter,
+      `자 안쪽=회색 ${r.inGrey} / 바깥=고유색 ${r.outColor} · 눈썹 속 굵은선=${r.thickInside}(없어야 함) · `
+      + `자 바깥 굵은선=${r.thickOutside} · 꼬리/아치 길이비 ${r.tailRatio.toFixed(2)} · 잠금=센터선 ${r.lockOnCenter}`);
+    check("107. 프리셋 — 내장 기본 3종 없음 · 사용자가 저장한 것만",
+      pr.empty && pr.rows === 0 && pr.hasBtn,
+      `빈 목록 표시=${pr.empty} · 줄 수=${pr.rows}(0이어야 함) · 프리셋 버튼 유지=${pr.hasBtn}`);
+  }
+
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
      「반영이 안 됐다」와 「판독이 실패했다」를 구분할 방법이 이것뿐입니다.
      APP_VERSION 은 릴리스 때 sw.js 의 VERSION 과 함께 올립니다. */
@@ -2411,28 +2500,39 @@ console.log("\n[밸런스 판정]");
       const lows = { front: g.front, frontThickness: g.frontThickness, h2: g.h2, archThickness: g.archThickness, h3: g.h3 };
       const browBot = Math.max(...Object.values(lows)) * H;
       /* 진한 세로 구간만 (연결선 opacity 0.16 제외) */
-      const seg = (key) => {
+      /* v1.51.0 — 한 세로선이 여러 토막으로 그려진다.
+         thick=true → **굵은 토막**(자 바깥쪽) · thick=false → 얇은 회색이 이어지는 전체 범위 */
+      const seg = (key, thick) => {
         const x = g[key] * S.dim.W;
         const ls = [...document.getElementById("guides").querySelectorAll("line")]
           .filter((l) => Math.abs(+l.getAttribute("x1") - x) < 0.6 && Math.abs(+l.getAttribute("x1") - +l.getAttribute("x2")) < 0.5
                       && +(l.getAttribute("stroke-opacity") || 1) > 0.2);
         if (!ls.length) return null;
-        const l = ls[0];
-        return { y0: Math.min(+l.getAttribute("y1"), +l.getAttribute("y2")),
-                 y1: Math.max(+l.getAttribute("y1"), +l.getAttribute("y2")),
-                 w: +l.getAttribute("stroke-width") };
+        const sorted = ls.slice().sort((a, b) => +b.getAttribute("stroke-width") - +a.getAttribute("stroke-width"));
+        if (thick) {
+          const l = sorted[0];
+          return { y0: Math.min(+l.getAttribute("y1"), +l.getAttribute("y2")),
+                   y1: Math.max(+l.getAttribute("y1"), +l.getAttribute("y2")),
+                   w: +l.getAttribute("stroke-width") };
+        }
+        return { y0: Math.min(...ls.map((l) => Math.min(+l.getAttribute("y1"), +l.getAttribute("y2")))),
+                 y1: Math.max(...ls.map((l) => Math.max(+l.getAttribute("y1"), +l.getAttribute("y2")))),
+                 w: +sorted[sorted.length - 1].getAttribute("stroke-width") };
       };
-      const arch = seg("v6"), outer = seg("v4"), inner = seg("v2");
-      return { arch, outer, inner, eyeY, browBot };
+      const arch = seg("v6", true), outer = seg("v4", true), inner = seg("v2", true);
+      const innerAll = seg("v2", false);
+      return { arch, outer, inner, innerAll, eyeY, browBot };
     });
     await ctx.close();
     const clear = (s) => s && s.y1 < vl.eyeY - 4 && s.y1 < vl.browBot + 0.05 * 390 + 14;
-    check("95. 세로선 — 아치선·아우터는 짧고 얇게 (눈까지 안 내려옴) · 이너는 길게",
+    /* v1.51.0 — **굵은 토막**은 셋 다 짧다(자 바깥쪽만). 눈까지 이어지는 것은 **얇은 회색**이다.
+       원장님 지시: 「바깥에만 굵은선이고 눈썹 내부는 얇은 회색으로」 */
+    check("95. 세로선 — 굵은 토막은 자 바깥쪽만(눈까지 안 내려옴) · 이너는 얇은 회색으로 눈까지",
       clear(vl.arch) && clear(vl.outer)
-        && vl.inner && vl.inner.y1 > vl.eyeY - 30
+        && vl.innerAll && vl.innerAll.y1 > vl.eyeY - 30
         && vl.arch.w < vl.inner.w && vl.outer.w < vl.inner.w,
-      `아치선끝 ${vl.arch && vl.arch.y1.toFixed(0)} · 아우터끝 ${vl.outer && vl.outer.y1.toFixed(0)} `
-      + `< 눈 ${vl.eyeY.toFixed(0)} · 이너끝 ${vl.inner && vl.inner.y1.toFixed(0)} · `
+      `아치선 굵은끝 ${vl.arch && vl.arch.y1.toFixed(0)} · 아우터 굵은끝 ${vl.outer && vl.outer.y1.toFixed(0)} `
+      + `< 눈 ${vl.eyeY.toFixed(0)} · 이너 얇은선끝 ${vl.innerAll && vl.innerAll.y1.toFixed(0)} · `
       + `굵기 아치선 ${vl.arch && vl.arch.w}/아우터 ${vl.outer && vl.outer.w}/이너 ${vl.inner && vl.inner.w}`);
   }
 
