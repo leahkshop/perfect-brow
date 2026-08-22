@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.46.2";
+const APP_VERSION = "v1.46.3";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -315,9 +315,9 @@ const H_SPECS = [
    v1.31.x 까지는 자 위치가 frac 상수로 박혀 있어, **아치 자가 아우터를 따라 움직였습니다**
    (원장님이 직접 찾아내신 문제). 상수를 되살리지 말고 anchor 를 쓰세요. */
   { key: "h1", vis: "h1Visible", i18n: "line_eye",   color: "#3A3F4A", dot: "#9AA3B2", w: 2.0, op: 0.5, anchor: null },
-  /* v1.46.1 — 이너 묶음 고유색 = **민트**(원장님 선택 「민트해보자」): 앰버는 튀어서 교체 */
-  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#2DD4BF", dot: "#99F6E4", w: 1.15, op: 0.9, anchor: "v2" },
-  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#2DD4BF", dot: "#99F6E4", w: 1.15, op: 0.9, anchor: "v2" },
+  /* v1.46.3 — 이너 묶음 = **딥 틸**(원장님 선택): 민트(#2DD4BF)도 튀어서 명도·채도 낮춤 */
+  { key: "front", vis: "frontVisible", i18n: "line_front", color: "#0D9488", dot: "#5EEAD4", w: 1.15, op: 0.9, anchor: "v2" },
+  { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#0D9488", dot: "#5EEAD4", w: 1.15, op: 0.9, anchor: "v2" },
   { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
   { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
   { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 1.15, op: 0.95, anchor: "v4" },
@@ -326,7 +326,7 @@ const H_SPECS = [
 const V_SPECS = [
   { key: "v1", vis: "v1Visible", i18n: "line_center", color: "#14161B", dot: "#C9D1E0", w: 1.1, op: 1,   mirror: null },
   /* 이너만 길게(눈까지) 남긴다 — 콧방울·내안각과 맞춰 보는 기준선이기 때문 (원장님 지시 2026-08-20) */
-  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#2DD4BF", dot: "#99F6E4", w: 1.35, op: 0.6, mirror: "v3", long: true },
+  { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#0D9488", dot: "#5EEAD4", w: 1.35, op: 0.6, mirror: "v3", long: true },
   /* 아치선 (v1.32.0) — 아치·아치두께가 올라가는 기둥. 아우터보다 **얇게** 그려 소속을 표시한다 */
   { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 0.75, op: 0.9, mirror: "v7" },
   /* 아우터는 **보라** — 꼬리와 한 묶음이라 색으로 묶어 준다 (원장님 지시 2026-08-20) */
@@ -563,7 +563,7 @@ function renderGuides() {
      가이드 중에는 지금 차례(guideCur) 하나만 강조 (v1.44.0). */
   const emph = (sp) => S.guideOn ? S.guideCur === sp.key : isSelected(sp.key);
   const liveColor = (sp) => sp.color;
-  const dimOp = (sp) => Math.max(0.4, sp.op * 0.6);
+  const dimOp = (sp) => Math.max(0.4, sp.op * 0.5);   /* v1.46.3 — 연한 상태 한 단계 더 차분하게 (0.6→0.5) */
   const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
   S.wr = WR;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -2779,7 +2779,7 @@ if ("serviceWorker" in navigator) {
 { const el = document.getElementById("verTag"); if (el) el.textContent = "Perfect Brow " + APP_VERSION; }
 
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
-  LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", inner: "#2DD4BF", neutral: "#14161B" },
+  LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", inner: "#0D9488", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
