@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.46.3";
+const APP_VERSION = "v1.47.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -561,7 +561,10 @@ function renderGuides() {
   /* v1.46.0 — 모든 선은 **항상 고유색**: 강조(차례/선택)가 아니면 연하게(투명도 60%),
      강조면 진하게(불투명)+굵게(+1.6). 회색 기본은 드로잉 위에서 사라져 폐지 (원장님 지시).
      가이드 중에는 지금 차례(guideCur) 하나만 강조 (v1.44.0). */
-  const emph = (sp) => S.guideOn ? S.guideCur === sp.key : isSelected(sp.key);
+  /* v1.47.0 — 가이드가 기본 상시 ON이 되면서, 가이드 중에도 **선택한 선은 켜진다**
+     (안 그러면 아우터·아치선처럼 플로우 밖 선을 골라도 아무 표시가 없다 — 회귀 51).
+     플로우 진행 중엔 움직인 선이 곧 선택이라 실제로는 하나만 켜진 것처럼 보인다. */
+  const emph = (sp) => (S.guideOn && S.guideCur === sp.key) || isSelected(sp.key);
   const liveColor = (sp) => sp.color;
   const dimOp = (sp) => Math.max(0.4, sp.op * 0.5);   /* v1.46.3 — 연한 상태 한 단계 더 차분하게 (0.6→0.5) */
   const WR = workRight() * W;          // 가로선·라벨은 여기까지만 (v1.17.0)
@@ -2230,6 +2233,10 @@ function loadPhoto(file) {
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
     S.pick = [];
+    /* v1.47.0 원장님 지시 — 「가이드는 앱이 켜지면 항상 시작 상태로 유지, 사용자가 클릭할 때만 꺼짐」
+       사진이 올라와 편집이 시작될 때마다 가이드 ON + 이너부터. 끄는 건 가이드 버튼 클릭뿐. */
+    S.guideOn = true;
+    S.guideCur = GUIDE_FLOW[0];
     clearHist();                 /* 새 사진 = 되돌리기 기록 초기화 */
     show("editor");
     requestAnimationFrame(() => {

@@ -2073,10 +2073,11 @@ console.log("\n[밸런스 판정]");
                  dim: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) <= 0.85),
                  grey: ls.some((l) => l.getAttribute("stroke") === "#3A414E") };
       };
-      /* v1.46.0 — 기본 = 고유색 연하게 (회색 아님·강조 아님) */
-      const greyByDefault = lineColorOf("h2").dim && !lineColorOf("h2").own && !lineColorOf("h2").grey
+      /* v1.46.0 — 기본 = 고유색 연하게 (회색 아님·강조 아님) — 플로우에 없는 아치·아우터로 확인 */
+      const greyByDefault = lineColorOf("h2").dim && !lineColorOf("h2").grey
                             && lineColorOf("v4").dim && !lineColorOf("v4").own;
-      document.getElementById("btnGuide").click();          // 가이드 ON — **이너부터** 켜짐 (v1.44.0)
+      /* v1.47.0 — 사진이 올라오면 가이드는 **저절로 켜져** 이너부터 시작한다 (원장님 지시).
+         버튼 클릭은 켜기 위해서가 아니라 **끄기 위해서만** 필요하다. */
       const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
       /* 앞머리(front) 를 슬라이더로 움직인다 → 움직이는 동안 front 가 켜지고, 끝나면 다음(아치두께) */
       S.selUD = "front";
