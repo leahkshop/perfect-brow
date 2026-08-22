@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.52.0";
+const APP_VERSION = "v1.53.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -673,6 +673,14 @@ function renderGuides() {
           const bx = idx === 0 ? ax + ov : ax - ov;
           const inA = idx === 0 ? [bx, xb] : [xa, bx];
           const outA = idx === 0 ? [xa, bx] : [bx, xb];
+          /* v1.53.0 — 꼬리 자는 **바깥(관자놀이 쪽)으로도 얇은 회색 참조선** (원장님 지시
+             2026-08-22: 「꼬리 선 밖으로 얇은 회색선 더 빼주고」). 자 길이만큼 뻗는다 */
+          if (sp.key === "h3") {
+            const ext = (xb - xa);
+            const t0 = idx === 0 ? clamp(xa - ext, 0, W) : xb;
+            const t1 = idx === 0 ? xa : clamp(xb + ext, 0, workRight() * W);
+            if (t1 - t0 > 1) drawLine(frag, t0, y, t1, y, HALF_GREY, HALF_W, HALF_OP);
+          }
           if (inA[1] - inA[0] > 1) drawLine(frag, inA[0], y, inA[1], y, HALF_GREY, HALF_W, HALF_OP);
           if (outA[1] - outA[0] > 1) drawLine(frag, outA[0], y, outA[1], y, col, wid, opa);
           return;

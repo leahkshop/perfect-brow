@@ -397,7 +397,7 @@ console.log("[세로 모드 · 기능]");
              glyph: document.getElementById("posPlusV").textContent + document.getElementById("posMinusV").textContent };
   });
   check("24. 세로 조절자 — 오른쪽 끝 · 세로 중앙 (▲위/▼아래)",
-    ctlV.vert && ctlV.rightEdge > st0W * 0.04 && ctlV.rightEdge < st0W * 0.10 && ctlV.centered && ctlV.upAbove && ctlV.glyph === "▲▼",
+    ctlV.vert && ctlV.rightEdge > st0W * 0.015 && ctlV.rightEdge < st0W * 0.08 && ctlV.centered && ctlV.upAbove && ctlV.glyph === "▲▼",
     `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 세로중앙=${ctlV.centered} 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
 
   // 25. 가로 조절자 = 아래 · 오른쪽 정렬, ◀ 왼쪽 / ▶ 오른쪽
@@ -412,7 +412,7 @@ console.log("[세로 모드 · 기능]");
              glyph: document.getElementById("posMinusH").textContent + document.getElementById("posPlusH").textContent };
   });
   check("25. 가로 조절자 — 아래·오른쪽 정렬 (◀왼쪽/▶오른쪽)",
-    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 120 && ctlH.rightEdge > st0W * 0.04 && ctlH.rightEdge < st0W * 0.10
+    ctlH.horiz && ctlH.bottomEdge >= 0 && ctlH.bottomEdge < 120 && ctlH.rightEdge > st0W * 0.015 && ctlH.rightEdge < st0W * 0.08
       && ctlH.rightOfLeft && ctlH.glyph === "◀▶",
     `가로=${ctlH.horiz} 하단여백=${ctlH.bottomEdge.toFixed(0)}px 우측여백=${ctlH.rightEdge.toFixed(0)}px 오른쪽화살표오른쪽=${ctlH.rightOfLeft} ${ctlH.glyph}`);
 
@@ -554,7 +554,7 @@ console.log("[세로 모드 · 기능]");
     const m = r("photoModes"), h = r("posCtlH"), st = r("stage");
     return {
       order: m.bottom <= h.top + 1,
-      rightEnd: st.right - h.right > st.width * 0.04 && st.right - h.right < st.width * 0.10
+      rightEnd: st.right - h.right > st.width * 0.015 && st.right - h.right < st.width * 0.06
                 && Math.abs(m.right - h.right) < 2,
       bottomEnd: st.bottom - h.bottom < 20,
       /* v1.44.1 — 바 폭 = 줌~밸런스 행 폭, 양쪽 끝 모두 일치 (원장님: "안길어 졌다" 재발 방지) */
@@ -1571,8 +1571,9 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     const hitChip = rects.some((r) => r.x < cx + chip.offsetWidth && r.x + r.w > cx
       && r.y < cy + chip.offsetHeight && r.y + r.h > cy);
     return {
-      rightOfBar: l.left >= bar.right - 1, inside: l.right <= st.right + 1,
-      gap: Math.round(l.left - bar.right),
+      /* v1.53.0 — 여백이 2%로 줄어 라벨이 바 **왼쪽**(캔버스 안쪽)으로 이동 */
+      rightOfBar: l.right <= bar.left + 1, inside: l.left >= st.left - 1 && l.right <= st.right + 1,
+      gap: Math.round(bar.left - l.right),
       count: rects.length, top: Math.min(...rects.map((r) => r.y)), hitChip,
     };
   });
@@ -1633,8 +1634,8 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     scrim.ok && scrim.noTouch && scrim.belowGuides && scrim.coversDocks && scrim.coversBar,
     `터치통과=${scrim.noTouch} 선위=${scrim.belowGuides} 아래도크덮음=${scrim.coversDocks} 세로바덮음=${scrim.coversBar}`);
 
-  check(`45. ${dev.n} — 세로 조절자 값 라벨이 바 오른쪽 · 캔버스 안`,
-    lab.rightOfBar && lab.inside, `바 오른쪽=${lab.rightOfBar}(간격 ${lab.gap}px) 캔버스안=${lab.inside}`);
+  check(`45. ${dev.n} — 세로 조절자 값 라벨이 바 왼쪽(안쪽) · 캔버스 안`,
+    lab.rightOfBar && lab.inside, `바 왼쪽=${lab.rightOfBar}(간격 ${lab.gap}px) 캔버스안=${lab.inside}`);
   /* v1.46.2 — 세로선 이름 배지는 **전부 숨김** (원장님 지시). 색이 곧 이름표. */
   check(`46. ${dev.n} — 세로선 이름 배지 없음 (v1.46.2 숨김)`,
     lab.count === 0 && !lab.hitChip,
