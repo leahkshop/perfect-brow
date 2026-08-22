@@ -2096,11 +2096,18 @@ console.log("\n[밸런스 판정]");
       const duringInner = S.guideCur === "v2";
       sh.dispatchEvent(new Event("change", { bubbles: true }));
       const afterInner = S.guideCur === "frontThickness";
-      /* 꼬리(h3) 끝나면 플로우 종료 (처음으로 돌아가지 않음) */
+      /* v1.47.2 — 꼬리(h3) 다음은 **아치 세로선(v6) → 아우터(v4)**, 아우터 뒤 종료 */
       S.selUD = "h3";
       sl.dispatchEvent(new Event("input", { bubbles: true }));
       sl.dispatchEvent(new Event("change", { bubbles: true }));
-      const endsAfterTail = S.guideCur === null && S.guideOn === true;
+      const afterTailArchV = S.guideCur === "v6";
+      S.selLR = "v6"; S.hMode = "line";
+      sh.dispatchEvent(new Event("change", { bubbles: true }));
+      const afterArchVOuter = S.guideCur === "v4";
+      S.selLR = "v4";
+      sh.dispatchEvent(new Event("change", { bubbles: true }));
+      const endsAfterTail = afterTailArchV && afterArchVOuter
+                            && S.guideCur === null && S.guideOn === true;
       /* 가이드 끄면 즉시 종료 */
       document.getElementById("btnGuide").click();
       const offEnds = S.guideOn === false && S.guideCur === null;
