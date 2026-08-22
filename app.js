@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.47.0";
+const APP_VERSION = "v1.47.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -623,7 +623,8 @@ function renderGuides() {
         const bad = offBy && idx === badIdx;
         drawLine(frag, xa, y, xb, y,
           bad ? BAL_RED : liveColor(sp),
-          bad ? sp.w + 2.2 : (sel ? sp.w + 1.6 : sp.w),
+          /* v1.47.1 — 기본(비강조) 선도 +0.6 굵게: 선택(+1.6)보단 얇게 (원장님 지시) */
+          bad ? sp.w + 2.2 : (sel ? sp.w + 1.8 : sp.w + 0.6),
           bad ? 1 : (sel ? 1 : dimOp(sp)));
       });
     }
@@ -638,7 +639,7 @@ function renderGuides() {
     for (const sp of V_SPECS) {
       if (!g[sp.vis]) continue;
       const sel = emph(sp);
-      const w = sel ? sp.w + 1.6 : sp.w, op = sel ? 1 : dimOp(sp);
+      const w = sel ? sp.w + 1.8 : sp.w + 0.6, op = sel ? 1 : dimOp(sp);   /* v1.47.1 — 기본 +0.6 */
       const full = sp.key === "v1";
       const band = sp.long ? bandL : bandT;
       const by0 = band.y0 * H, by1 = band.y1 * H;

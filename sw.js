@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v44";  /* v1.47.0 — 가이드: 사진 올라오면 항상 켜진 채 시작, 버튼 클릭으로만 끔 */
+const VERSION = "pb-v45";  /* v1.47.1 — 기본 선 굵기 +0.6 (선택보단 얇게, 기존보단 굵게) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
