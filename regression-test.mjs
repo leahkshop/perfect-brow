@@ -2465,6 +2465,68 @@ console.log("\n[밸런스 판정]");
       `빈 목록 표시=${pr.empty} · 줄 수=${pr.rows}(0이어야 함) · 프리셋 버튼 유지=${pr.hasBtn}`);
   }
 
+  /* 108. ⚠️ v1.54.0 (원장님 지시 2026-08-22)
+     「가이드는 처음 시작시 지시등 블링킹 효과 두번후 색상 선명 — 그리고 드래그시 …
+      다음 지시선 두번 블링킹 — 움직일때 … 다음 플로우 동일 적용」
+     · 지시등 : 다음 차례 선이 **두 번 깜빡인 뒤 선명하게** 남는다 (시작은 켜짐, 끝도 켜짐)
+     · 드래그 : 잡고 움직이는 동안 **고유색을 반투명(0.6)** — 회색으로 바꾸지 않는다.
+                어느 선을 잡고 있는지 색으로 알아야 하고, 아래 드로잉이 비쳐야 한다
+     ⛔ 저장 이미지에 깜빡임의 '꺼진' 순간이나 반투명이 찍히면 안 됩니다 (exportImage 가 끔) */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, W = S.dim.W;
+      PBx.stopBlink();
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.guideOn = true; S.guideCur = "v2"; S.sel = "v2"; S.multi = false; S.selSet = [];
+      S.blink = 0; S.dragOn = false;
+      /* 잡은(강조) 이너 세로선의 제일 굵은 토막 하나 */
+      const litV = () => {
+        const vx = S.g.v2 * W;
+        const segs = [...document.getElementById("guides").querySelectorAll("line")]
+          .map((l) => ({ x: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+                         c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+                         o: +(l.getAttribute("stroke-opacity") || 1) }))
+          .filter((l) => Math.abs(l.x - l.x2) < 0.5 && Math.abs(l.x - vx) < 1);
+        let best = null;
+        for (const l of segs) if (!best || l.w > best.w) best = l;
+        return best || { c: "", w: 0, o: 0 };
+      };
+      PBx.render(); const crisp = litV();
+      S.blink = 1; PBx.render(); const blinked = litV();
+      S.blink = 0; S.dragOn = true; PBx.render(); const dragged = litV();
+      S.dragOn = false; PBx.render();
+      return { crisp, blinked, dragged };
+    });
+    /* 시퀀스 — 시작은 켜짐(테스트·느린 기기가 첫 프레임을 놓치지 않게) · 중간에 꺼짐이 있고 · 끝은 켜짐 */
+    const seq = await p.evaluate(() => new Promise((res) => {
+      const S = window.PB.S;
+      S.guideOn = true; S.guideCur = "v2"; S.sel = "v2";
+      window.PB.startBlink();
+      const samples = []; const t0 = Date.now();
+      const iv = setInterval(() => {
+        samples.push(S.blink);
+        if (Date.now() - t0 > 1000) { clearInterval(iv); res(samples); }
+      }, 30);
+    }));
+    const expSrc = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+    const exportClean = /async function exportImage\(\)[\s\S]{0,400}?stopBlink\(\);\s*S\.dragOn = false;/.test(expSrc);
+    await ctx.close();
+    const offCount = seq.filter((v, i) => v === 1 && seq[i - 1] !== 1).length;
+    const startsOn = seq[0] === 0, endsOn = seq[seq.length - 1] === 0;
+    check("108. 지시등 — 두 번 깜빡이고 선명 · 드래그 중은 반투명 고유색(회색 아님) · 저장본은 선명",
+      r.crisp.o > 0.95 && r.blinked.o < 0.2 && r.blinked.c === r.crisp.c
+        && r.dragged.o > 0.5 && r.dragged.o < 0.75 && r.dragged.c === r.crisp.c && r.dragged.c !== "#14161B"
+        && startsOn && endsOn && offCount === 2 && exportClean,
+      `선명 ${r.crisp.c}@${r.crisp.o} · 깜빡임 ${r.blinked.c}@${r.blinked.o} · 드래그 ${r.dragged.c}@${r.dragged.o} · `
+      + `꺼진 횟수 ${offCount}(2여야 함) · 시작켜짐 ${startsOn} · 끝켜짐 ${endsOn} · 저장본 선명 ${exportClean}`);
+  }
+
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
      「반영이 안 됐다」와 「판독이 실패했다」를 구분할 방법이 이것뿐입니다.
      APP_VERSION 은 릴리스 때 sw.js 의 VERSION 과 함께 올립니다. */

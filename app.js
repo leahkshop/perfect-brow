@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.53.0";
+const APP_VERSION = "v1.54.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -444,6 +444,8 @@ const S = {
   photoMode: "zoom",
   locked: false,
   guideOn: false, guideCur: null,   // 가이드 플로우 (v1.42.0)
+  blink: 0,              // 지시등 깜빡임의 '꺼진' 순간 (v1.54.0)
+  dragOn: false,         // 선을 잡고 움직이는 중 (v1.54.0)
   dim: { W: 0, H: 0 },
   iw: 0, ih: 0, s0: 1, fitW: 0, fitH: 0,
   hiddenSnapshot: null,
@@ -559,6 +561,16 @@ const HALF_GREY = "#14161B", HALF_W = 1.0, HALF_OP = 0.5;
    ⛔ 색 토막을 세로선에서 뚝 끊거나(ㄱ자로 돌아감), 조용한 세로선에 색 토막을 되살리지 마세요. */
 const VGREY_W = 1.7, VGREY_OP = 0.6;   // 조용한 세로선 — 얇은 참조선(1.0)보다는 분명한 한 줄
 const OVERSHOOT = 0.5;                 // 고유색이 세로선을 지나 안쪽으로 넘는 비율 (자 반폭 기준)
+/* ⚠️ v1.54.0 — 지시등(블링킹)과 드래그 중 반투명 (원장님 지시 2026-08-22)
+   가이드가 다음 선으로 넘어가면 그 선이 **두 번 깜빡인 뒤 선명하게** 남는다 — 눈이
+   화면 어디를 봐야 하는지 한 번에 잡아준다. 움직이는 동안에는 **고유색을 반투명**으로
+   낮춰 선 아래 드로잉이 비쳐 보이게 하고, 손을 떼면 다시 선명해진다.
+   ⛔ 드래그 중에 회색으로 바꾸지 마세요 — 어느 선을 잡고 있는지 색으로 알아야 합니다.
+   ⛔ 저장(내보내기) 이미지에는 깜빡임·반투명이 남으면 안 됩니다 (exportImage 가 끕니다). */
+const BLINK_OP = 0.12, BLINK_MS = 160;  // 깜빡임의 '꺼진' 순간 투명도 · 한 칸 길이
+const DRAG_OP = 0.6;                    // 드래그 중 반투명 — 색은 유지, 아래가 비친다
+/* 강조된 선의 지금 투명도. 깜빡임 > 드래그 > 선명 순으로 우선 */
+const emphOp = () => (S.blink ? BLINK_OP : (S.dragOn ? DRAG_OP : 1));
 const SEG_HALF = 0.19;           // 자 반폭 (눈썹 폭 기준)
 const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
 const VPAD = 0.045;              // 세로선(긴 것)이 위아래로 더 나가는 여유
@@ -664,7 +676,7 @@ function renderGuides() {
         const col = bad ? BAL_RED : lineColor(sp, sel);
         /* v1.47.1 — 기본(비강조) 선도 +0.6 굵게: 선택(+1.6)보단 얇게 (원장님 지시) */
         const wid = bad ? sp.w + 2.2 : (sel ? sp.w + 1.8 : sp.w + 0.6);
-        const opa = bad ? 1 : (sel ? 1 : dimOpOf(sp));
+        const opa = bad ? 1 : (sel ? emphOp() : dimOpOf(sp));
         /* v1.51.0 — 자의 **안쪽(센터 쪽) 절반**은 얇은 짙은 회색.
            ⚠️ 밸런스로 빨갛게 칠하는 토막은 **나누지 않는다** — 판정 표시가 가려지면 안 됩니다. */
         if (!bad && sp.anchor) {
@@ -699,7 +711,7 @@ function renderGuides() {
     for (const sp of V_SPECS) {
       if (!g[sp.vis]) continue;
       const sel = emph(sp);
-      const w = sel ? sp.w + 1.8 : sp.w + 0.6, op = sel ? 1 : dimOpOf(sp);   /* v1.47.1 — 기본 +0.6 */
+      const w = sel ? sp.w + 1.8 : sp.w + 0.6, op = sel ? emphOp() : dimOpOf(sp);   /* v1.47.1 — 기본 +0.6 · v1.54.0 깜빡임/드래그 */
       const full = sp.key === "v1";
       const band = sp.long ? bandL : bandT;
       const by0 = band.y0 * H, by1 = band.y1 * H;
@@ -1013,6 +1025,7 @@ touch.addEventListener("pointermove", (e) => {
     if (!gDrag.moved) {
       if (Math.hypot(sp.x - gDrag.x0, sp.y - gDrag.y0) < 3) return;
       gDrag.moved = true;
+      S.dragOn = true; stopBlink();   /* 움직이는 동안 반투명 — 아래 드로잉이 비친다 (v1.54.0) */
       /* 끌기 시작 = 잡은 선을 선택에 합류 (여러라인 모드) */
       if (S.multi && gDrag.tapKey && !S.selSet.includes(gDrag.tapKey)) S.selSet.push(gDrag.tapKey);
       /* 가이드: 움직이기 시작한 선이 "지금 차례"가 된다 — 예약돼 있던 다음 선은 꺼진다 (v1.42.0) */
@@ -1052,6 +1065,7 @@ touch.addEventListener("pointermove", (e) => {
 
 function endPointer(e) {
   pts.delete(e.pointerId);
+  if (pts.size === 0) S.dragOn = false;   /* 손을 떼면 다시 선명 (v1.54.0) */
   /* "탭만" 했을 때(3px 데드존을 넘지 않음)의 판정 — 여러라인 / 한 줄 모드가 다르다 (BASELINE 1-7)
        · 여러라인 : 선택에 추가 / 이미 있으면 선택 해제 (숨기지 않음)
        · 한 줄    : 새 선이면 선택만, 이미 선택돼 있던 선을 다시 탭하면 숨김/표시 */
@@ -1077,6 +1091,26 @@ function endPointer(e) {
   }
 }
 
+/* ═══ 지시등 블링킹 (v1.54.0 · 원장님 지시 2026-08-22) ═══════════════════
+   다음 차례 선이 **두 번 깜빡인 뒤 선명하게** 남는다 — "여기다"를 눈으로 찍어준다.
+   ⚠️ 시퀀스는 **켜짐으로 시작**한다. 그래야 render() 직후 화면을 읽는 회귀 테스트와
+      느린 기기에서 첫 프레임이 사라진 것처럼 보이지 않는다.
+   ⚠️ 타이머는 하나만 — 다음 선으로 넘어가면 이전 깜빡임은 즉시 취소된다. */
+let blinkTimer = null;
+function startBlink() {
+  clearTimeout(blinkTimer);
+  const seq = [0, 1, 0, 1];          // 켜짐·꺼짐·켜짐·꺼짐 → 끝나면 켜짐으로 남는다
+  let i = 0;
+  const step2 = () => {
+    if (i >= seq.length) { S.blink = 0; blinkTimer = null; render(); return; }
+    S.blink = seq[i++];
+    render();
+    blinkTimer = setTimeout(step2, BLINK_MS);
+  };
+  step2();
+}
+function stopBlink() { clearTimeout(blinkTimer); blinkTimer = null; S.blink = 0; }
+
 /* 가이드: 이 선의 움직임이 끝났다 → **그 선의 다음** 순서가 켜진다.
    마지막(꼬리) 뒤로는 처음으로 돌아가지 않는다 — 플로우 종료 (원장님 지시 2026-08-21) */
 function guideAdvance(key) {
@@ -1088,7 +1122,8 @@ function guideAdvance(key) {
   /* v1.49.0 — 다음 차례로 **선택도 함께 옮긴다**. 두 가지가 한 번에 해결된다:
        ① 방금 쓴 선이 선택으로 남아 같이 밝아지는 문제가 사라진다 (밝은 선 = 항상 하나)
        ② 조절 바가 곧바로 다음 선을 잡아, 레일에서 다시 고를 필요가 없다 (시술 중 손이 덜 간다) */
-  if (next) noteSel(next);
+  if (next) { noteSel(next); render(); startBlink(); return; }
+  stopBlink();
   render();
 }
 touch.addEventListener("pointerup", endPointer);
@@ -2240,6 +2275,9 @@ function autoFromDrawing() {
 /* ═══════════ 9. export ═══════════ */
 async function exportImage() {
   try {
+    /* v1.54.0 — 저장본은 **언제나 선명한 상태**. 깜빡임의 '꺼진' 순간이나 드래그 반투명이
+       그대로 찍히면 선이 흐린 사진이 남습니다. ⛔ 이 세 줄을 지우지 마세요. */
+    stopBlink(); S.dragOn = false; render();
     const { W, H } = S.dim, R = 2;
     const c = document.createElement("canvas");
     c.width = W * R; c.height = H * R;
@@ -2315,6 +2353,7 @@ function loadPhoto(file) {
       measure();
       render();
       runFaceAI();
+      startBlink();     /* 첫 지시등 — 이너가 두 번 깜빡이고 선명해진다 (v1.54.0) */
     });
   };
   im.onerror = () => toast(t("export_fail"));
@@ -2621,6 +2660,7 @@ $("btnGuide").onclick = () => {
   S.guideCur = S.guideOn ? GUIDE_FLOW[0] : null;
   updateButtons();
   render();
+  if (S.guideOn) startBlink(); else stopBlink();   /* 지시등 두 번 (v1.54.0) */
 };
 $("btnRefL").onclick = () => setRefSide("L");
 $("btnRefR").onclick = () => setRefSide("R");
@@ -2648,17 +2688,19 @@ histSlider(posSliderH);
 
 /* 세로 조절자 — 위아래로 움직이는 가로선(S.selUD) 전담 */
 posSliderV.addEventListener("input", (e) => { beginEdit(); noteSel(S.selUD);
+  S.dragOn = true; stopBlink();                                    /* v1.54.0 */
   if (S.guideOn && GUIDE_FLOW.includes(S.selUD)) S.guideCur = S.selUD;
   applyPos(parseFloat(e.target.value), S.selUD); });
-posSliderV.addEventListener("change", () => guideAdvance(S.selUD));
+posSliderV.addEventListener("change", () => { S.dragOn = false; guideAdvance(S.selUD); });
 $("posMinusV").onclick = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); });
 $("posPlusV").onclick  = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); });
 
 /* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
 posSliderH.addEventListener("input", (e) => { beginEdit(); if (!hIsPhoto()) noteSel(S.selLR);
+  if (!hIsPhoto()) { S.dragOn = true; stopBlink(); }                /* v1.54.0 */
   if (!hIsPhoto() && S.guideOn && GUIDE_FLOW.includes(S.selLR)) S.guideCur = S.selLR;
   applyH(parseFloat(e.target.value)); });
-posSliderH.addEventListener("change", () => { if (!hIsPhoto()) guideAdvance(S.selLR); });
+posSliderH.addEventListener("change", () => { S.dragOn = false; if (!hIsPhoto()) guideAdvance(S.selLR); });
 $("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) - hConfig().step); });
 $("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) + hConfig().step); });
 
@@ -2880,4 +2922,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
-  applyLayout, openPicker, endPicking };
+  applyLayout, openPicker, endPicking, startBlink, stopBlink };
