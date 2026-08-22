@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 기준 버전 | **v1.30.1** |
+| 기준 버전 | **v1.47.2** |
 | 확정일 | 2026-08-20 |
 | 라이브 주소 | https://leahkshop.github.io/perfect-brow/ |
 | 저장소 | https://github.com/leahkshop/perfect-brow |
