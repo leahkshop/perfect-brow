@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.48.0";
+const APP_VERSION = "v1.49.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -327,9 +327,14 @@ const H_SPECS = [
      ⚠️ `dimColor` 를 지우고 알파 방식으로 되돌리면 탁한 색이 그대로 돌아옵니다. */
   { key: "front", vis: "frontVisible", i18n: "line_front", color: "#5EEAD4", dimColor: "#C9D1D6", dot: "#5EEAD4", w: 1.15, op: 0.9, anchor: "v2" },
   { key: "frontThickness", vis: "frontThicknessVisible", i18n: "line_ft", color: "#5EEAD4", dimColor: "#C9D1D6", dot: "#5EEAD4", w: 1.15, op: 0.9, anchor: "v2" },
-  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
-  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
-  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dot: "#A855F7", w: 1.15, op: 0.95, anchor: "v4" },
+  /* ⚠️ v1.49.0 — 아치·꼬리도 **연한 상태를 알파가 아니라 별도 색**으로 (원장님 지시 2026-08-22).
+     고유색(파랑·보라)은 **그대로 둡니다** — 원장님이 유지를 원하셨습니다.
+     문제는 강조 색이 아니라 연한 상태였습니다: 알파 0.475로 흐리게 하니 파랑이 피부와 섞여
+     화면 실제색이 #6D7CA4(휘도 0.203), 보라는 #A762A0(0.195) — **피부(0.199)와 밝기가 같아
+     사실상 안 보였습니다.** 이너만 알파를 걷어낸 뒤로 「아치 파랑이 죽어있는 느낌」이 된 이유. */
+  { key: "h2", vis: "h2Visible", i18n: "line_arch",  color: "#2E8BFF", dimColor: "#A9CFF2", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
+  { key: "archThickness", vis: "archThicknessVisible", i18n: "line_at", color: "#2E8BFF", dimColor: "#A9CFF2", dot: "#2E8BFF", w: 1.15, op: 0.95, anchor: "v6" },
+  { key: "h3", vis: "h3Visible", i18n: "line_tail",  color: "#A855F7", dimColor: "#D0B8F0", dot: "#A855F7", w: 1.15, op: 0.95, anchor: "v4" },
 ];
 
 const V_SPECS = [
@@ -337,9 +342,9 @@ const V_SPECS = [
   /* 이너만 길게(눈까지) 남긴다 — 콧방울·내안각과 맞춰 보는 기준선이기 때문 (원장님 지시 2026-08-20) */
   { key: "v2", vis: "v2Visible", i18n: "line_inner",  color: "#5EEAD4", dimColor: "#C9D1D6", dot: "#5EEAD4", w: 1.35, op: 0.6, mirror: "v3", long: true },
   /* 아치선 (v1.32.0) — 아치·아치두께가 올라가는 기둥. 아우터보다 **얇게** 그려 소속을 표시한다 */
-  { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dot: "#2E8BFF", w: 0.75, op: 0.9, mirror: "v7" },
+  { key: "v6", vis: "v6Visible", i18n: "line_archv",  color: "#2E8BFF", dimColor: "#A9CFF2", dot: "#2E8BFF", w: 0.75, op: 0.9, mirror: "v7" },
   /* 아우터는 **보라** — 꼬리와 한 묶음이라 색으로 묶어 준다 (원장님 지시 2026-08-20) */
-  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#A855F7", dot: "#A855F7", w: 0.95, op: 1,   mirror: "v5" },
+  { key: "v4", vis: "v4Visible", i18n: "line_outer",  color: "#A855F7", dimColor: "#D0B8F0", dot: "#A855F7", w: 0.95, op: 1,   mirror: "v5" },
 ];
 
 const ALL_VIS = [
@@ -1035,7 +1040,12 @@ function guideAdvance(key) {
   if (!S.guideOn) return;
   const i = GUIDE_FLOW.indexOf(key);
   if (i < 0) return;                                   // 플로우 밖의 선은 순서에 영향 없음
-  S.guideCur = i + 1 < GUIDE_FLOW.length ? GUIDE_FLOW[i + 1] : null;
+  const next = i + 1 < GUIDE_FLOW.length ? GUIDE_FLOW[i + 1] : null;
+  S.guideCur = next;
+  /* v1.49.0 — 다음 차례로 **선택도 함께 옮긴다**. 두 가지가 한 번에 해결된다:
+       ① 방금 쓴 선이 선택으로 남아 같이 밝아지는 문제가 사라진다 (밝은 선 = 항상 하나)
+       ② 조절 바가 곧바로 다음 선을 잡아, 레일에서 다시 고를 필요가 없다 (시술 중 손이 덜 간다) */
+  if (next) noteSel(next);
   render();
 }
 touch.addEventListener("pointerup", endPointer);
@@ -1141,6 +1151,14 @@ function noteSel(key) {
   /* 세로선(좌우 이동)을 고르면 아래 가로 바를 선 조절로 되돌린다 (v1.11.0) */
   if (axisOf(key) === "v") S.selUD = key;
   else { S.selLR = key; S.hMode = "line"; }
+  /* ⚠️ v1.49.0 — 가이드 중에는 **밝은 선이 언제나 하나**여야 한다 (원장님 지시 2026-08-22):
+     「오직 하나의 플로우에 하나의 색만 밝고 짙어진다」.
+     v1.47.0 이 강조 조건에 `isSelected` 를 OR 로 더하면서, 다음 차례로 넘어가도 **방금 쓴 선이
+     선택으로 남아 둘이 함께 밝은** 상태가 됐다(실제로 확인함). 사용자가 고른 선이 곧 지금
+     차례가 되게 해서 둘을 항상 붙여 둔다. 플로우 밖 선(센터·V피봇 등)을 고르면 추천을
+     잠시 내리고(null), 플로우 안 선을 다시 고르면 **그 선부터 재개**한다.
+     ⚠️ 이 두 줄을 지우면 밝은 선이 두 개가 되는 문제가 그대로 돌아옵니다. */
+  if (S.guideOn) S.guideCur = GUIDE_FLOW.includes(key) ? key : null;
 }
 function setSel(key) {
   noteSel(key);

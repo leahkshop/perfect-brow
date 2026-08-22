@@ -2068,14 +2068,16 @@ console.log("\n[밸런스 판정]");
           .filter((l) => +(l.getAttribute("stroke-opacity") || 1) > 0.3
             && (x !== null ? Math.abs(+l.getAttribute("x1") - x) < 1 && Math.abs(+l.getAttribute("x1") - +l.getAttribute("x2")) < 0.5
                            : Math.abs(+l.getAttribute("y1") - y) < 1 && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5));
-        /* v1.46.0 — own = 고유색 **진하게**(강조), dim = 고유색 **연하게**(기본) */
+        /* v1.46.0 — own = 고유색 **진하게**(강조) · v1.49.0 — dimc = **dimColor 로 연하게**(기본) */
         return { own: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) > 0.9),
                  dim: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) <= 0.85),
+                 dimc: ls.some((l) => !!sp.dimColor && l.getAttribute("stroke") === sp.dimColor),
                  grey: ls.some((l) => l.getAttribute("stroke") === "#3A414E") };
       };
-      /* v1.46.0 — 기본 = 고유색 연하게 (회색 아님·강조 아님) — 플로우에 없는 아치·아우터로 확인 */
-      const greyByDefault = lineColorOf("h2").dim && !lineColorOf("h2").grey
-                            && lineColorOf("v4").dim && !lineColorOf("v4").own;
+      /* v1.49.0 — 기본(연한) = **dimColor 로 그린다** (알파 아님 · 회색 아님). 플로우 밖 아치·아우터로 확인.
+         ⚠️ 알파 방식으로 되돌리면 파랑·보라가 피부와 밝기가 같아져 사실상 안 보입니다 (104 참고) */
+      const greyByDefault = lineColorOf("h2").dimc && !lineColorOf("h2").own && !lineColorOf("h2").grey
+                            && lineColorOf("v4").dimc && !lineColorOf("v4").own;
       /* v1.47.0 — 사진이 올라오면 가이드는 **저절로 켜져** 이너부터 시작한다 (원장님 지시).
          버튼 클릭은 켜기 위해서가 아니라 **끄기 위해서만** 필요하다. */
       const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
@@ -2127,7 +2129,8 @@ console.log("\n[밸런스 판정]");
        ② 연한 상태를 알파 0.45로 만들어서, 화면에 실제로 나오는 색은 피부와 섞인 #617F6A 였다
      → 강조 = 민트 #5EEAD4 (레일 버튼 띠와 **같은 색**) · 연한 = 연회색 #C9D1D6 을 **알파 없이** 그대로.
      ⚠️ dimColor 를 지우고 알파 방식으로 되돌리면 이 검사가 깨집니다.
-     ⚠️ 다른 묶음(눈·아치·꼬리·센터·아우터)은 **종전 방식 그대로** — 그것까지 회색이 되면
+     ⚠️ v1.49.0 에서 아치·꼬리도 같은 방식(연한 상태 별도 색)으로 통일됐습니다 — 다만 **각 묶음의
+        연한 색은 자기 계열**입니다(아치 #A9CFF2 · 꼬리 #D0B8F0). 전부 같은 회색으로 만들면
         v1.46.2에서 세로선 배지를 지우며 세운 「색이 곧 이름표」가 무너집니다. */
   {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
@@ -2170,17 +2173,125 @@ console.log("\n[밸런스 판정]");
     });
     await ctx.close();
     const d = c102;
-    check("102. 이너 묶음 — 연한=연회색(알파 없음) · 강조=민트 · 다른 묶음은 종전 방식",
+    check("102. 이너 묶음 — 연한=연회색(알파 없음) · 강조=민트 · 선 색 = 레일 띠 색",
       d.dimFront && d.dimFront.c === "#C9D1D6" && d.dimFront.op >= 0.99
         && d.dimInner && d.dimInner.c === "#C9D1D6" && d.dimInner.op >= 0.99
         && d.litFront && d.litFront.c === "#5EEAD4" && d.litFront.op >= 0.99
         && d.litInner && d.litInner.c === "#5EEAD4"
         && d.litFront.w > d.dimFront.w + 1          /* 강조는 실제로 굵어져야 한다 */
-        && d.dimTail && d.dimTail.c === "#A855F7" && d.dimTail.op <= 0.85   /* 꼬리는 그대로 */
+        && d.dimTail && d.dimTail.c === "#D0B8F0" && d.dimTail.op >= 0.99   /* v1.49.0 — 꼬리도 같은 방식 */
         && d.dotMatches,                            /* 선 색 = 레일 버튼 띠 색 */
       `연한 앞머리 ${d.dimFront && d.dimFront.c}@${d.dimFront && d.dimFront.op} · 연한 이너 ${d.dimInner && d.dimInner.c}@${d.dimInner && d.dimInner.op} · `
       + `강조 앞머리 ${d.litFront && d.litFront.c} 굵기 ${d.dimFront && d.dimFront.w}→${d.litFront && d.litFront.w} · `
       + `꼬리 ${d.dimTail && d.dimTail.c}@${d.dimTail && d.dimTail.op} · 띠=선색 ${d.dotMatches}`);
+  }
+
+  /* 103·104. ⚠️ v1.49.0 (원장님 지시 2026-08-22)
+     103 「먼저 하나의 선이 밝게 짙게 보인다 — 선택이 끝나면 다음 선이 밝게 빛난다. 이때 이전에
+          사용된 선은 색이 옅어진다. **오직 하나의 플로우에 하나의 색만 밝고 짙어진다**」
+          v1.47.0 이 강조 조건에 isSelected 를 OR 로 더하면서, 다음 차례로 넘어가도 방금 쓴 선이
+          선택으로 남아 **둘이 함께 밝았습니다**(v1.48.0 에서 실제로 확인). 이 검사가 그것을 잠급니다.
+     104 「아치 파랑라인이 톤다운된 느낌이라 눈이 더 아파진다」 — 원인은 강조 색이 아니라 **연한 상태**.
+          알파 0.475 로 흐리게 하니 파랑이 피부와 섞여 화면 실제색 #6D7CA4(휘도 0.203),
+          보라는 #A762A0(0.195) — 피부(0.199)와 밝기가 같아 사실상 안 보였습니다.
+          ⚠️ 고유색(#2E8BFF · #A855F7)은 **바꾸지 않습니다** — 원장님이 유지를 원하셨습니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+
+    const g103 = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
+      /* 강조 여부는 **실제로 그려진 굵기**로 판정한다 — 상태값만 보면 아무 일이 없어도 통과한다 */
+      const litKeys = () => {
+        const out = [];
+        for (const sp of PBx.H_SPECS.concat(PBx.V_SPECS)) {
+          if (!S.g[sp.vis]) continue;
+          const vert = sp.key[0] === "v";
+          const t = vert ? S.g[sp.key] * W : S.g[sp.key] * H;
+          const ls = [...document.getElementById("guides").querySelectorAll("line")].filter((l) => {
+            const x1 = +l.getAttribute("x1"), x2 = +l.getAttribute("x2");
+            const y1 = +l.getAttribute("y1"), y2 = +l.getAttribute("y2");
+            if (+(l.getAttribute("stroke-opacity") || 1) <= 0.3) return false;
+            return vert ? (Math.abs(x1 - x2) < 0.5 && Math.abs(x1 - t) < 1)
+                        : (Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - t) < 1 && Math.abs(x2 - x1) > 4);
+          });
+          if (ls.length && +ls[0].getAttribute("stroke-width") >= sp.w + 1.7) out.push(sp.key);
+        }
+        return out;
+      };
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.multi = false; S.selSet = [];
+      S.guideOn = true; S.guideCur = "v2"; S.sel = "v2"; S.selLR = "v2"; S.selUD = "front"; S.hMode = "line";
+      PBx.render();
+      const start = litKeys();
+      /* 이너를 슬라이더로 움직이고 손을 뗀다 → 다음 차례(앞두께)로 */
+      const sh = document.getElementById("posSliderH");
+      sh.value = String(S.g.v2 + 0.02);
+      sh.dispatchEvent(new Event("input", { bubbles: true }));
+      sh.dispatchEvent(new Event("change", { bubbles: true }));
+      PBx.render();
+      const afterStep = litKeys();
+      const selMoved = S.selUD === "frontThickness";      /* 조절 바도 다음 선을 잡는다 */
+      /* 플로우 밖 선(센터)을 고르면 추천을 내리고 그 선만 밝다 */
+      document.querySelector('.lbtn[data-key="v1"]').click();
+      PBx.render();
+      const outside = { lit: litKeys(), cur: S.guideCur };
+      /* 플로우 안 선(아치)을 고르면 그 선부터 재개 */
+      document.querySelector('.lbtn[data-key="h2"]').click();
+      PBx.render();
+      const resume = { lit: litKeys(), cur: S.guideCur };
+      return { start, afterStep, selMoved, outside, resume };
+    });
+
+    const g104 = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
+      const spec = (k) => PBx.H_SPECS.concat(PBx.V_SPECS).find((x) => x.key === k);
+      const seg = (key) => {
+        const vert = key[0] === "v";
+        const t = vert ? S.g[key] * W : S.g[key] * H;
+        const ls = [...document.getElementById("guides").querySelectorAll("line")].filter((l) => {
+          const x1 = +l.getAttribute("x1"), x2 = +l.getAttribute("x2");
+          const y1 = +l.getAttribute("y1"), y2 = +l.getAttribute("y2");
+          if (+(l.getAttribute("stroke-opacity") || 1) <= 0.3) return false;
+          return vert ? (Math.abs(x1 - x2) < 0.5 && Math.abs(x1 - t) < 1)
+                      : (Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - t) < 1 && Math.abs(x2 - x1) > 4);
+        });
+        return ls.length ? { c: ls[0].getAttribute("stroke"), op: +(ls[0].getAttribute("stroke-opacity") || 1) } : null;
+      };
+      S.g = { ...PBx.DEFAULT_GUIDE }; S.guideOn = false; S.guideCur = null;
+      S.multi = false; S.selSet = []; S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
+      PBx.render();
+      const dimArch = seg("h2"), dimTail = seg("h3"), dimOuter = seg("v4");
+      S.sel = "h2"; PBx.render();
+      const litArch = seg("h2");
+      S.sel = "h3"; PBx.render();
+      const litTail = seg("h3");
+      return { dimArch, dimTail, dimOuter, litArch, litTail,
+               nativeKept: spec("h2").color === "#2E8BFF" && spec("h3").color === "#A855F7" };
+    });
+    await ctx.close();
+
+    check("103. 가이드 플로우 — 밝은 선은 언제나 **하나** · 다음 차례로 선택도 함께 이동",
+      g103.start.join() === "v2"
+        && g103.afterStep.join() === "frontThickness"      /* 이전 선(v2)이 남아 있으면 실패 */
+        && g103.selMoved
+        && g103.outside.lit.join() === "v1" && g103.outside.cur === null
+        && g103.resume.lit.join() === "h2" && g103.resume.cur === "h2",
+      `시작 [${g103.start}] → 한 단계 뒤 [${g103.afterStep}] · 조절바 이동=${g103.selMoved} · `
+      + `플로우 밖 선택 [${g103.outside.lit}](차례 ${g103.outside.cur}) · 재개 [${g103.resume.lit}](차례 ${g103.resume.cur})`);
+
+    check("104. 아치·꼬리 — 고유색 유지 · 연한 상태만 별도 색(알파 아님)",
+      g104.nativeKept
+        && g104.dimArch && g104.dimArch.c === "#A9CFF2" && g104.dimArch.op >= 0.99
+        && g104.dimTail && g104.dimTail.c === "#D0B8F0" && g104.dimTail.op >= 0.99
+        && g104.dimOuter && g104.dimOuter.c === "#D0B8F0" && g104.dimOuter.op >= 0.99
+        && g104.litArch && g104.litArch.c === "#2E8BFF"
+        && g104.litTail && g104.litTail.c === "#A855F7",
+      `연한 아치 ${g104.dimArch && g104.dimArch.c}@${g104.dimArch && g104.dimArch.op} · 연한 꼬리 ${g104.dimTail && g104.dimTail.c} · `
+      + `연한 아우터 ${g104.dimOuter && g104.dimOuter.c} · 강조 아치 ${g104.litArch && g104.litArch.c} · 강조 꼬리 ${g104.litTail && g104.litTail.c}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
