@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.51.0";
+const APP_VERSION = "v1.52.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -547,7 +547,18 @@ function drawBadge(frag, text, x, y, color, anchor) {
    · 세로선   : **두 자 사이(눈썹 몸통)가 얇다** — 굵은 선이 눈썹 속을 가로지르면 드로잉을 가린다
                 (원장님: 「바깥에만 굵은선이고 눈썹 내부는 얇은 회색으로」) */
 const HALF_GREY = "#14161B", HALF_W = 1.0, HALF_OP = 0.5;
-const VOUT = 0.065;              // 세로선이 자 바깥으로 굵게 뻗는 길이 (원장님 선택: 3단계)
+/* ⚠️ v1.52.0 — 세로선과 자의 방향 신호 (원장님 지시 2026-08-22)
+   v1.51.0 의 토막 방식은 "굵은 조각이 자 끝에 붙은 ㄱ자"로 보여 **어느 방향으로 움직이는
+   선인지 읽히지 않았다** (원장님: 「세로로 움직여야하는지 가로로 움직여야하는지 직관적이지
+   않다」). 해결 두 가지:
+   ① 세로선은 조용할 때 **전체가 회색 한 줄**(색 없음·조금 두껍게) — 잡는 순간 전체가
+      고유색으로 켜져 "세로줄 = 좌우 이동"이 그 순간 읽힌다 (원장님 제안)
+   ② 가로 자의 고유색은 세로선을 **지나 안쪽으로 반폭의 50%** 까지 나온다 — 색 토막이
+      세로선을 관통하므로 "이 선은 가로"가 읽힌다 (원장님이 빨간 펜으로 그어주신 길이를
+      픽셀로 재서 45~55% → 50%로 확정)
+   ⛔ 색 토막을 세로선에서 뚝 끊거나(ㄱ자로 돌아감), 조용한 세로선에 색 토막을 되살리지 마세요. */
+const VGREY_W = 1.7, VGREY_OP = 0.6;   // 조용한 세로선 — 얇은 참조선(1.0)보다는 분명한 한 줄
+const OVERSHOOT = 0.5;                 // 고유색이 세로선을 지나 안쪽으로 넘는 비율 (자 반폭 기준)
 const SEG_HALF = 0.19;           // 자 반폭 (눈썹 폭 기준)
 const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
 const VPAD = 0.045;              // 세로선(긴 것)이 위아래로 더 나가는 여유
@@ -576,18 +587,6 @@ function browBandY(tight) {
   const ys = H_SPECS.filter((sp) => !tight || sp.anchor).map((sp) => g[sp.key]);
   const pad = tight ? VPAD_TIGHT : VPAD;
   return { y0: clamp(Math.min(...ys) - pad, 0, 1), y1: clamp(Math.max(...ys) + pad, 0, 1) };
-}
-
-/* 세로선에서 **굵게 남길 토막**. 나머지는 얇은 회색으로 잇는다 (v1.51.0)
-   자가 둘이면 그 **사이는 비우고**(눈썹 몸통이 보이게) 두 자의 바깥쪽만,
-   자가 하나(꼬리)면 끊지 않고 그 자 위아래로. */
-function vStrongSegs(key) {
-  const g = S.g;
-  const ys = H_SPECS.filter((sp) => sp.anchor === key).map((sp) => g[sp.key]).sort((a, b) => a - b);
-  if (!ys.length) return null;                       // 센터(v1) — 얼굴 축이라 전체 길이 그대로
-  const lo = ys[0], hi = ys[ys.length - 1];
-  if (hi - lo < 0.005) return [[lo - VOUT, hi + VOUT]];
-  return [[lo - VOUT, lo], [hi, hi + VOUT]];
 }
 
 function renderGuides() {
@@ -670,8 +669,10 @@ function renderGuides() {
            ⚠️ 밸런스로 빨갛게 칠하는 토막은 **나누지 않는다** — 판정 표시가 가려지면 안 됩니다. */
         if (!bad && sp.anchor) {
           const ax = (idx === 0 ? g[sp.anchor] : 2 * g.v1 - g[sp.anchor]) * W;
-          const inA = idx === 0 ? [ax, xb] : [xa, ax];
-          const outA = idx === 0 ? [xa, ax] : [ax, xb];
+          const ov = (xb - xa) / 2 * OVERSHOOT;      // 색이 세로선을 지나 안쪽으로 (v1.52.0)
+          const bx = idx === 0 ? ax + ov : ax - ov;
+          const inA = idx === 0 ? [bx, xb] : [xa, bx];
+          const outA = idx === 0 ? [xa, bx] : [bx, xb];
           if (inA[1] - inA[0] > 1) drawLine(frag, inA[0], y, inA[1], y, HALF_GREY, HALF_W, HALF_OP);
           if (outA[1] - outA[0] > 1) drawLine(frag, outA[0], y, outA[1], y, col, wid, opa);
           return;
@@ -701,14 +702,10 @@ function renderGuides() {
           x1: x, y1: 0, x2: x, y2: H, stroke: lc,
           "stroke-width": 1, "stroke-opacity": 0.16,
         }));
-        const ss = vStrongSegs(sp.key);
-        if (!ss) { drawLine(frag, x, by0, x, by1, lc, w, op); return; }
-        const a0 = Math.min(by0, ...ss.map((q) => q[0] * H));   // 굵은 토막이 잘리지 않게
-        const a1 = Math.max(by1, ...ss.map((q) => q[1] * H));
-        drawLine(frag, x, a0, x, a1, HALF_GREY, HALF_W, HALF_OP);
-        for (const [qa, qb] of ss) {
-          if (qb * H - qa * H > 1) drawLine(frag, x, qa * H, x, qb * H, lc, w, op);
-        }
+        /* v1.52.0 — 잡은(강조) 세로선은 **전체 길이 고유색**: "세로줄 = 좌우 이동" 신호.
+           조용할 땐 **전체가 회색 한 줄** — 색과 토막이 없어 자의 색 토막과 헷갈리지 않는다 */
+        if (sel) { drawLine(frag, x, by0, x, by1, lc, w, op); return; }
+        drawLine(frag, x, by0, x, by1, HALF_GREY, VGREY_W, VGREY_OP);
       };
       const x = g[sp.key] * W;
       draw(x);

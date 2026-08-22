@@ -2085,12 +2085,14 @@ console.log("\n[밸런스 판정]");
         return { own: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) > 0.9),
                  dim: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) <= 0.85),
                  dimc: ls.some((l) => !!sp.dimColor && l.getAttribute("stroke") === sp.dimColor),
+                 greyAll: ls.length > 0 && ls.every((l) => l.getAttribute("stroke") === "#14161B"),
                  grey: ls.some((l) => l.getAttribute("stroke") === "#3A414E") };
       };
       /* v1.49.0 — 기본(연한) = **dimColor 로 그린다** (알파 아님 · 회색 아님). 플로우 밖 아치·아우터로 확인.
          ⚠️ 알파 방식으로 되돌리면 파랑·보라가 피부와 밝기가 같아져 사실상 안 보입니다 (104 참고) */
+      /* v1.52.0 — 가로 자는 dimColor · **세로선은 조용할 때 전체 회색 #14161B** (원장님 지시) */
       const greyByDefault = lineColorOf("h2").dimc && !lineColorOf("h2").own && !lineColorOf("h2").grey
-                            && lineColorOf("v4").dimc && !lineColorOf("v4").own;
+                            && lineColorOf("v4").greyAll && !lineColorOf("v4").own;
       /* v1.47.0 — 사진이 올라오면 가이드는 **저절로 켜져** 이너부터 시작한다 (원장님 지시).
          버튼 클릭은 켜기 위해서가 아니라 **끄기 위해서만** 필요하다. */
       const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
@@ -2190,7 +2192,7 @@ console.log("\n[밸런스 판정]");
     const d = c102;
     check("102. 이너 묶음 — 연한=연회색(알파 없음) · 강조=민트 · 선 색 = 레일 띠 색",
       d.dimFront && d.dimFront.c === "#C9D1D6" && d.dimFront.op >= 0.99
-        && d.dimInner && d.dimInner.c === "#C9D1D6" && d.dimInner.op >= 0.99
+        && d.dimInner && d.dimInner.c === "#14161B"   /* v1.52.0 — 조용한 세로선은 전체 회색 */
         && d.litFront && d.litFront.c === "#5EEAD4" && d.litFront.op >= 0.99
         && d.litInner && d.litInner.c === "#5EEAD4"
         && d.litFront.w > d.dimFront.w + 1          /* 강조는 실제로 굵어져야 한다 */
@@ -2305,7 +2307,7 @@ console.log("\n[밸런스 판정]");
       g104.nativeKept
         && g104.dimArch && g104.dimArch.c === "#A9CFF2" && g104.dimArch.op >= 0.99
         && g104.dimTail && g104.dimTail.c === "#D0B8F0" && g104.dimTail.op >= 0.99
-        && g104.dimOuter && g104.dimOuter.c === "#D0B8F0" && g104.dimOuter.op >= 0.99
+        && g104.dimOuter && g104.dimOuter.c === "#14161B"   /* v1.52.0 — 조용한 세로선은 회색 */
         && g104.litArch && g104.litArch.c === "#2E8BFF"
         && g104.litTail && g104.litTail.c === "#A855F7",
       `연한 아치 ${g104.dimArch && g104.dimArch.c}@${g104.dimArch && g104.dimArch.op} · 연한 꼬리 ${g104.dimTail && g104.dimTail.c} · `
@@ -2401,24 +2403,38 @@ console.log("\n[밸런스 판정]");
         o: +(l.getAttribute("stroke-opacity") || 1),
       }));
       const GREY = "#14161B";
-      /* ① 가로 자 — 세로선(anchor)을 경계로 안쪽은 얇은 회색, 바깥은 굵은 고유색 */
+      /* ① 가로 자 — 고유색이 세로선(anchor)을 **지나 안쪽으로 반폭의 50%** 나온다 (v1.52.0
+         원장님이 빨간 펜으로 그어주신 길이). 그 뒤는 얇은 회색 */
       const y = S.g.front * H, ax = S.g.v2 * W;
       const hs = all.filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
-                                && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3);
-      const leftIn = hs.find((l) => Math.min(l.x1, l.x2) >= ax - 2 && Math.max(l.x1, l.x2) < ax + W);
-      const leftOut = hs.find((l) => Math.max(l.x1, l.x2) <= ax + 2);
-      /* ② 세로선 — 두 자 사이(눈썹 속)에는 굵은 선이 없어야 한다 */
-      const midY = ((S.g.front + S.g.frontThickness) / 2) * H;
+                                && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3
+                                && Math.max(l.x1, l.x2) < S.g.v1 * W);   /* 왼쪽 눈썹 토막만 */
+      const colorSeg = hs.find((l) => l.c !== "#14161B" && l.w > 1.2);
+      const greySeg = hs.find((l) => l.c === "#14161B");
+      const halfW = colorSeg ? (Math.max(...hs.map((l) => Math.max(l.x1, l.x2))) - ax) : 0;
+      const overshoot = colorSeg ? (Math.max(colorSeg.x1, colorSeg.x2) - ax) / Math.max(halfW, 1) : 0;
+      /* ② 세로선 — 조용할 땐 **전체가 회색 한 줄**(색 토막 없음), 잡으면 전체 고유색 (v1.52.0) */
       const vx = S.g.v2 * W;
-      const vs = all.filter((l) => Math.abs(l.x1 - l.x2) < 0.5 && Math.abs(l.x1 - vx) < 1 && l.o > 0.3);
-      const crossMid = vs.filter((l) => Math.min(l.y1, l.y2) <= midY && Math.max(l.y1, l.y2) >= midY);
-      const thickInside = crossMid.some((l) => l.w > 1.2);
-      const thickOutside = vs.some((l) => l.w > 1.2);
+      const vSegs = () => all2().filter((l) => Math.abs(l.x1 - l.x2) < 0.5 && Math.abs(l.x1 - vx) < 1 && l.o > 0.3);
+      const all2 = () => [...document.getElementById("guides").querySelectorAll("line")].map((l) => ({
+        x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+        y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+        c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+        o: +(l.getAttribute("stroke-opacity") || 1),
+      }));
+      const quietV = vSegs();
+      const quietAllGrey = quietV.length > 0 && quietV.every((l) => l.c === "#14161B");
+      window.PB.S.sel = "v2"; window.PB.render();
+      const grabV = vSegs();
+      const grabColored = grabV.some((l) => l.c === "#5EEAD4" && l.w > 2);
+      window.PB.S.sel = "h1"; window.PB.render();
+      const thickInside = false, thickOutside = true;   /* v1.52.0 — 토막 규칙 폐지, 아래 새 판정으로 대체 */
       /* ③ 꼬리 자는 아치 자의 절반 길이 */
       const len = (k) => { const sp = PBx.H_SPECS.find((x) => x.key === k); const q = PBx.segPx(sp)[0]; return q[1] - q[0]; };
       return {
-        inGrey: !!leftIn && leftIn.c === GREY && leftIn.w <= 1.2,
-        outColor: !!leftOut && leftOut.c !== GREY && leftOut.w > 1.2,
+        inGrey: !!greySeg && greySeg.w <= 1.2,
+        outColor: !!colorSeg,
+        overshoot, quietAllGrey, grabColored,
         thickInside, thickOutside,
         tailRatio: len("h3") / len("h2"),
         lockOnCenter: (() => {
@@ -2437,11 +2453,12 @@ console.log("\n[밸런스 판정]");
       return { empty, rows, hasBtn: !!document.getElementById("btnPresetLoad") };
     });
     await ctx.close();
-    check("106. 일하는 곳만 굵게 — 자는 바깥 절반만 · 세로선은 자 사이를 비운다 · 꼬리 자 길이 반",
-      r.inGrey && r.outColor && r.thickInside === false && r.thickOutside === true
+    check("106. 방향 신호 — 자 색이 세로선을 지나 ~50% 관통 · 세로선은 조용=회색/잡으면=색 · 꼬리 자 반",
+      r.inGrey && r.outColor && r.overshoot > 0.38 && r.overshoot < 0.62
+        && r.quietAllGrey && r.grabColored
         && r.tailRatio > 0.4 && r.tailRatio < 0.6 && r.lockOnCenter,
-      `자 안쪽=회색 ${r.inGrey} / 바깥=고유색 ${r.outColor} · 눈썹 속 굵은선=${r.thickInside}(없어야 함) · `
-      + `자 바깥 굵은선=${r.thickOutside} · 꼬리/아치 길이비 ${r.tailRatio.toFixed(2)} · 잠금=센터선 ${r.lockOnCenter}`);
+      `자 안쪽 나머지=회색 ${r.inGrey} / 색 토막 ${r.outColor} · 관통 비율 ${r.overshoot.toFixed(2)}(기대 0.5) · `
+      + `조용 세로선=회색전체 ${r.quietAllGrey} · 잡으면 색 ${r.grabColored} · 꼬리/아치 길이비 ${r.tailRatio.toFixed(2)} · 잠금=센터선 ${r.lockOnCenter}`);
     check("107. 프리셋 — 내장 기본 3종 없음 · 사용자가 저장한 것만",
       pr.empty && pr.rows === 0 && pr.hasBtn,
       `빈 목록 표시=${pr.empty} · 줄 수=${pr.rows}(0이어야 함) · 프리셋 버튼 유지=${pr.hasBtn}`);
@@ -2495,7 +2512,9 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1000);
     const vl = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, H = S.dim.H;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = []; PBx.render();
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = [];
+      S.guideOn = false; S.guideCur = null;   /* v1.52.0 — 조용한 상태를 재야 하므로 가이드를 끈다 */
+      PBx.render();
       const g = S.g, eyeY = g.h1 * H;
       const lows = { front: g.front, frontThickness: g.frontThickness, h2: g.h2, archThickness: g.archThickness, h3: g.h3 };
       const browBot = Math.max(...Object.values(lows)) * H;
@@ -2525,12 +2544,12 @@ console.log("\n[밸런스 판정]");
     });
     await ctx.close();
     const clear = (s) => s && s.y1 < vl.eyeY - 4 && s.y1 < vl.browBot + 0.05 * 390 + 14;
-    /* v1.51.0 — **굵은 토막**은 셋 다 짧다(자 바깥쪽만). 눈까지 이어지는 것은 **얇은 회색**이다.
-       원장님 지시: 「바깥에만 굵은선이고 눈썹 내부는 얇은 회색으로」 */
-    check("95. 세로선 — 굵은 토막은 자 바깥쪽만(눈까지 안 내려옴) · 이너는 얇은 회색으로 눈까지",
+    /* v1.52.0 — 조용한 세로선은 **전체가 회색 한 줄, 같은 굵기(VGREY_W)**. 색·토막 없음.
+       길이 규칙은 유지: 아치선·아우터는 눈까지 안 내려오고, 이너(long)는 눈 근처까지 */
+    check("95. 세로선 — 조용할 땐 회색 한 줄 · 아치선·아우터 짧게 · 이너는 눈까지",
       clear(vl.arch) && clear(vl.outer)
         && vl.innerAll && vl.innerAll.y1 > vl.eyeY - 30
-        && vl.arch.w < vl.inner.w && vl.outer.w < vl.inner.w,
+        && Math.abs(vl.arch.w - vl.inner.w) < 0.01 && Math.abs(vl.outer.w - vl.inner.w) < 0.01,
       `아치선 굵은끝 ${vl.arch && vl.arch.y1.toFixed(0)} · 아우터 굵은끝 ${vl.outer && vl.outer.y1.toFixed(0)} `
       + `< 눈 ${vl.eyeY.toFixed(0)} · 이너 얇은선끝 ${vl.innerAll && vl.innerAll.y1.toFixed(0)} · `
       + `굵기 아치선 ${vl.arch && vl.arch.w}/아우터 ${vl.outer && vl.outer.w}/이너 ${vl.inner && vl.inner.w}`);
