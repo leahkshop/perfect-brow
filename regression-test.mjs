@@ -2120,6 +2120,69 @@ console.log("\n[밸런스 판정]");
       Object.entries(g101).map(([k, v]) => `${k}=${v}`).join(" "));
   }
 
+  /* 102. ⚠️ 이너 묶음 두 색 체계 (v1.48.0 · 원장님 지시 2026-08-22)
+     「이너 색은 눈이 조금 아프면서 톤다운된 이상한 색이다」 → 원인이 두 개였습니다.
+       ① 딥 틸(#0D9488)은 피부와 **밝기 대비가 1.1~1.5:1** 뿐이라 밝기가 아니라 색으로만 보였다
+          (같은 명도 + 보색 + 채도 91% → 눈이 진동한다. 확대할수록 심해진다)
+       ② 연한 상태를 알파 0.45로 만들어서, 화면에 실제로 나오는 색은 피부와 섞인 #617F6A 였다
+     → 강조 = 민트 #5EEAD4 (레일 버튼 띠와 **같은 색**) · 연한 = 연회색 #C9D1D6 을 **알파 없이** 그대로.
+     ⚠️ dimColor 를 지우고 알파 방식으로 되돌리면 이 검사가 깨집니다.
+     ⚠️ 다른 묶음(눈·아치·꼬리·센터·아우터)은 **종전 방식 그대로** — 그것까지 회색이 되면
+        v1.46.2에서 세로선 배지를 지우며 세운 「색이 곧 이름표」가 무너집니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+    const c102 = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
+      const spec = (k) => PBx.H_SPECS.concat(PBx.V_SPECS).find((x) => x.key === k);
+      /* 실제로 그려진 선을 읽는다 — 옅은 연결선(0.16)은 걸러낸다 */
+      const seg = (key) => {
+        const sp = spec(key), vert = key[0] === "v";
+        const t = vert ? S.g[key] * W : S.g[key] * H;
+        const ls = [...document.getElementById("guides").querySelectorAll("line")]
+          .filter((l) => {
+            const x1 = +l.getAttribute("x1"), x2 = +l.getAttribute("x2");
+            const y1 = +l.getAttribute("y1"), y2 = +l.getAttribute("y2");
+            const op = +(l.getAttribute("stroke-opacity") || 1);
+            if (op <= 0.3) return false;
+            return vert ? (Math.abs(x1 - x2) < 0.5 && Math.abs(x1 - t) < 1)
+                        : (Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - t) < 1 && Math.abs(x2 - x1) > 4);
+          });
+        if (!ls.length) return null;
+        return { c: ls[0].getAttribute("stroke"), op: +(ls[0].getAttribute("stroke-opacity") || 1),
+                 w: +ls[0].getAttribute("stroke-width") };
+      };
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = [];
+      S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
+      PBx.render();
+      const dimFront = seg("front"), dimInner = seg("v2"), dimTail = seg("h3");
+      S.sel = "front"; PBx.render();
+      const litFront = seg("front");
+      S.sel = "v2"; PBx.render();
+      const litInner = seg("v2");
+      return { dimFront, dimInner, dimTail, litFront, litInner,
+               dotMatches: spec("front").dot === spec("front").color && spec("v2").dot === spec("v2").color };
+    });
+    await ctx.close();
+    const d = c102;
+    check("102. 이너 묶음 — 연한=연회색(알파 없음) · 강조=민트 · 다른 묶음은 종전 방식",
+      d.dimFront && d.dimFront.c === "#C9D1D6" && d.dimFront.op >= 0.99
+        && d.dimInner && d.dimInner.c === "#C9D1D6" && d.dimInner.op >= 0.99
+        && d.litFront && d.litFront.c === "#5EEAD4" && d.litFront.op >= 0.99
+        && d.litInner && d.litInner.c === "#5EEAD4"
+        && d.litFront.w > d.dimFront.w + 1          /* 강조는 실제로 굵어져야 한다 */
+        && d.dimTail && d.dimTail.c === "#A855F7" && d.dimTail.op <= 0.85   /* 꼬리는 그대로 */
+        && d.dotMatches,                            /* 선 색 = 레일 버튼 띠 색 */
+      `연한 앞머리 ${d.dimFront && d.dimFront.c}@${d.dimFront && d.dimFront.op} · 연한 이너 ${d.dimInner && d.dimInner.c}@${d.dimInner && d.dimInner.op} · `
+      + `강조 앞머리 ${d.litFront && d.litFront.c} 굵기 ${d.dimFront && d.dimFront.w}→${d.litFront && d.litFront.w} · `
+      + `꼬리 ${d.dimTail && d.dimTail.c}@${d.dimTail && d.dimTail.op} · 띠=선색 ${d.dotMatches}`);
+  }
+
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
      「반영이 안 됐다」와 「판독이 실패했다」를 구분할 방법이 이것뿐입니다.
      APP_VERSION 은 릴리스 때 sw.js 의 VERSION 과 함께 올립니다. */
