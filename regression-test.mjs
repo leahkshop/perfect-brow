@@ -1663,10 +1663,11 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       chgGrey: !/34, 211, 238|103, 232, 249/.test(getComputedStyle(el("btnChange")).borderTopColor),
       resetTop: rst.top <= rd.top + 2,   /* 도크 맨 위 또는 그보다 위 (v1.44.0 위로 올림) */
       resetDarkRed: cs.color,
-      /* v1.45.0 — 초기화 = 프리셋 버튼과 같은 크기 · 사진저장 = 줌(켜짐) 그라데이션 채움
-         · 되돌리기·다시실행 더 크게(기본 dockbtn 초과) + 채움 배경 */
+      /* v1.45.0 — 초기화 = 프리셋 버튼과 같은 크기 · 되돌리기·다시실행 더 크게 + 채움 배경
+         v1.50.0 — **사진저장은 더 이상 채움이 아니다** (원장님 지시: 「시작시 사진저장에 색상 죽일것」).
+         대신 **사진잠금이 채움**으로 시선을 잡는다. 되돌리지 마세요 — 105 번도 함께 잠급니다. */
       resetPresetSize: Math.abs(rst.height - r("btnPresetLoad").height) < 2,
-      exportFilled: getComputedStyle(el("btnExport")).backgroundImage.includes("gradient"),
+      exportQuiet: !getComputedStyle(el("btnExport")).backgroundImage.includes("gradient"),
       undoBigger: r("btnUndo").height > 34 && r("btnRedo").height > 34,
       undoFilled: getComputedStyle(el("btnUndo")).backgroundImage.includes("gradient")
                   || getComputedStyle(el("btnUndo")).backgroundColor !== "rgba(0, 0, 0, 0)",
@@ -1702,7 +1703,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     place.photoInRDock && place.photoOrder && place.chgSameSize && place.chgGrey
       /* v1.45.0 — 초기화 = 프리셋 크기 · 앱 컨셉 코랄(--danger #FF6B7A) 글자 (원장님: 「빨간색은 앱 컨셉과 비슷하게」) */
       && place.resetTop && /255, 107, 122/.test(place.resetDarkRed)
-      && place.resetPresetSize && place.exportFilled && place.undoBigger && place.undoFilled
+      && place.resetPresetSize && place.exportQuiet && place.undoBigger && place.undoFilled
       && place.lockAlone && Math.abs(place.lockCentre - 0.5) < 0.02
       && place.balLeftOfCentre < 0.48 && place.balLeftOfCentre > 0.25
       && place.favs === 3 && place.favShorter > 6
@@ -2292,6 +2293,69 @@ console.log("\n[밸런스 판정]");
         && g104.litTail && g104.litTail.c === "#A855F7",
       `연한 아치 ${g104.dimArch && g104.dimArch.c}@${g104.dimArch && g104.dimArch.op} · 연한 꼬리 ${g104.dimTail && g104.dimTail.c} · `
       + `연한 아우터 ${g104.dimOuter && g104.dimOuter.c} · 강조 아치 ${g104.litArch && g104.litArch.c} · 강조 꼬리 ${g104.litTail && g104.litTail.c}`);
+  }
+
+  /* 105. ⚠️ 밝은 사진 위에서도 읽히는가 · 버튼 위계 (v1.50.0 · 원장님 지시 2026-08-22)
+     「맨위에 버튼들 사진이 밝고 고객 이마가 넓은경우 버튼이 아예 안보인다」
+     원인: 캔버스 위 칩 배경이 var(--glass) = rgba(255,255,255,.035) — **거의 투명한 흰색**.
+     밝은 이마 위에서 흰 바탕에 흰 글씨가 되어 사라졌습니다. BASELINE 3장에 이미 있던
+     「어두운 반투명 + 흰 테두리」 규칙과 코드가 어긋나 있었습니다.
+     함께 잠그는 것:
+       · 사진잠금 = 채움(주요) — 「사진 잠금이 더 행동에 필요한 시선을 잡아야 한다」
+       · 사진저장 = 채움 아님 — 「시작시 사진저장에 색상 죽일것」
+       · 가이드 켜짐 = 채움 + 글로우 — 「이것이 켜져있다는 신호가 보여야 한다」
+       · 초기화 = 어두운 판이되 **채움은 아니다** — 눌리면 전부 지워지므로 시선을 끌면 안 됩니다(3장) */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1000);
+    const ui = await p.evaluate(() => {
+      const S = window.PB.S;
+      S.balOn = true; S.balance = { off: {}, skipped: [] };
+      S.guideOn = true; S.guideCur = "v2"; S.locked = false;
+      window.PB.render();
+      const rgba = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+      /* 어두운 판인가 — 밝기 합이 낮고 충분히 불투명해야 밝은 사진 위에서도 글자가 산다 */
+      const darkPlate = (el) => {
+        const c = rgba(getComputedStyle(el).backgroundColor);
+        if (c.length < 3) return false;
+        const a = c.length > 3 ? c[3] : 1;
+        return (c[0] + c[1] + c[2]) < 180 && a >= 0.5;
+      };
+      const stage = document.getElementById("stage");
+      const chips = [...stage.querySelectorAll(".chip")]
+        .filter((e) => !document.getElementById("lineRail").contains(e) && e.offsetWidth > 0
+                    && !e.classList.contains("on"));      /* 켜진 칩은 액센트 채움이라 별개 */
+      const bad = chips.filter((e) => !darkPlate(e)).map((e) => e.id || e.textContent.trim());
+      const grad = (id) => getComputedStyle(document.getElementById(id)).backgroundImage.includes("gradient");
+      return {
+        chipCount: chips.length, badChips: bad,
+        resetDark: darkPlate(document.getElementById("btnReset")),
+        resetNotFilled: !grad("btnReset"),
+        lockFilled: grad("btnLock"),
+        exportQuiet: !grad("btnExport"),
+        guideOnSignal: (() => {                            /* 가이드는 켜졌을 때만 채움 */
+          const g = document.getElementById("btnGuide");
+          const had = g.classList.contains("on");           /* 이미 켜져 있을 수 있다 — 먼저 끄고 잰다 */
+          g.classList.remove("on");
+          const off = grad("btnGuide");
+          g.classList.add("on");
+          const on = grad("btnGuide");
+          g.classList.toggle("on", had);
+          return on && !off;
+        })(),
+      };
+    });
+    await ctx.close();
+    check("105. 밝은 사진에서도 읽히는가 — 캔버스 칩·초기화는 어두운 판 · 잠금=채움 · 저장은 조용",
+      ui.chipCount >= 4 && ui.badChips.length === 0
+        && ui.resetDark && ui.resetNotFilled
+        && ui.lockFilled && ui.exportQuiet && ui.guideOnSignal,
+      `칩 ${ui.chipCount}개 검사 · 흰 배경 남은 것 [${ui.badChips}] · 초기화 어두운판=${ui.resetDark}/채움아님=${ui.resetNotFilled} · `
+      + `잠금채움=${ui.lockFilled} · 저장조용=${ui.exportQuiet} · 가이드켜짐신호=${ui.guideOnSignal}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
