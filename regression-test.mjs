@@ -2602,18 +2602,26 @@ console.log("\n[밸런스 판정]");
       S.look = { ...PBx.LOOK_DEF, alpha: 0.6 }; PBx.render();
       const dimOp = front()[0].o;
 
-      /* ⑤ 잡은 선(드래그) 심·테두리 — 두 번째 컨셉 (v1.57.0) */
+      /* ⑤ 잡은 선(드래그) — 기본 선과 **완전 분리** (v1.59.0: 심·테두리·굵기·투명도·없음) */
       S.look = { ...PBx.LOOK_DEF, dragCore: "#FFFFFF", dragEdge: "#2E8BFF" };
       S.sel = "front"; S.dragOn = true; PBx.render();
       const grab = segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
       const dragRing = grab[0] && grab[0].c, dragCore = grab[1] && grab[1].c;
+      /* 테두리 「없음」 = 심만 한 줄 */
+      S.look.dragEdge = "none"; PBx.render();
+      const grabNone = segsAt(S.g.front * H).filter((l) => l.w > 1.2);
+      /* 잡은 선 굵기·투명도는 기본 선 weight·alpha 와 무관하게 따로 논다 */
+      S.look = { ...PBx.LOOK_DEF, weight: 0.8, alpha: 1, dragW: 1.35, dragOp: 0.6 }; PBx.render();
+      const grabBig = segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
+      const dragWOk = grabBig[1] && Math.abs(grabBig[1].w - (2.95 * 1.35)) < 0.01;
+      const dragOpOk = grabBig[1] && Math.abs(grabBig[1].o - 0.6) < 0.01;
       S.dragOn = false;
 
       /* ⑥ 조합 3개 · 「모두 이 색」 · 저장 · 이전 설정으로 */
       S.look = { ...PBx.LOOK_DEF }; S.lookSnap = { ...PBx.LOOK_DEF }; PBx.buildLookUI();
       const comboN = document.querySelectorAll("#lookCombo button").length;
       const swN = document.querySelectorAll("#swInner button.sw").length;
-      const dragSwN = document.querySelectorAll("#swDragC button.sw").length;
+      const dragSwN = document.querySelectorAll("#swDragE button.sw").length;   /* 7 + 살구 + 없음 = 9 */
       document.querySelectorAll("#lookCombo button")[1].click();      /* 밝은 사진 */
       const brightApplied = { ...S.look };
       document.getElementById("lookAll").click();
@@ -2633,12 +2641,16 @@ console.log("\n[밸런스 판정]");
         autoLight, autoDark,
         baseW, thickW, thinW, baseLen, longLen, shortLen, dimOp,
         comboN, swN, dragSwN, dragRing, dragCore, backOk,
+        dragNoneOk: grabNone.length === 1 && grabNone[0].c === "#FFFFFF",
+        dragWOk, dragOpOk,
+        tabsOk: !!document.getElementById("tabBase") && !!document.getElementById("tabGrab")
+             && !!document.getElementById("segDragW") && !!document.getElementById("rngDragOp"),
         brightEdge: brightApplied.edge, brightEdgeC: brightApplied.edgeC,
         allSame, storedInner: stored.inner, resetOk: afterReset.inner === PBx.LOOK_DEF.inner && afterReset.edge === 0,
       };
     });
     await ctx.close();
-    check("109. 설정 — 색상표 · 테두리 대비색 · 굵기/길이/투명도 · 잡은 선 심/테두리 · 이전 설정으로",
+    check("109. 설정 — 기본 선/잡은 선 탭 분리 · 잡은 선 심/테두리(없음)/굵기/투명도 · 이전 설정으로",
       r.palOk
         && r.baseC === "#5EEAD4" && r.baseRail === "#5EEAD4"
         && r.changedC === "#FF4D94" && r.changedRail === "#FF4D94"
@@ -2647,14 +2659,15 @@ console.log("\n[밸런스 판정]");
         && r.thickW > r.baseW && r.thinW < r.baseW
         && r.longLen > r.baseLen && r.shortLen < r.baseLen
         && Math.abs(r.dimOp - 0.6) < 0.01
-        && r.comboN === 3 && r.swN === 7 && r.dragSwN === 8
+        && r.comboN === 3 && r.swN === 7 && r.dragSwN === 9
         && r.dragRing === "#2E8BFF" && r.dragCore === "#FFFFFF" && r.backOk
+        && r.dragNoneOk && r.dragWOk && r.dragOpOk && r.tabsOk
         && r.brightEdge === 70 && r.brightEdgeC === "light"
         && r.allSame && r.storedInner && r.resetOk,
       `색상표 ${r.pal.length}개 · 선 ${r.baseC}→${r.changedC} / 띠 ${r.baseRail}→${r.changedRail} · `
       + `테두리 밝은색→${r.edgeLightPair[0]} 짙은색→${r.edgeDarkPair[0]} 더굵음=${r.edgeThicker} · `
       + `굵기 ${r.thinW}/${r.baseW}/${r.thickW} · 길이 ${Math.round(r.shortLen)}/${Math.round(r.baseLen)}/${Math.round(r.longLen)} · `
-      + `투명도 ${r.dimOp} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(8색 ${r.dragSwN === 8}) · `
+      + `투명도 ${r.dimOp} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(9칸 ${r.dragSwN === 9}) · 없음=심만 ${r.dragNoneOk} · 굵기분리 ${r.dragWOk}/투명도분리 ${r.dragOpOk} · 탭 ${r.tabsOk} · `
       + `이전설정복귀 ${r.backOk} · 모두같은색 ${r.allSame} · 저장 ${r.storedInner} · 기본으로 ${r.resetOk}`);
   }
 
@@ -2697,6 +2710,34 @@ console.log("\n[밸런스 판정]");
         && r.l1.length > 0 && r.l2.length > 0 && r.l3.length > 0 && r.l1 !== r.l2
         && r.stored === r.s3.inner,
       `가이드 오른쪽=${r.rightOfGuide} · ${r.s0.inner} → [${r.l1}]${r.s1.inner} → [${r.l2}]${r.s2.inner} → [${r.l3}]${r.s3.inner}(복귀 ${r.s3.inner === r.s0.inner}) · 저장 ${r.stored}`);
+  }
+
+  /* 111. ⚠️ v1.59.0 — 설정 시트도 가짜 회전(rot90)을 따라간다 (원장님 지시 2026-08-23
+     「설정창 가로모드로 변경」). 시트는 body 직속 fixed 라 .screen 의 회전을 상속받지 못해
+     아이폰 세로 잠금 상태에서 **설정만 세로로** 떴었다. ⛔ body.rot90 .sheet 블록을 지우면 재발. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const rot = document.body.classList.contains("rot90");
+      const el = document.getElementById("mLook");
+      window.PB.S.lookSnap = { ...window.PB.S.look }; window.PB.buildLookUI();
+      el.classList.add("on");
+      const tf = getComputedStyle(el).transform;   /* ⚠️ display:none 이 되기 전에 읽는다 */
+      const inW = document.querySelector("#mLook .sheet-in").getBoundingClientRect();
+      el.classList.remove("on");
+      /* matrix(0,1,-1,0,...) = 90° 회전. 회전된 시트의 화면상 폭 = 기기 세로(844) 방향 */
+      return { rot, tf, w: Math.round(inW.width), h: Math.round(inW.height) };
+    });
+    await ctx.close();
+    const rotated = /matrix\(0,\s*1,\s*-1,\s*0/.test(r.tf);
+    check("111. 설정 시트 — 아이폰 세로 잠금(rot90)에서도 가로로 뜬다",
+      r.rot && rotated && r.w < r.h,   /* 회전됐으면 화면상 rect 는 세로가 길다 */
+      `rot90=${r.rot} · transform=${r.tf.slice(0, 24)}… · 시트 rect ${r.w}×${r.h}(회전이면 세로>가로)`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
