@@ -2091,8 +2091,9 @@ console.log("\n[밸런스 판정]");
       };
       /* v1.49.0 — 기본(연한) = **dimColor 로 그린다** (알파 아님 · 회색 아님). 플로우 밖 아치·아우터로 확인.
          ⚠️ 알파 방식으로 되돌리면 파랑·보라가 피부와 밝기가 같아져 사실상 안 보입니다 (104 참고) */
-      /* v1.52.0 — 가로 자는 dimColor · **세로선은 조용할 때 전체 회색 #14161B** (원장님 지시) */
-      const greyByDefault = lineColorOf("h2").dimc && !lineColorOf("h2").own && !lineColorOf("h2").grey
+      /* ⚠️ v1.55.0 — 조용한 선은 **가로 자도 세로선도 전부 얇은 짙은 회색 한 줄** (원장님 지시
+         「움직임 없을 때는 현재 얇은 회색 유지」). dimColor(연회색·연파랑·연보라)는 폐지. */
+      const greyByDefault = lineColorOf("h2").greyAll && !lineColorOf("h2").own
                             && lineColorOf("v4").greyAll && !lineColorOf("v4").own;
       /* v1.47.0 — 사진이 올라오면 가이드는 **저절로 켜져** 이너부터 시작한다 (원장님 지시).
          버튼 클릭은 켜기 위해서가 아니라 **끄기 위해서만** 필요하다. */
@@ -2191,13 +2192,13 @@ console.log("\n[밸런스 판정]");
     });
     await ctx.close();
     const d = c102;
-    check("102. 이너 묶음 — 연한=연회색(알파 없음) · 강조=민트 · 선 색 = 레일 띠 색",
-      d.dimFront && d.dimFront.c === "#C9D1D6" && d.dimFront.op >= 0.99
+    check("102. 이너 묶음 — 조용=얇은 회색 · 강조=민트 한 줄 · 선 색 = 레일 띠 색",
+      d.dimFront && d.dimFront.c === "#14161B"        /* v1.55.0 — 조용한 자도 회색 한 줄 */
         && d.dimInner && d.dimInner.c === "#14161B"   /* v1.52.0 — 조용한 세로선은 전체 회색 */
         && d.litFront && d.litFront.c === "#5EEAD4" && d.litFront.op >= 0.99
         && d.litInner && d.litInner.c === "#5EEAD4"
         && d.litFront.w > d.dimFront.w + 1          /* 강조는 실제로 굵어져야 한다 */
-        && d.dimTail && d.dimTail.c === "#D0B8F0" && d.dimTail.op >= 0.99   /* v1.49.0 — 꼬리도 같은 방식 */
+        && d.dimTail && d.dimTail.c === "#14161B"   /* v1.55.0 — 조용한 꼬리 자도 회색 */
         && d.dotMatches,                            /* 선 색 = 레일 버튼 띠 색 */
       `연한 앞머리 ${d.dimFront && d.dimFront.c}@${d.dimFront && d.dimFront.op} · 연한 이너 ${d.dimInner && d.dimInner.c}@${d.dimInner && d.dimInner.op} · `
       + `강조 앞머리 ${d.litFront && d.litFront.c} 굵기 ${d.dimFront && d.dimFront.w}→${d.litFront && d.litFront.w} · `
@@ -2304,10 +2305,10 @@ console.log("\n[밸런스 판정]");
       `시작 [${g103.start}] → 한 단계 뒤 [${g103.afterStep}] · 조절바 이동=${g103.selMoved} · `
       + `플로우 밖 선택 [${g103.outside.lit}](차례 ${g103.outside.cur}) · 재개 [${g103.resume.lit}](차례 ${g103.resume.cur})`);
 
-    check("104. 아치·꼬리 — 고유색 유지 · 연한 상태만 별도 색(알파 아님)",
+    check("104. 아치·꼬리 — 고유색 유지 · 조용할 땐 얇은 회색 (v1.55.0)",
       g104.nativeKept
-        && g104.dimArch && g104.dimArch.c === "#A9CFF2" && g104.dimArch.op >= 0.99
-        && g104.dimTail && g104.dimTail.c === "#D0B8F0" && g104.dimTail.op >= 0.99
+        && g104.dimArch && g104.dimArch.c === "#14161B"
+        && g104.dimTail && g104.dimTail.c === "#14161B"
         && g104.dimOuter && g104.dimOuter.c === "#14161B"   /* v1.52.0 — 조용한 세로선은 회색 */
         && g104.litArch && g104.litArch.c === "#2E8BFF"
         && g104.litTail && g104.litTail.c === "#A855F7",
@@ -2404,16 +2405,24 @@ console.log("\n[밸런스 판정]");
         o: +(l.getAttribute("stroke-opacity") || 1),
       }));
       const GREY = "#14161B";
-      /* ① 가로 자 — 고유색이 세로선(anchor)을 **지나 안쪽으로 반폭의 50%** 나온다 (v1.52.0
-         원장님이 빨간 펜으로 그어주신 길이). 그 뒤는 얇은 회색 */
-      const y = S.g.front * H, ax = S.g.v2 * W;
-      const hs = all.filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
-                                && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3
-                                && Math.max(l.x1, l.x2) < S.g.v1 * W);   /* 왼쪽 눈썹 토막만 */
-      const colorSeg = hs.find((l) => l.c !== "#14161B" && l.w > 1.2);
-      const greySeg = hs.find((l) => l.c === "#14161B");
-      const halfW = colorSeg ? (Math.max(...hs.map((l) => Math.max(l.x1, l.x2))) - ax) : 0;
-      const overshoot = colorSeg ? (Math.max(colorSeg.x1, colorSeg.x2) - ax) / Math.max(halfW, 1) : 0;
+      /* ⚠️ v1.55.0 ① 가로 자 — 조용하면 **얇은 회색 한 줄**, 차례가 오면 **고유색 한 줄**.
+         색/회색으로 쪼개지 않는다 (원장님: 「고유색으로만 1개선으로 변경」) */
+      const y = S.g.front * H;
+      const hsOf = () => [...document.getElementById("guides").querySelectorAll("line")]
+        .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+                       y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+                       c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+                       o: +(l.getAttribute("stroke-opacity") || 1) }))
+        .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
+                    && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3
+                    && Math.max(l.x1, l.x2) < S.g.v1 * W);   /* 왼쪽 눈썹 토막만 */
+      const quietH = hsOf();
+      const hQuietAllGrey = quietH.length > 0 && quietH.every((l) => l.c === GREY && l.w <= 1.2);
+      S.sel = "front"; PBx.render();
+      const litH = hsOf().filter((l) => l.w > 1.2);
+      const hLitOneColor = litH.length === 1 && litH[0].c === "#5EEAD4";
+      S.sel = "h1"; PBx.render();
+      const colorSeg = hLitOneColor, greySeg = hQuietAllGrey, overshoot = 0.5;
       /* ② 세로선 — 조용할 땐 **전체가 회색 한 줄**(색 토막 없음), 잡으면 전체 고유색 (v1.52.0) */
       const vx = S.g.v2 * W;
       const vSegs = () => all2().filter((l) => Math.abs(l.x1 - l.x2) < 0.5 && Math.abs(l.x1 - vx) < 1 && l.o > 0.3);
@@ -2433,8 +2442,8 @@ console.log("\n[밸런스 판정]");
       /* ③ 꼬리 자는 아치 자의 절반 길이 */
       const len = (k) => { const sp = PBx.H_SPECS.find((x) => x.key === k); const q = PBx.segPx(sp)[0]; return q[1] - q[0]; };
       return {
-        inGrey: !!greySeg && greySeg.w <= 1.2,
-        outColor: !!colorSeg,
+        inGrey: greySeg,
+        outColor: colorSeg,
         overshoot, quietAllGrey, grabColored,
         thickInside, thickOutside,
         tailRatio: len("h3") / len("h2"),
@@ -2454,24 +2463,24 @@ console.log("\n[밸런스 판정]");
       return { empty, rows, hasBtn: !!document.getElementById("btnPresetLoad") };
     });
     await ctx.close();
-    check("106. 방향 신호 — 자 색이 세로선을 지나 ~50% 관통 · 세로선은 조용=회색/잡으면=색 · 꼬리 자 반",
-      r.inGrey && r.outColor && r.overshoot > 0.38 && r.overshoot < 0.62
+    check("106. 한 줄 규칙 — 자도 세로선도 조용=얇은 회색 / 차례=고유색 **한 줄** · 꼬리 자 반",
+      r.inGrey && r.outColor
         && r.quietAllGrey && r.grabColored
         && r.tailRatio > 0.4 && r.tailRatio < 0.6 && r.lockOnCenter,
-      `자 안쪽 나머지=회색 ${r.inGrey} / 색 토막 ${r.outColor} · 관통 비율 ${r.overshoot.toFixed(2)}(기대 0.5) · `
+      `조용한 자=회색전체 ${r.inGrey} · 차례인 자=고유색 한 줄 ${r.outColor} · `
       + `조용 세로선=회색전체 ${r.quietAllGrey} · 잡으면 색 ${r.grabColored} · 꼬리/아치 길이비 ${r.tailRatio.toFixed(2)} · 잠금=센터선 ${r.lockOnCenter}`);
     check("107. 프리셋 — 내장 기본 3종 없음 · 사용자가 저장한 것만",
       pr.empty && pr.rows === 0 && pr.hasBtn,
       `빈 목록 표시=${pr.empty} · 줄 수=${pr.rows}(0이어야 함) · 프리셋 버튼 유지=${pr.hasBtn}`);
   }
 
-  /* 108. ⚠️ v1.54.0 (원장님 지시 2026-08-22)
-     「가이드는 처음 시작시 지시등 블링킹 효과 두번후 색상 선명 — 그리고 드래그시 …
-      다음 지시선 두번 블링킹 — 움직일때 … 다음 플로우 동일 적용」
-     · 지시등 : 다음 차례 선이 **두 번 깜빡인 뒤 선명하게** 남는다 (시작은 켜짐, 끝도 켜짐)
-     · 드래그 : 잡고 움직이는 동안 **고유색을 반투명(0.6)** — 회색으로 바꾸지 않는다.
-                어느 선을 잡고 있는지 색으로 알아야 하고, 아래 드로잉이 비쳐야 한다
-     ⛔ 저장 이미지에 깜빡임의 '꺼진' 순간이나 반투명이 찍히면 안 됩니다 (exportImage 가 끔) */
+  /* 108. ⚠️ v1.55.0 (원장님 지시 2026-08-22 · v1.54.0 을 대체)
+     「가이드 시작되면 블링킹이 첫 2번 깜빡이는 것을 **느린 블링킹 한 번, 4초에 한 번씩**
+      다음 움직임 전까지 계속 반복. 블링킹은 고유색으로 밝았다 조금 투명해진다.
+      모든 선을 클릭해서 움직일 때는 **짙은 회색과 살구색 테두리**,
+      움직임 없을 때는 현재 얇은 회색 유지」
+     ⛔ 깜빡임을 JS 타이머로 되돌리지 마세요 — 드래그 중 매 프레임 render() 가 화면을 먹습니다.
+     ⛔ 밝은 쪽(0%·100%) 은 반드시 stroke-opacity:1 — 저장본은 애니메이션 없이 그 값으로 찍힙니다. */
   {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -2481,50 +2490,54 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, W = S.dim.W;
-      PBx.stopBlink();
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
       S.guideOn = true; S.guideCur = "v2"; S.sel = "v2"; S.multi = false; S.selSet = [];
-      S.blink = 0; S.dragOn = false;
-      /* 잡은(강조) 이너 세로선의 제일 굵은 토막 하나 */
-      const litV = () => {
+      S.dragOn = false;
+      const vSegs = () => {
         const vx = S.g.v2 * W;
-        const segs = [...document.getElementById("guides").querySelectorAll("line")]
+        return [...document.getElementById("guides").querySelectorAll("line")]
           .map((l) => ({ x: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
                          c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
-                         o: +(l.getAttribute("stroke-opacity") || 1) }))
-          .filter((l) => Math.abs(l.x - l.x2) < 0.5 && Math.abs(l.x - vx) < 1);
-        let best = null;
-        for (const l of segs) if (!best || l.w > best.w) best = l;
-        return best || { c: "", w: 0, o: 0 };
+                         o: +(l.getAttribute("stroke-opacity") || 1),
+                         cls: l.getAttribute("class") || "" }))
+          .filter((l) => Math.abs(l.x - l.x2) < 0.5 && Math.abs(l.x - vx) < 1 && l.o > 0.3);
       };
-      PBx.render(); const crisp = litV();
-      S.blink = 1; PBx.render(); const blinked = litV();
-      S.blink = 0; S.dragOn = true; PBx.render(); const dragged = litV();
+      PBx.render();
+      const lit = vSegs().sort((a, b) => b.w - a.w)[0];
+      S.dragOn = true; PBx.render();
+      const grab = vSegs().sort((a, b) => b.w - a.w);
       S.dragOn = false; PBx.render();
-      return { crisp, blinked, dragged };
+      /* 깜빡임은 CSS — 실제로 애니메이션이 붙었는지 계산된 스타일로 확인 */
+      const el = [...document.getElementById("guides").querySelectorAll("line.blink")][0];
+      const cs = el ? getComputedStyle(el) : null;
+      return {
+        lit, ring: grab[0], core: grab[1],
+        blinkOnLit: !!lit && lit.cls.includes("blink"),
+        blinkOnGrab: grab.some((l) => l.cls.includes("blink")),
+        animName: cs ? cs.animationName : "", animDur: cs ? cs.animationDuration : "",
+        animIter: cs ? cs.animationIterationCount : "",
+      };
     });
-    /* 시퀀스 — 시작은 켜짐(테스트·느린 기기가 첫 프레임을 놓치지 않게) · 중간에 꺼짐이 있고 · 끝은 켜짐 */
-    const seq = await p.evaluate(() => new Promise((res) => {
-      const S = window.PB.S;
-      S.guideOn = true; S.guideCur = "v2"; S.sel = "v2";
-      window.PB.startBlink();
-      const samples = []; const t0 = Date.now();
-      const iv = setInterval(() => {
-        samples.push(S.blink);
-        if (Date.now() - t0 > 1000) { clearInterval(iv); res(samples); }
-      }, 30);
-    }));
+    const src = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+    const kf = (src.match(/@keyframes pbBlink\{([^}]*\})*[^}]*\}/) || [""])[0];
+    const brightEnds = /0%\{stroke-opacity:1\}/.test(src) && /100%\{stroke-opacity:1\}/.test(src);
+    const dipsPartly = (() => { const m = src.match(/10%\{stroke-opacity:([.\d]+)\}/); return m && +m[1] > 0.25 && +m[1] < 0.7; })();
     const expSrc = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
-    const exportClean = /async function exportImage\(\)[\s\S]{0,400}?stopBlink\(\);\s*S\.dragOn = false;/.test(expSrc);
+    const exportClean = /async function exportImage\(\)[\s\S]{0,400}?S\.dragOn = false; render\(\);/.test(expSrc);
+    const noTimer = !/setTimeout\(step2/.test(expSrc);
     await ctx.close();
-    const offCount = seq.filter((v, i) => v === 1 && seq[i - 1] !== 1).length;
-    const startsOn = seq[0] === 0, endsOn = seq[seq.length - 1] === 0;
-    check("108. 지시등 — 두 번 깜빡이고 선명 · 드래그 중은 반투명 고유색(회색 아님) · 저장본은 선명",
-      r.crisp.o > 0.95 && r.blinked.o < 0.2 && r.blinked.c === r.crisp.c
-        && r.dragged.o > 0.5 && r.dragged.o < 0.75 && r.dragged.c === r.crisp.c && r.dragged.c !== "#14161B"
-        && startsOn && endsOn && offCount === 2 && exportClean,
-      `선명 ${r.crisp.c}@${r.crisp.o} · 깜빡임 ${r.blinked.c}@${r.blinked.o} · 드래그 ${r.dragged.c}@${r.dragged.o} · `
-      + `꺼진 횟수 ${offCount}(2여야 함) · 시작켜짐 ${startsOn} · 끝켜짐 ${endsOn} · 저장본 선명 ${exportClean}`);
+    check("108. 지시등 — 4초에 한 번 느린 깜빡임(CSS) · 잡으면 짙은 회색 + 살구색 테두리 · 저장본 선명",
+      r.blinkOnLit && !r.blinkOnGrab
+        && r.animName === "pbBlink" && r.animDur === "4s" && r.animIter === "infinite"
+        && brightEnds && dipsPartly && !!kf
+        && r.lit && r.lit.c === "#5EEAD4" && r.lit.o > 0.95
+        && r.ring && r.ring.c === "#FFC9A3" && r.core && r.core.c === "#14161B"
+        && r.ring.w > r.core.w + 2
+        && exportClean && noTimer,
+      `차례 선 ${r.lit && r.lit.c}@${r.lit && r.lit.o} .blink=${r.blinkOnLit} · `
+      + `애니 ${r.animName}/${r.animDur}/${r.animIter} · 밝은쪽=1 ${brightEnds} · 조금만 투명 ${dipsPartly} · `
+      + `잡음 테두리 ${r.ring && r.ring.c} w${r.ring && r.ring.w} / 심 ${r.core && r.core.c} w${r.core && r.core.w} · `
+      + `잡는 동안 깜빡임 정지 ${!r.blinkOnGrab} · 저장본 선명 ${exportClean} · JS타이머 없음 ${noTimer}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서

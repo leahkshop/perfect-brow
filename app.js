@@ -290,7 +290,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.54.0";
+const APP_VERSION = "v1.55.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -444,8 +444,7 @@ const S = {
   photoMode: "zoom",
   locked: false,
   guideOn: false, guideCur: null,   // 가이드 플로우 (v1.42.0)
-  blink: 0,              // 지시등 깜빡임의 '꺼진' 순간 (v1.54.0)
-  dragOn: false,         // 선을 잡고 움직이는 중 (v1.54.0)
+  dragOn: false,         // 선을 잡고 움직이는 중 (v1.55.0 — 짙은 회색 + 살구색 테두리)
   dim: { W: 0, H: 0 },
   iw: 0, ih: 0, s0: 1, fitW: 0, fitH: 0,
   hiddenSnapshot: null,
@@ -507,13 +506,15 @@ function mk(tag, attrs) {
   return e;
 }
 
-function drawLine(frag, x1, y1, x2, y2, color, w, op) {
+function drawLine(frag, x1, y1, x2, y2, color, w, op, cls) {
   /* 흰색 헤일로 없음 (v1.42.1 — 원장님 지시: 「선은 흰색 테두리말고 그냥 짙은회색으로」).
      헤일로를 되살리면 선이 두꺼워 보여 정교함이 죽습니다. */
-  frag.appendChild(mk("line", {
+  const a = {
     x1, y1, x2, y2, stroke: color, "stroke-width": w,
     "stroke-opacity": op, "stroke-linecap": "round",
-  }));
+  };
+  if (cls) a.class = cls;
+  frag.appendChild(mk("line", a));
 }
 
 const badgeW = (text) => Math.max(26, text.length * 6 + 12);
@@ -560,17 +561,22 @@ const HALF_GREY = "#14161B", HALF_W = 1.0, HALF_OP = 0.5;
       픽셀로 재서 45~55% → 50%로 확정)
    ⛔ 색 토막을 세로선에서 뚝 끊거나(ㄱ자로 돌아감), 조용한 세로선에 색 토막을 되살리지 마세요. */
 const VGREY_W = 1.7, VGREY_OP = 0.6;   // 조용한 세로선 — 얇은 참조선(1.0)보다는 분명한 한 줄
-const OVERSHOOT = 0.5;                 // 고유색이 세로선을 지나 안쪽으로 넘는 비율 (자 반폭 기준)
-/* ⚠️ v1.54.0 — 지시등(블링킹)과 드래그 중 반투명 (원장님 지시 2026-08-22)
-   가이드가 다음 선으로 넘어가면 그 선이 **두 번 깜빡인 뒤 선명하게** 남는다 — 눈이
-   화면 어디를 봐야 하는지 한 번에 잡아준다. 움직이는 동안에는 **고유색을 반투명**으로
-   낮춰 선 아래 드로잉이 비쳐 보이게 하고, 손을 떼면 다시 선명해진다.
-   ⛔ 드래그 중에 회색으로 바꾸지 마세요 — 어느 선을 잡고 있는지 색으로 알아야 합니다.
-   ⛔ 저장(내보내기) 이미지에는 깜빡임·반투명이 남으면 안 됩니다 (exportImage 가 끕니다). */
-const BLINK_OP = 0.12, BLINK_MS = 160;  // 깜빡임의 '꺼진' 순간 투명도 · 한 칸 길이
-const DRAG_OP = 0.6;                    // 드래그 중 반투명 — 색은 유지, 아래가 비친다
-/* 강조된 선의 지금 투명도. 깜빡임 > 드래그 > 선명 순으로 우선 */
-const emphOp = () => (S.blink ? BLINK_OP : (S.dragOn ? DRAG_OP : 1));
+const TAIL_EXT = true;                 // 꼬리 자 바깥의 얇은 회색 참조선 (v1.53.0 원장님 지시)
+/* ⚠️ v1.55.0 — 선의 상태는 **딱 세 가지** (원장님 지시 2026-08-22 · v1.51~1.54 의 혼합 폐지)
+   ① 조용            : 얇은 짙은 회색 **한 줄** — 가로 자도 색 토막 없이 전부 회색
+   ② 지금 차례·선택   : **고유색 한 줄** — 4초에 한 번 느리게 깜빡(밝음→조금 투명→밝음)
+   ③ 잡고 움직이는 중 : **짙은 회색 심 + 살구색 테두리**
+   원장님: 「가로바들이 회색과 고유색으로 섞여있는데 고유색으로만 1개선으로 변경 …
+   모든 선을 클릭해서 움직일 때는 짙은회색과 살구색 테두리, 움직임 없을 때는 얇은 회색 유지」
+   ⛔ 자를 색+회색으로 나누던 v1.51~1.53 방식으로 되돌리지 마세요 — 「1개선」이 지시입니다.
+   ⛔ 깜빡임은 CSS(`#guides line.blink`)가 돌립니다. JS 타이머로 되돌리면 드래그가 버벅입니다.
+   ⛔ 저장(내보내기)은 SVG를 직렬화하므로 CSS 애니메이션이 안 붙습니다 → 늘 선명하게 찍힙니다. */
+const APRICOT = "#FFC9A3";              // 살구색 테두리 — 잡고 있는 선 하나만
+const GRAB_RING = 3.2;                  // 테두리가 심보다 넓은 양(px)
+function drawGrab(frag, x1, y1, x2, y2, w) {
+  drawLine(frag, x1, y1, x2, y2, APRICOT, w + GRAB_RING, 0.95);
+  drawLine(frag, x1, y1, x2, y2, HALF_GREY, w, 1);
+}
 const SEG_HALF = 0.19;           // 자 반폭 (눈썹 폭 기준)
 const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
 const VPAD = 0.045;              // 세로선(긴 것)이 위아래로 더 나가는 여유
@@ -673,31 +679,19 @@ function renderGuides() {
       segs.forEach(([xa, xb], idx) => {
         if (xb - xa < 2) return;                       // 세로선이 화면 밖으로 밀리면 그리지 않는다
         const bad = offBy && idx === badIdx;
-        const col = bad ? BAL_RED : lineColor(sp, sel);
-        /* v1.47.1 — 기본(비강조) 선도 +0.6 굵게: 선택(+1.6)보단 얇게 (원장님 지시) */
-        const wid = bad ? sp.w + 2.2 : (sel ? sp.w + 1.8 : sp.w + 0.6);
-        const opa = bad ? 1 : (sel ? emphOp() : dimOpOf(sp));
-        /* v1.51.0 — 자의 **안쪽(센터 쪽) 절반**은 얇은 짙은 회색.
-           ⚠️ 밸런스로 빨갛게 칠하는 토막은 **나누지 않는다** — 판정 표시가 가려지면 안 됩니다. */
-        if (!bad && sp.anchor) {
-          const ax = (idx === 0 ? g[sp.anchor] : 2 * g.v1 - g[sp.anchor]) * W;
-          const ov = (xb - xa) / 2 * OVERSHOOT;      // 색이 세로선을 지나 안쪽으로 (v1.52.0)
-          const bx = idx === 0 ? ax + ov : ax - ov;
-          const inA = idx === 0 ? [bx, xb] : [xa, bx];
-          const outA = idx === 0 ? [xa, bx] : [bx, xb];
-          /* v1.53.0 — 꼬리 자는 **바깥(관자놀이 쪽)으로도 얇은 회색 참조선** (원장님 지시
-             2026-08-22: 「꼬리 선 밖으로 얇은 회색선 더 빼주고」). 자 길이만큼 뻗는다 */
-          if (sp.key === "h3") {
-            const ext = (xb - xa);
-            const t0 = idx === 0 ? clamp(xa - ext, 0, W) : xb;
-            const t1 = idx === 0 ? xa : clamp(xb + ext, 0, workRight() * W);
-            if (t1 - t0 > 1) drawLine(frag, t0, y, t1, y, HALF_GREY, HALF_W, HALF_OP);
-          }
-          if (inA[1] - inA[0] > 1) drawLine(frag, inA[0], y, inA[1], y, HALF_GREY, HALF_W, HALF_OP);
-          if (outA[1] - outA[0] > 1) drawLine(frag, outA[0], y, outA[1], y, col, wid, opa);
-          return;
+        /* v1.53.0 — 꼬리 자는 **바깥(관자놀이 쪽)으로 얇은 회색 참조선**을 더 뺀다 (원장님 지시
+           2026-08-22: 「꼬리 선 밖으로 얇은 회색선 더 빼주고」). 자 길이만큼 뻗는다 */
+        if (!bad && TAIL_EXT && sp.key === "h3" && sp.anchor) {
+          const ext = (xb - xa);
+          const t0 = idx === 0 ? clamp(xa - ext, 0, W) : xb;
+          const t1 = idx === 0 ? xa : clamp(xb + ext, 0, workRight() * W);
+          if (t1 - t0 > 1) drawLine(frag, t0, y, t1, y, HALF_GREY, HALF_W, HALF_OP);
         }
-        drawLine(frag, xa, y, xb, y, col, wid, opa);
+        /* ⚠️ v1.55.0 — 세 상태 (위 상수 주석 참고). 자를 색/회색으로 쪼개지 않는다 */
+        if (bad) { drawLine(frag, xa, y, xb, y, BAL_RED, sp.w + 2.2, 1); return; }
+        if (sel && S.dragOn) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
+        if (sel) { drawLine(frag, xa, y, xb, y, liveColor(sp), sp.w + 1.8, 1, "blink"); return; }
+        drawLine(frag, xa, y, xb, y, HALF_GREY, HALF_W, HALF_OP);
       });
     }
   }
@@ -711,20 +705,24 @@ function renderGuides() {
     for (const sp of V_SPECS) {
       if (!g[sp.vis]) continue;
       const sel = emph(sp);
-      const w = sel ? sp.w + 1.8 : sp.w + 0.6, op = sel ? emphOp() : dimOpOf(sp);   /* v1.47.1 — 기본 +0.6 · v1.54.0 깜빡임/드래그 */
+      const w = sel ? sp.w + 1.8 : sp.w + 0.6, op = sel ? 1 : dimOpOf(sp);   /* v1.47.1 — 기본 +0.6 */
       const full = sp.key === "v1";
       const band = sp.long ? bandL : bandT;
       const by0 = band.y0 * H, by1 = band.y1 * H;
       const lc = lineColor(sp, sel);
       const draw = (x) => {
-        if (full) { drawLine(frag, x, 0, x, H, lc, w, op); return; }
+        if (full) {
+          if (sel && S.dragOn) { drawGrab(frag, x, 0, x, H, w); return; }
+          drawLine(frag, x, 0, x, H, lc, w, op, sel ? "blink" : null); return;
+        }
         frag.appendChild(mk("line", {                       // 라벨 ↔ 선 연결 (헤일로 없음)
           x1: x, y1: 0, x2: x, y2: H, stroke: lc,
           "stroke-width": 1, "stroke-opacity": 0.16,
         }));
         /* v1.52.0 — 잡은(강조) 세로선은 **전체 길이 고유색**: "세로줄 = 좌우 이동" 신호.
            조용할 땐 **전체가 회색 한 줄** — 색과 토막이 없어 자의 색 토막과 헷갈리지 않는다 */
-        if (sel) { drawLine(frag, x, by0, x, by1, lc, w, op); return; }
+        if (sel && S.dragOn) { drawGrab(frag, x, by0, x, by1, w); return; }
+        if (sel) { drawLine(frag, x, by0, x, by1, lc, w, op, "blink"); return; }
         drawLine(frag, x, by0, x, by1, HALF_GREY, VGREY_W, VGREY_OP);
       };
       const x = g[sp.key] * W;
@@ -1025,7 +1023,7 @@ touch.addEventListener("pointermove", (e) => {
     if (!gDrag.moved) {
       if (Math.hypot(sp.x - gDrag.x0, sp.y - gDrag.y0) < 3) return;
       gDrag.moved = true;
-      S.dragOn = true; stopBlink();   /* 움직이는 동안 반투명 — 아래 드로잉이 비친다 (v1.54.0) */
+      S.dragOn = true;   /* 움직이는 동안 짙은 회색 + 살구색 테두리 (v1.55.0) */
       /* 끌기 시작 = 잡은 선을 선택에 합류 (여러라인 모드) */
       if (S.multi && gDrag.tapKey && !S.selSet.includes(gDrag.tapKey)) S.selSet.push(gDrag.tapKey);
       /* 가이드: 움직이기 시작한 선이 "지금 차례"가 된다 — 예약돼 있던 다음 선은 꺼진다 (v1.42.0) */
@@ -1091,25 +1089,12 @@ function endPointer(e) {
   }
 }
 
-/* ═══ 지시등 블링킹 (v1.54.0 · 원장님 지시 2026-08-22) ═══════════════════
-   다음 차례 선이 **두 번 깜빡인 뒤 선명하게** 남는다 — "여기다"를 눈으로 찍어준다.
-   ⚠️ 시퀀스는 **켜짐으로 시작**한다. 그래야 render() 직후 화면을 읽는 회귀 테스트와
-      느린 기기에서 첫 프레임이 사라진 것처럼 보이지 않는다.
-   ⚠️ 타이머는 하나만 — 다음 선으로 넘어가면 이전 깜빡임은 즉시 취소된다. */
-let blinkTimer = null;
-function startBlink() {
-  clearTimeout(blinkTimer);
-  const seq = [0, 1, 0, 1];          // 켜짐·꺼짐·켜짐·꺼짐 → 끝나면 켜짐으로 남는다
-  let i = 0;
-  const step2 = () => {
-    if (i >= seq.length) { S.blink = 0; blinkTimer = null; render(); return; }
-    S.blink = seq[i++];
-    render();
-    blinkTimer = setTimeout(step2, BLINK_MS);
-  };
-  step2();
-}
-function stopBlink() { clearTimeout(blinkTimer); blinkTimer = null; S.blink = 0; }
+/* ═══ 지시등 블링킹 (v1.55.0 · 원장님 지시 2026-08-22) ═══════════════════
+   「느린 블링킹 한 번, 4초에 한 번씩 다음 움직임 전까지 계속 반복.
+     블링킹은 고유색으로 밝았다 조금 투명해진다」
+   → **CSS 가 돌린다**: `#guides line.blink { animation: pbBlink 4s ... infinite }` (index.html).
+     JS 타이머로 매 프레임 render() 하던 v1.54.0 방식은 드래그 중 화면을 잡아먹습니다.
+     강조된 선에 `blink` 클래스만 붙이면 되고, 잡는 순간 클래스가 빠져 깜빡임이 멎습니다. */
 
 /* 가이드: 이 선의 움직임이 끝났다 → **그 선의 다음** 순서가 켜진다.
    마지막(꼬리) 뒤로는 처음으로 돌아가지 않는다 — 플로우 종료 (원장님 지시 2026-08-21) */
@@ -1122,8 +1107,7 @@ function guideAdvance(key) {
   /* v1.49.0 — 다음 차례로 **선택도 함께 옮긴다**. 두 가지가 한 번에 해결된다:
        ① 방금 쓴 선이 선택으로 남아 같이 밝아지는 문제가 사라진다 (밝은 선 = 항상 하나)
        ② 조절 바가 곧바로 다음 선을 잡아, 레일에서 다시 고를 필요가 없다 (시술 중 손이 덜 간다) */
-  if (next) { noteSel(next); render(); startBlink(); return; }
-  stopBlink();
+  if (next) noteSel(next);
   render();
 }
 touch.addEventListener("pointerup", endPointer);
@@ -2275,9 +2259,9 @@ function autoFromDrawing() {
 /* ═══════════ 9. export ═══════════ */
 async function exportImage() {
   try {
-    /* v1.54.0 — 저장본은 **언제나 선명한 상태**. 깜빡임의 '꺼진' 순간이나 드래그 반투명이
-       그대로 찍히면 선이 흐린 사진이 남습니다. ⛔ 이 세 줄을 지우지 마세요. */
-    stopBlink(); S.dragOn = false; render();
+    /* v1.55.0 — 저장본은 **언제나 선명한 고유색**. 잡고 있던 살구색 테두리가 찍히면 안 됩니다.
+       (깜빡임은 CSS 라 직렬화된 SVG 에는 애초에 안 붙습니다.) ⛔ 이 두 줄을 지우지 마세요. */
+    S.dragOn = false; render();
     const { W, H } = S.dim, R = 2;
     const c = document.createElement("canvas");
     c.width = W * R; c.height = H * R;
@@ -2353,7 +2337,6 @@ function loadPhoto(file) {
       measure();
       render();
       runFaceAI();
-      startBlink();     /* 첫 지시등 — 이너가 두 번 깜빡이고 선명해진다 (v1.54.0) */
     });
   };
   im.onerror = () => toast(t("export_fail"));
@@ -2660,7 +2643,6 @@ $("btnGuide").onclick = () => {
   S.guideCur = S.guideOn ? GUIDE_FLOW[0] : null;
   updateButtons();
   render();
-  if (S.guideOn) startBlink(); else stopBlink();   /* 지시등 두 번 (v1.54.0) */
 };
 $("btnRefL").onclick = () => setRefSide("L");
 $("btnRefR").onclick = () => setRefSide("R");
@@ -2688,7 +2670,7 @@ histSlider(posSliderH);
 
 /* 세로 조절자 — 위아래로 움직이는 가로선(S.selUD) 전담 */
 posSliderV.addEventListener("input", (e) => { beginEdit(); noteSel(S.selUD);
-  S.dragOn = true; stopBlink();                                    /* v1.54.0 */
+  S.dragOn = true;                                                 /* v1.55.0 */
   if (S.guideOn && GUIDE_FLOW.includes(S.selUD)) S.guideCur = S.selUD;
   applyPos(parseFloat(e.target.value), S.selUD); });
 posSliderV.addEventListener("change", () => { S.dragOn = false; guideAdvance(S.selUD); });
@@ -2697,7 +2679,7 @@ $("posPlusV").onclick  = () => step(() => { noteSel(S.selUD); applyPos(parseFloa
 
 /* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
 posSliderH.addEventListener("input", (e) => { beginEdit(); if (!hIsPhoto()) noteSel(S.selLR);
-  if (!hIsPhoto()) { S.dragOn = true; stopBlink(); }                /* v1.54.0 */
+  if (!hIsPhoto()) { S.dragOn = true; }                            /* v1.55.0 */
   if (!hIsPhoto() && S.guideOn && GUIDE_FLOW.includes(S.selLR)) S.guideCur = S.selLR;
   applyH(parseFloat(e.target.value)); });
 posSliderH.addEventListener("change", () => { S.dragOn = false; if (!hIsPhoto()) guideAdvance(S.selLR); });
@@ -2922,4 +2904,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
-  applyLayout, openPicker, endPicking, startBlink, stopBlink };
+  applyLayout, openPicker, endPicking };
