@@ -313,6 +313,9 @@ body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
    **폭을 반드시 제한하세요** — 프리셋 이름은 원장님이 직접 지으시므로 길어질 수 있고,
    그대로 두면 왼쪽 묶음이 가운데까지 밀고 들어옵니다 (회귀 83번). */
 .favrow{align-items:flex-end}
+/* v1.58.0 — 조합 순환 버튼은 **좁게**: 왼쪽 도크가 넓어지면 가운데 도크(잠금=센터선)를
+   밀어내므로, 아이폰 compact 에서도 세 도크가 공존할 폭이어야 합니다 (회귀 83 도크간격) */
+.menurow button#btnLookCycle{min-width:46px;padding:0 4px}
 /* `.menurow button` 이 뒤에 선언되므로 특이도를 한 단계 올립니다 */
 /* v1.50.0 — 「가이드 색상 조금 더 온, 이것이 켜져있다는 신호가 보여야 한다」 (원장님 지시) */
 #btnGuide.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800;
@@ -321,7 +324,7 @@ body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
   flex-direction:row;gap:4px;padding:0 8px;font-size:9px}
 .menurow.favrow button i, .menurow.favrow button i svg{width:12px;height:12px;color:var(--a2)}
 .menurow.favrow button em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.land.compact #editor .menurow.favrow button{height:30px;min-width:38px;max-width:54px;padding:0 3px;font-size:8px}  /* v1.43.0 — 가운데 도크(3버튼)와 겹치지 않게 더 좁게 */
+body.land.compact #editor .menurow.favrow button{height:30px;min-width:32px;max-width:41px;padding:0 2px;font-size:8px}  /* v1.58.0 — 순환 버튼 자리 확보 */  /* v1.43.0 — 가운데 도크(3버튼)와 겹치지 않게 더 좁게 */
 body.land.compact #editor .favrow button i, body.land.compact #editor .favrow button i svg{width:11px;height:11px}
 /* 좌우 드래그 바 — 가운데 도크와 겹치지 않는 선까지만 넓힙니다 (v1.28.0).
    넓히면 사진잠금 위로 올라타고, 회귀 83번이 그것을 잡습니다. */
@@ -553,6 +556,7 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .dockbtn.danger{height:46px;min-width:52px;font-size:9px}
   body.land.compact #editor #btnUndo, body.land.compact #editor #btnRedo{height:38px;min-width:52px;font-size:9px}
   body.land.compact #editor .menurow button{height:46px;min-width:52px;font-size:9px;padding:0 6px}
+  body.land.compact #editor .menurow button#btnLookCycle{min-width:34px;padding:0 1px;font-size:8px}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
   body.land.compact #editor .ldock{bottom:calc(var(--safe-b) + 6px);left:6px}
   /* 가로 화면은 세로가 짧아 모달이 잘린다 — 더 넓고 촘촘하게 (v1.20.1) */
@@ -673,6 +677,9 @@ body:not(.land) #railLang{display:none}
         <!-- 가이드 플로우 (v1.42.0) — 켜면 이너→앞두께→앞머리→아치두께→아치→꼬리 순서로
              "지금 차례"인 선만 고유색으로 켜진다. 스킵 가능(안 켜면 이전과 동일) -->
         <button id="btnGuide"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h10M14 12l-4-4M14 12l-4 4M18 5v14"/></svg></i><em data-i18n="editor_guide">가이드</em></button>
+        <!-- v1.58.0 — 조합 순환 버튼 (원장님 지시 2026-08-23: 「가이드 오른쪽에 선 색변경 버튼,
+             클릭 시 다른 추천 조합으로, 또 클릭 시 다른 조합」). 순서: 내 세트 → 밝은 사진 → 어두운 사진 → 다시 내 세트 -->
+        <button id="btnLookCycle"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17c2.5-2 3.8-5.2 3.8-8.5S14.5 5.5 12 3.5z" fill="currentColor" stroke="none" opacity=".45"/></svg></i><em id="lookCycleName" data-i18n="set_cycle">선 색</em></button>
       </div>
       <div class="menurow favrow" id="favRow"></div>
     </div>

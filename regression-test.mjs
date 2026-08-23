@@ -1646,7 +1646,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
 
   check(`40. ${dev.n} — 왼쪽 아래는 프리셋(+즐겨찾기) · 좌우 바와 겹치지 않음`,
     menuPos.leftBottom && menuPos.noOverlap && menuPos.gone
-      && menuPos.ids === "btnPresetLoad,btnGuide",   /* v1.42.0 — 프리셋 옆 가이드 버튼 */
+      && menuPos.ids === "btnPresetLoad,btnGuide,btnLookCycle",   /* v1.58.0 — 가이드 오른쪽 조합 순환 */
     `왼쪽아래=${menuPos.leftBottom} 겹침없음=${menuPos.noOverlap} 눈가이드제거=${menuPos.gone} [${menuPos.ids}]`);
 
   /* 83. 버튼 자리 (v1.29.0) — 원장님이 정하신 자리
@@ -2656,6 +2656,47 @@ console.log("\n[밸런스 판정]");
       + `굵기 ${r.thinW}/${r.baseW}/${r.thickW} · 길이 ${Math.round(r.shortLen)}/${Math.round(r.baseLen)}/${Math.round(r.longLen)} · `
       + `투명도 ${r.dimOp} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(8색 ${r.dragSwN === 8}) · `
       + `이전설정복귀 ${r.backOk} · 모두같은색 ${r.allSame} · 저장 ${r.storedInner} · 기본으로 ${r.resetOk}`);
+  }
+
+  /* 110. ⚠️ v1.58.0 조합 순환 버튼 (원장님 지시 2026-08-23)
+     「가이드 오른쪽에 선 색변경 가능한 버튼 하나 추가, 클릭 시 다른 추천 조합으로 변경 —
+      또 클릭 시 다른 조합 변경」
+     순서: 내 세트 → 밝은 사진 → 어두운 사진 → **다시 내 세트** (한 바퀴 돌면 그대로 복귀 —
+     시술 중 잘못 눌러도 잃는 것이 없어야 한다). 라벨은 지금 조합 이름을 보여준다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      /* 내 세트 = 기본에서 이너만 핑크로 바꾼 값 (추천 조합 어느 것과도 다르게) */
+      S.look = { ...PBx.LOOK_DEF, inner: "#FF4D94" }; S.lookOwn = null;
+      window.PB.render();
+      const btn = document.getElementById("btnLookCycle");
+      const label = () => document.getElementById("lookCycleName").textContent;
+      const snap = () => ({ inner: S.look.inner, arch: S.look.arch, edge: S.look.edge, edgeC: S.look.edgeC });
+      const guideBtn = document.getElementById("btnGuide");
+      const rightOfGuide = btn.previousElementSibling === guideBtn;
+      const s0 = snap();
+      btn.click(); const s1 = snap(), l1 = label();
+      btn.click(); const s2 = snap(), l2 = label();
+      btn.click(); const s3 = snap(), l3 = label();
+      return { rightOfGuide, s0, s1, s2, s3, l1, l2, l3,
+               stored: (JSON.parse(localStorage.getItem("pb_look_v1") || "{}")).inner };
+    });
+    await ctx.close();
+    const bright = { inner: "#14161B", edgeC: "light" }, dark = { inner: "#5EEAD4", edgeC: "dark" };
+    check("110. 조합 순환 버튼 — 가이드 오른쪽 · 클릭마다 다음 조합 · 한 바퀴 돌면 내 세트 복귀",
+      r.rightOfGuide
+        && r.s1.inner === bright.inner && r.s1.edgeC === "light" && r.s1.edge === 70
+        && r.s2.inner === dark.inner && r.s2.edgeC === "dark" && r.s2.edge === 70
+        && r.s3.inner === r.s0.inner && r.s3.edge === r.s0.edge     /* 내 세트로 복귀 */
+        && r.l1.length > 0 && r.l2.length > 0 && r.l3.length > 0 && r.l1 !== r.l2
+        && r.stored === r.s3.inner,
+      `가이드 오른쪽=${r.rightOfGuide} · ${r.s0.inner} → [${r.l1}]${r.s1.inner} → [${r.l2}]${r.s2.inner} → [${r.l3}]${r.s3.inner}(복귀 ${r.s3.inner === r.s0.inner}) · 저장 ${r.stored}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서

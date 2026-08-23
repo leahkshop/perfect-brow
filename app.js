@@ -46,6 +46,7 @@ const I18N = {
     /* v1.56.0 설정 시트 */
     set_title: "설정 — 선 모양", set_badge: "설정",
     set_dragc: "잡은 선 심", set_drage: "잡은 선 테두리", set_back: "이전 설정으로",
+    set_cycle: "선 색", set_c_mine: "내 세트",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
@@ -188,6 +189,7 @@ const I18N = {
     editor_preset_save: "Save current",
     set_title: "Settings — Line look", set_badge: "Set",
     set_dragc: "Grab core", set_drage: "Grab outline", set_back: "Undo changes",
+    set_cycle: "Colors", set_c_mine: "My set",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
@@ -317,7 +319,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.57.0";
+const APP_VERSION = "v1.58.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -536,6 +538,7 @@ const S = {
   dragOn: false,         // 선을 잡고 움직이는 중 (v1.55.0 — 짙은 회색 + 살구색 테두리)
   look: loadLook(),      // 선 모양 설정 (v1.56.0) — 색·테두리·굵기·길이·투명도
   lookSnap: null,        // 설정 시트를 연 순간의 값 (「현재 세트」 카드)
+  lookOwn: null,         // 순환 버튼의 「내 세트」 (v1.58.0) — 추천을 돌다 돌아올 내 설정
   dim: { W: 0, H: 0 },
   iw: 0, ih: 0, s0: 1, fitW: 0, fitH: 0,
   hiddenSnapshot: null,
@@ -1562,6 +1565,7 @@ function buildFavBar() {
     b.addEventListener("click", () => applyPreset(p));
     return b;
   }));
+  alignCenterDock();   /* 즐겨찾기로 왼쪽 도크 폭이 바뀌면 가운데 도크를 다시 맞춘다 (v1.58.0) */
 }
 
 function userPresets() {
@@ -2463,7 +2467,11 @@ function swatchBtn(hex, on, fn) {
 }
 function lookSet(patch) {
   Object.assign(S.look, patch);
+  /* 순환 버튼의 「내 세트」 동기화 (v1.58.0) — 추천 조합과 다른 값을 만들면 그게 내 세트다 */
+  if (!LOOK_COMBOS.some((c) => c.v && ["inner", "arch", "tail"].every((k) => c.v[k] === S.look[k])
+      && c.v.edge === S.look.edge && c.v.edgeC === S.look.edgeC)) S.lookOwn = { ...S.look };
   saveLook(); buildLookUI(); render(); updateButtons();
+  if (typeof cycleLabel === "function") cycleLabel();
 }
 function buildLookUI() {
   const L = S.look, nm = (p) => (LANG === "ko" ? p.ko : p.en);
@@ -2547,6 +2555,39 @@ function lookPreview() {
   svgP.appendChild(f);
 }
 $("btnLook").onclick = () => { S.lookSnap = { ...S.look }; buildLookUI(); $("mLook").classList.add("on"); };
+
+/* ═══ 조합 순환 버튼 (v1.58.0 · 원장님 지시 2026-08-23) ═══════════════════
+   「가이드 오른쪽에 선 색변경 버튼 — 클릭 시 다른 추천 조합, 또 클릭 시 다른 조합」
+   순서: **내 세트 → 밝은 사진 → 어두운 사진 → 다시 내 세트**.
+   ⚠️ 「내 세트」는 순환을 **시작한 순간의 내 설정**입니다 — 한 바퀴 돌면 그대로 돌아오므로
+      시술 중 잘못 눌러도 잃는 것이 없습니다. 추천 조합인 채로 설정에서 값을 직접 바꾸면
+      그 값이 새 「내 세트」가 됩니다 (lookSet 이 lookOwn 을 갱신).
+   ⚠️ 버튼 라벨이 지금 조합 이름을 보여줍니다 — 무엇이 켜져 있는지 화면에서 읽히게. */
+function comboMatches(v) {
+  return ["inner", "arch", "tail"].every((k) => v[k] === S.look[k])
+      && v.edge === S.look.edge && v.edgeC === S.look.edgeC;
+}
+function currentComboId() {
+  for (const c of LOOK_COMBOS) if (c.v && comboMatches(c.v)) return c.id;
+  return "mine";
+}
+function cycleLabel() {
+  const id = currentComboId();
+  const el = $("lookCycleName"); if (!el) return;
+  el.textContent = id === "mine" ? t("set_c_mine")
+    : t(LOOK_COMBOS.find((c) => c.id === id).name);
+}
+$("btnLookCycle").onclick = () => {
+  const order = ["mine", "bright", "dark"];
+  const cur = currentComboId();
+  if (cur === "mine") S.lookOwn = { ...S.look };          /* 내 세트를 기억하고 떠난다 */
+  const next = order[(order.indexOf(cur) + 1) % order.length];
+  const v = next === "mine" ? (S.lookOwn || { ...LOOK_DEF })
+                            : LOOK_COMBOS.find((c) => c.id === next).v;
+  Object.assign(S.look, v);
+  saveLook(); render(); updateButtons(); cycleLabel();
+  showHud(next === "mine" ? t("set_c_mine") : t(LOOK_COMBOS.find((c) => c.id === next).name), 1400);
+};
 $("lookAll").onclick = () => lookSet({ arch: S.look.inner, tail: S.look.inner });
 $("lookReset").onclick = () => lookSet({ ...LOOK_DEF });
 /* 조작하다 별로면 **시트를 연 순간의 값**으로 한 번에 복귀 (원장님 지시 2026-08-23) */
@@ -2588,6 +2629,7 @@ function applyI18n() {
   buildFavBar();
   updateButtons();
   updatePanels();
+  if (typeof cycleLabel === "function") cycleLabel();   /* 순환 버튼 라벨 = 지금 조합 이름 (v1.58.0) */
 }
 function setLang(l) {
   LANG = l;
