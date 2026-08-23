@@ -323,7 +323,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.59.0";
+const APP_VERSION = "v1.60.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -475,18 +475,31 @@ const PALETTE = [
   { hex: "#14161B", ko: "먹",   en: "Ink" },      /* 밝은 피부에서 최고 대비 8.6:1 */
 ];
 const LOOK_KEY = "pb_look_v1";
+/* ⚠️⚠️ v1.60.0 — **원장님이 실제 앱에서 맞춰 확정한 기본값** (2026-08-23 · 스크린샷 픽셀 판독)
+   「지금 내가 앱에 설정한 선을 기본으로 셋팅하고 못 박아줘」
+
+   이 값은 취향이 아니라 **시술 현장에서 눈으로 맞춘 결과**입니다. 임의로 바꾸지 마세요:
+   · 선 굵기 얇게(0.8) · 가로 길이 짧게(0.14) · 투명도 75%
+       → 자가 눈썹 위를 덜 가리고, 아래 드로잉이 비쳐 갭을 눈으로 잽니다
+   · 테두리 없음 + 자동
+       → 원장님 사진에서는 테두리 없이도 읽혀서, 화면을 더 조용하게 두는 쪽을 고르셨습니다
+   · 잡은 선 = 먹 심 · 테두리 **없음** · 얇게 · 95%
+       → 잡은 순간 「짙은 한 줄」로만 바뀌는 것이 가장 방해가 적다는 판단
+   ⛔ 값을 바꾸려면 원장님 확인을 먼저 받으세요. 회귀 112 가 이 값을 통째로 잠급니다.
+   ⛔ LOOK_COMBOS(추천 조합)는 **색과 테두리만** 바꿉니다 — 굵기·길이·투명도·잡은 선은
+      원장님 값이 그대로 남아야 합니다 (조합을 돌려도 손에 익은 두께가 안 변하도록). */
 const LOOK_DEF = { inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
-                   edge: 0, edgeC: "auto", weight: 1, hlen: 0.19, alpha: 1,
-                   /* 잡은 선(움직일 때)은 기본 선과 **완전 분리** (원장님 지시 2026-08-23).
-                      dragEdge: "none" 이면 테두리 없이 심만 그린다 */
-                   dragCore: "#14161B", dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
+                   edge: 0, edgeC: "auto", weight: 0.8, hlen: 0.14, alpha: 0.75,
+                   dragCore: "#14161B", dragEdge: "none", dragW: 0.8, dragOp: 0.95 };
 /* 맨 위 3개 조합 — 첫 칸은 늘 「현재 세트」(지금 값), 나머지 둘은 상황별 추천 */
 const LOOK_COMBOS = [
   { id: "now",    name: "set_c_now",    desc: "set_c_now_d" },
+  /* ⚠️ v1.60.0 — 추천 조합은 **색과 테두리만** 손댑니다. 굵기·가로 길이·투명도·잡은 선은
+     원장님이 확정한 값(LOOK_DEF)이 그대로 남습니다 — 조합을 돌려도 손에 익은 두께가 안 변하게. */
   { id: "bright", name: "set_c_bright", desc: "set_c_bright_d",
-    v: { inner: "#14161B", arch: "#2E8BFF", tail: "#A855F7", edge: 70, edgeC: "light", weight: 1, hlen: 0.19, alpha: 1 } },
+    v: { inner: "#14161B", arch: "#2E8BFF", tail: "#A855F7", edge: 70, edgeC: "light" } },
   { id: "dark",   name: "set_c_dark",   desc: "set_c_dark_d",
-    v: { inner: "#5EEAD4", arch: "#38BDF8", tail: "#FF4D94", edge: 70, edgeC: "dark", weight: 1, hlen: 0.19, alpha: 1 } },
+    v: { inner: "#5EEAD4", arch: "#38BDF8", tail: "#FF4D94", edge: 70, edgeC: "dark" } },
 ];
 function loadLook() {
   try { return { ...LOOK_DEF, ...(JSON.parse(localStorage.getItem(LOOK_KEY)) || {}) }; }

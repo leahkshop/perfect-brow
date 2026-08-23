@@ -2076,6 +2076,11 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1000);
     const g101 = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB;
+      /* ⚠️ v1.60.0 — 원장님 확정 기본값은 얇게/짧게/75%·잡은선 테두리 없음입니다(회귀 112).
+         이 검사는 **선 그리기 규칙**을 보는 것이므로, 값에 흔들리지 않게 중립값으로 고정합니다. */
+      const NEUTRAL = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1,
+                        dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
+      S.look = { ...NEUTRAL };
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = []; S.selUD = "front"; PBx.render();
       const lineColorOf = (key) => {
         const sp = PBx.H_SPECS.concat(PBx.V_SPECS).find((x) => x.key === key);
@@ -2182,6 +2187,7 @@ console.log("\n[밸런스 판정]");
                  w: +thick.getAttribute("stroke-width") };
       };
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };   /* v1.60.0 중립값 (회귀 112 참고) */
       S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = [];
       S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
       PBx.render();
@@ -2227,6 +2233,11 @@ console.log("\n[밸런스 판정]");
 
     const g103 = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
+      /* ⚠️ v1.60.0 — 원장님 확정 기본값은 얇게/짧게/75%·잡은선 테두리 없음입니다(회귀 112).
+         이 검사는 **선 그리기 규칙**을 보는 것이므로, 값에 흔들리지 않게 중립값으로 고정합니다. */
+      const NEUTRAL = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1,
+                        dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
+      S.look = { ...NEUTRAL };
       /* 강조 여부는 **실제로 그려진 굵기**로 판정한다 — 상태값만 보면 아무 일이 없어도 통과한다 */
       const litKeys = () => {
         const out = [];
@@ -2287,6 +2298,7 @@ console.log("\n[밸런스 판정]");
         return { c: thick.getAttribute("stroke"), op: +(thick.getAttribute("stroke-opacity") || 1) };
       };
       S.g = { ...PBx.DEFAULT_GUIDE }; S.guideOn = false; S.guideCur = null;
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };   /* v1.60.0 중립값 */
       S.multi = false; S.selSet = []; S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
       PBx.render();
       const dimArch = seg("h2"), dimTail = seg("h3"), dimOuter = seg("v4");
@@ -2494,6 +2506,9 @@ console.log("\n[밸런스 판정]");
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, W = S.dim.W;
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      /* v1.60.0 — 기본값이 얇게/75%·잡은선 테두리 없음이라, 이 검사는 중립값으로 고정 (회귀 112) */
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1,
+                 dragCore: "#14161B", dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
       S.guideOn = true; S.guideCur = "v2"; S.sel = "v2"; S.multi = false; S.selSet = [];
       S.dragOn = false;
       const vSegs = () => {
@@ -2573,8 +2588,9 @@ console.log("\n[밸런스 판정]");
         return b ? b.style.getPropertyValue("--dot").trim() : ""; };
       const lenOf = () => { const q = PBx.segPx(PBx.H_SPECS.find((x) => x.key === "front"))[0]; return q[1] - q[0]; };
 
-      /* ① 기본값 · 색상표 7개 · 모두 다른 색 */
-      S.look = { ...PBx.LOOK_DEF }; S.sel = "front"; PBx.render();
+      /* ① 기본값 · 색상표 7개 · 모두 다른 색 (v1.60.0 — 굵기/길이/투명도는 중립값 기준으로 비교) */
+      const NEU = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };
+      S.look = { ...NEU }; S.sel = "front"; PBx.render();
       const pal = PBx.PALETTE.map((x) => x.hex);
       const palOk = pal.length === 7 && new Set(pal).size === 7;
       const base = front()[0], baseRail = railColor(), baseW = base.w, baseLen = lenOf();
@@ -2591,19 +2607,19 @@ console.log("\n[밸런스 판정]");
       const autoLight = PBx.edgeColorFor("#5EEAD4"), autoDark = PBx.edgeColorFor("#14161B");
 
       /* ④ 굵기 · 가로 길이 · 투명도 */
-      S.look = { ...PBx.LOOK_DEF, weight: 1.35 }; PBx.render();
+      S.look = { ...NEU, weight: 1.35 }; PBx.render();
       const thickW = front()[0].w;
-      S.look = { ...PBx.LOOK_DEF, weight: 0.8 }; PBx.render();
+      S.look = { ...NEU, weight: 0.8 }; PBx.render();
       const thinW = front()[0].w;
-      S.look = { ...PBx.LOOK_DEF, hlen: 0.25 }; PBx.render();
+      S.look = { ...NEU, hlen: 0.25 }; PBx.render();
       const longLen = lenOf();
-      S.look = { ...PBx.LOOK_DEF, hlen: 0.14 }; PBx.render();
+      S.look = { ...NEU, hlen: 0.14 }; PBx.render();
       const shortLen = lenOf();
-      S.look = { ...PBx.LOOK_DEF, alpha: 0.6 }; PBx.render();
+      S.look = { ...NEU, alpha: 0.6 }; PBx.render();
       const dimOp = front()[0].o;
 
       /* ⑤ 잡은 선(드래그) — 기본 선과 **완전 분리** (v1.59.0: 심·테두리·굵기·투명도·없음) */
-      S.look = { ...PBx.LOOK_DEF, dragCore: "#FFFFFF", dragEdge: "#2E8BFF" };
+      S.look = { ...NEU, dragCore: "#FFFFFF", dragEdge: "#2E8BFF" };
       S.sel = "front"; S.dragOn = true; PBx.render();
       const grab = segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
       const dragRing = grab[0] && grab[0].c, dragCore = grab[1] && grab[1].c;
@@ -2611,7 +2627,7 @@ console.log("\n[밸런스 판정]");
       S.look.dragEdge = "none"; PBx.render();
       const grabNone = segsAt(S.g.front * H).filter((l) => l.w > 1.2);
       /* 잡은 선 굵기·투명도는 기본 선 weight·alpha 와 무관하게 따로 논다 */
-      S.look = { ...PBx.LOOK_DEF, weight: 0.8, alpha: 1, dragW: 1.35, dragOp: 0.6 }; PBx.render();
+      S.look = { ...NEU, weight: 0.8, alpha: 1, dragEdge: "#2E8BFF", dragW: 1.35, dragOp: 0.6 }; PBx.render();
       const grabBig = segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
       const dragWOk = grabBig[1] && Math.abs(grabBig[1].w - (2.95 * 1.35)) < 0.01;
       const dragOpOk = grabBig[1] && Math.abs(grabBig[1].o - 0.6) < 0.01;
@@ -2738,6 +2754,40 @@ console.log("\n[밸런스 판정]");
     check("111. 설정 시트 — 아이폰 세로 잠금(rot90)에서도 가로로 뜬다",
       r.rot && rotated && r.w < r.h,   /* 회전됐으면 화면상 rect 는 세로가 길다 */
       `rot90=${r.rot} · transform=${r.tf.slice(0, 24)}… · 시트 rect ${r.w}×${r.h}(회전이면 세로>가로)`);
+  }
+
+  /* 112. ⚠️⚠️ v1.60.0 — **원장님이 확정한 기본 선 세팅** (2026-08-23)
+     「지금 내가 앱에 설정한 선을 기본으로 셋팅하고 못 박아줘」
+     원장님이 실제 시술 화면에서 눈으로 맞춘 값입니다. 이 테스트가 그 값을 통째로 잠급니다.
+     ⛔ 값을 바꾸려면 **원장님 확인을 먼저** 받으세요. 이 테스트를 고쳐서 통과시키지 마세요. */
+  {
+    const LOCKED = {
+      inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
+      edge: 0, edgeC: "auto", weight: 0.8, hlen: 0.14, alpha: 0.75,
+      dragCore: "#14161B", dragEdge: "none", dragW: 0.8, dragOp: 0.95,
+    };
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r = await p.evaluate((L) => {
+      const PBx = window.PB, D = PBx.LOOK_DEF;
+      const same = Object.keys(L).every((k) => D[k] === L[k]);
+      const extra = Object.keys(D).filter((k) => !(k in L));
+      /* 저장된 설정이 없는 새 기기 = LOOK_DEF 그대로 시작해야 한다 */
+      localStorage.removeItem("pb_look_v1");
+      const fresh = PBx.loadLook();
+      const freshSame = Object.keys(L).every((k) => fresh[k] === L[k]);
+      /* 추천 조합은 **색·테두리만** 건드린다 — 굵기·길이·투명도·잡은 선은 원장님 값 유지 */
+      const keepsGeom = PBx.LOOK_COMBOS.filter((c) => c.v).every((c) =>
+        ["weight", "hlen", "alpha", "dragCore", "dragEdge", "dragW", "dragOp"].every((k) => !(k in c.v)));
+      return { same, extra, freshSame, keepsGeom, got: D };
+    }, LOCKED);
+    await ctx.close();
+    check("112. 원장님 확정 기본 세팅 — 얇게·짧게·75% · 테두리 없음/자동 · 잡은 선 먹 심·테두리 없음·95%",
+      r.same && r.extra.length === 0 && r.freshSame && r.keepsGeom,
+      `LOOK_DEF 일치=${r.same} · 예상 밖 항목 [${r.extra}] · 새 기기 시작값 일치=${r.freshSame} · 추천조합이 굵기/길이/투명도 안 건드림=${r.keepsGeom} · `
+      + `굵기 ${r.got.weight} 길이 ${r.got.hlen} 투명도 ${r.got.alpha} 테두리 ${r.got.edge}/${r.got.edgeC} · 잡은선 ${r.got.dragCore}/${r.got.dragEdge}/${r.got.dragW}/${r.got.dragOp}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
