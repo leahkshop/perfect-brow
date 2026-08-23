@@ -323,7 +323,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.60.0";
+const APP_VERSION = "v1.61.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1116,6 +1116,22 @@ touch.addEventListener("pointerdown", (e) => {
       : [key];
     gMode = "line";
     gDrag = { key, mirrored, tapKey, wasSel, keys, baseAll: { ...S.g }, base: S.g[key], x0: sp.x, y0: sp.y };
+    /* ═══ v1.61.0 — 꼬리·아우터는 **한 점**이다 (원장님 지시 2026-08-23) ═══════════
+       「꼬리와 아우터는 붙어있는데 … 양방향 사선 동시에 움직일 수 있니?」 → 「둘 다 사선」 선택.
+       꼬리 끝 = (아우터 x, 꼬리 y) 한 점이므로, 꼬리 자든 아우터 세로선이든 잡고 **사선으로
+       끌면 둘이 함께** 움직인다. dy → 꼬리(h3), dx → 아우터(v4 · 대칭은 setLine 이 처리).
+       · 아우터를 오른쪽(거울) 인스턴스로 잡으면 dx 부호가 뒤집힌다 — 기존 mirrored 와 동일 규칙
+       · 꼬리 자를 잡았을 때의 좌/우 판정은 **누른 지점이 센터선(v1)의 어느 쪽인가**로
+       · 한 축만 미세 조정하고 싶으면 아래 조절 바(위아래/좌우)를 쓰면 된다 — 바는 한 축씩
+       · 여러라인 모드에서는 이 규칙을 끈다(dragManyBy 가 이미 각자 축으로 움직임)
+       ⛔ 다른 자(앞머리·아치 등)에 이 규칙을 퍼뜨리지 마세요 — 그 자들은 두께를 재는
+          쌍이라 x 가 세로선에 묶여 있고, 사선이 되면 잰 값이 흐트러집니다. */
+    if (!S.multi && (key === "h3" || key === "v4") && S.g.h3Visible && S.g.v4Visible) {
+      gDrag.tailPair = {
+        h3: S.g.h3, v4: S.g.v4,
+        flip: key === "v4" ? mirrored : sp.x > S.g.v1 * S.dim.W,
+      };
+    }
     render();
     const c0 = posConfig();
     /* 값 HUD 없음 (v1.44.0) — 바 라벨의 숫자로 충분합니다 */
@@ -1153,6 +1169,10 @@ touch.addEventListener("pointermove", (e) => {
     const dxN = (sp.x - gDrag.x0) / W, dyN = (sp.y - gDrag.y0) / H;
     if (S.multi && gDrag.keys.length > 1) {
       dragManyBy(gDrag.keys, gDrag.baseAll, dxN, dyN, gDrag.mirrored ? gDrag.key : null);
+    } else if (gDrag.tailPair) {
+      /* 꼬리·아우터 사선 (v1.61.0) — 한 손짓으로 꼬리 끝 점을 놓는다 */
+      setLine("h3", gDrag.tailPair.h3 + dyN);
+      setLine("v4", gDrag.tailPair.flip ? gDrag.tailPair.v4 - dxN : gDrag.tailPair.v4 + dxN);
     } else {
       dragLineBy(gDrag.key, gDrag.base, dxN, dyN, gDrag.mirrored);
     }

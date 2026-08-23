@@ -2790,6 +2790,72 @@ console.log("\n[밸런스 판정]");
       + `굵기 ${r.got.weight} 길이 ${r.got.hlen} 투명도 ${r.got.alpha} 테두리 ${r.got.edge}/${r.got.edgeC} · 잡은선 ${r.got.dragCore}/${r.got.dragEdge}/${r.got.dragW}/${r.got.dragOp}`);
   }
 
+  /* 113. ⚠️ v1.61.0 — 꼬리·아우터 사선 이동 (원장님 지시 2026-08-23 · 「둘 다 사선」 선택)
+     꼬리 끝 = (아우터 x, 꼬리 y) **한 점**. 꼬리 자든 아우터 세로선이든 잡고 사선으로 끌면
+     dy → 꼬리(h3), dx → 아우터(v4)가 함께 움직인다. 오른쪽(거울)에서 잡으면 dx 부호 반전.
+     ⛔ 다른 자(앞머리·아치)로 퍼뜨리지 말 것 — 두께 쌍이 흐트러진다. 여러라인 모드는 예외 없음. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.g.h3Visible = true; S.g.v4Visible = true;
+      S.multi = false; S.selSet = []; S.locked = true; S.guideOn = false; S.guideCur = null;
+      PBx.render();
+    });
+    const box = await (await p.$("#touch")).boundingBox();
+    const st = await p.evaluate(() => {
+      const S = window.PB.S, W = S.dim.W, H = S.dim.H;
+      return { W, H, h3: S.g.h3, v4: S.g.v4, v1: S.g.v1,
+               tailY: S.g.h3 * H, leftX: S.g.v4 * W, rightX: (2 * S.g.v1 - S.g.v4) * W };
+    });
+    const drag = async (x0, y0, dx, dy) => {
+      await p.mouse.move(box.x + x0, box.y + y0);
+      await p.mouse.down();
+      await p.mouse.move(box.x + x0 + dx, box.y + y0 + dy, { steps: 10 });
+      await p.mouse.up();
+      await p.waitForTimeout(100);
+    };
+    const g = () => p.evaluate(() => ({ h3: window.PB.S.g.h3, v4: window.PB.S.g.v4, front: window.PB.S.g.front }));
+    /* ① 왼쪽 꼬리 자를 사선으로 → h3 아래로 + v4 왼쪽으로(코 쪽) */
+    const b1 = await g();
+    await drag(st.leftX + 20, st.tailY, -24, 30);
+    const a1 = await g();
+    const d1y = (a1.h3 - b1.h3) * st.H, d1x = (a1.v4 - b1.v4) * st.W;
+    /* ② 오른쪽(거울) 아우터 세로선을 사선으로 → dx 부호 반전 · h3 도 함께 */
+    await p.evaluate(() => { const S = window.PB.S; S.g = { ...window.PB.DEFAULT_GUIDE };
+      S.g.h3Visible = true; S.g.v4Visible = true; window.PB.render(); });
+    const st2 = await p.evaluate(() => { const S = window.PB.S;
+      return { rightX: (2 * S.g.v1 - S.g.v4) * S.dim.W, midY: (S.g.h3 + 0.10) * S.dim.H }; });
+    const b2 = await g();
+    await drag(st2.rightX, st2.midY, 26, -18);
+    const a2 = await g();
+    const d2x = (a2.v4 - b2.v4) * st.W, d2y = (a2.h3 - b2.h3) * st.H;
+    /* ③ 다른 자(앞머리)는 사선이 아니다 — 가로 드래그에 x 영향 없음 */
+    await p.evaluate(() => { const S = window.PB.S; S.g = { ...window.PB.DEFAULT_GUIDE }; window.PB.render(); });
+    const st3 = await p.evaluate(() => { const S = window.PB.S;
+      const q = window.PB.segPx(window.PB.H_SPECS.find((x) => x.key === "front"))[0];
+      return { x: (q[0] + q[1]) / 2, y: S.g.front * S.dim.H, v2: S.g.v2 }; });
+    const b3 = await g();
+    await drag(st3.x, st3.y, 30, 22);
+    const a3 = await p.evaluate(() => ({ front: window.PB.S.g.front, v2: window.PB.S.g.v2 }));
+    const frontMoved = Math.abs((a3.front - b3.front) * st.H - 22) < 4;
+    const v2Still = Math.abs(a3.v2 - st3.v2) < 1e-9;
+    await ctx.close();
+    check("113. 꼬리·아우터 사선 — 한 손짓으로 꼬리 끝 점을 놓는다 (거울쪽 부호 반전 · 다른 자는 그대로)",
+      Math.abs(d1y - 30) < 4 && Math.abs(d1x - (-24)) < 4
+        && Math.abs(d2x - (-26)) < 4 && Math.abs(d2y - (-18)) < 4
+        && frontMoved && v2Still,
+      `왼쪽 꼬리자 사선 Δy=${d1y.toFixed(1)}(30) Δx=${d1x.toFixed(1)}(-24) · `
+      + `오른쪽 아우터 사선 Δx=${d2x.toFixed(1)}(-26·반전) Δy=${d2y.toFixed(1)}(-18) · `
+      + `앞머리자는 위아래만=${frontMoved}/${v2Still}`);
+  }
+
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
      「반영이 안 됐다」와 「판독이 실패했다」를 구분할 방법이 이것뿐입니다.
      APP_VERSION 은 릴리스 때 sw.js 의 VERSION 과 함께 올립니다. */
