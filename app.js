@@ -43,6 +43,18 @@ const I18N = {
     editor_preset: "프리셋",
     editor_guide: "가이드",
     editor_preset_save: "현재 설정 저장",
+    /* v1.56.0 설정 시트 */
+    set_title: "설정 — 선 모양", set_badge: "설정", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
+    set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
+    set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
+    set_prev_note: "왼쪽 = 밝은 피부 · 오른쪽 = 어두운 눈썹 위. 두 쪽 다 잘 보이는 조합을 고르세요.",
+    set_none: "없음", set_auto: "자동", set_light: "흰색", set_dark: "먹색",
+    set_thin: "얇게", set_mid: "중간", set_thick: "두껍게",
+    set_short: "짧게", set_long: "길게",
+    set_c_now: "현재 세트", set_c_now_d: "지금 쓰던 색 그대로",
+    set_c_bright: "밝은 사진", set_c_bright_d: "짙은 선 + 흰 테두리",
+    set_c_dark: "어두운 사진", set_c_dark_d: "밝은 선 + 먹 테두리",
+    set_saved: "설정을 저장했습니다",
     editor_load_preset: "프리셋",
     editor_preset_load: "프리셋",
     editor_photo_lock: "사진잠금",
@@ -172,6 +184,17 @@ const I18N = {
     editor_align: "Pupil Align",
     editor_preset: "Presets",
     editor_preset_save: "Save current",
+    set_title: "Settings — Line look", set_badge: "Set", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
+    set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
+    set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
+    set_prev_note: "Left = bright skin · Right = dark brow. Pick a set that reads on both.",
+    set_none: "None", set_auto: "Auto", set_light: "White", set_dark: "Ink",
+    set_thin: "Thin", set_mid: "Medium", set_thick: "Thick",
+    set_short: "Short", set_long: "Long",
+    set_c_now: "Current", set_c_now_d: "What you use now",
+    set_c_bright: "Bright photo", set_c_bright_d: "Dark lines + white outline",
+    set_c_dark: "Dark photo", set_c_dark_d: "Bright lines + ink outline",
+    set_saved: "Settings saved",
     editor_load_preset: "Presets",
     editor_preset_load: "Presets",
     editor_photo_lock: "Lock Photo",
@@ -290,7 +313,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.55.0";
+const APP_VERSION = "v1.56.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -421,6 +444,67 @@ const centerX = () => workRight() / 2;
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
 const R_OUTER = 1.50;     // 눈꼬리(외안각)
 
+/* ═══════════ 2-b. 설정 — 선 모양 (v1.56.0 · 원장님 지시 2026-08-23) ═══════════
+   「각 선마다 사용자가 선호하는 색상 … 색상표와 아래 미리보기 선 … 선의 테두리 유무,
+     있을 때 몇 퍼센트, 테두리 색상도 대비색으로 … 선 굵기 / 가로선 길이 / 투명도 …
+     맨 위에 추천 3개 조합 … 너무 자세하게는 말고 직관적으로 깔끔하게」
+
+   ⚠️ 색상표를 고른 근거 (숫자로 확인함 — 마음대로 바꾸지 마세요)
+   원장님 사진의 피부(밝은 쪽 rgb 215,170,140 / 보통 189,128,100)와 짙은 눈썹(55,42,38)
+   **양쪽 모두에 밝기 대비 2:1 을 넘기는 색은 사실상 없습니다** (흰색 2.10 / 먹 1.07 이 한계).
+   → 그래서 색은 **색상(hue)이 피부의 주황(약 25°)에서 멀리 떨어지도록** 고르고,
+     밝기 대비는 **테두리(대비색 헤일로)** 가 만들도록 역할을 나눴습니다. 이 설정의 설계입니다.
+   먹(#14161B)은 밝은 피부 대비 8.6:1 로 **밝은 사진에서 가장 잘 보이는 색**이라 넣었습니다. */
+const PALETTE = [
+  { hex: "#5EEAD4", ko: "민트", en: "Mint" },     /* 166° */
+  { hex: "#A3E635", ko: "라임", en: "Lime" },     /*  81° */
+  { hex: "#38BDF8", ko: "하늘", en: "Sky" },      /* 199° */
+  { hex: "#2E8BFF", ko: "파랑", en: "Blue" },     /* 215° */
+  { hex: "#A855F7", ko: "보라", en: "Violet" },   /* 280° */
+  { hex: "#FF4D94", ko: "핑크", en: "Pink" },     /* 334° */
+  { hex: "#14161B", ko: "먹",   en: "Ink" },      /* 밝은 피부에서 최고 대비 8.6:1 */
+];
+const LOOK_KEY = "pb_look_v1";
+const LOOK_DEF = { inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
+                   edge: 0, edgeC: "auto", weight: 1, hlen: 0.19, alpha: 1 };
+/* 맨 위 3개 조합 — 첫 칸은 늘 「현재 세트」(지금 값), 나머지 둘은 상황별 추천 */
+const LOOK_COMBOS = [
+  { id: "now",    name: "set_c_now",    desc: "set_c_now_d" },
+  { id: "bright", name: "set_c_bright", desc: "set_c_bright_d",
+    v: { inner: "#14161B", arch: "#2E8BFF", tail: "#A855F7", edge: 70, edgeC: "light", weight: 1, hlen: 0.19, alpha: 1 } },
+  { id: "dark",   name: "set_c_dark",   desc: "set_c_dark_d",
+    v: { inner: "#5EEAD4", arch: "#38BDF8", tail: "#FF4D94", edge: 70, edgeC: "dark", weight: 1, hlen: 0.19, alpha: 1 } },
+];
+function loadLook() {
+  try { return { ...LOOK_DEF, ...(JSON.parse(localStorage.getItem(LOOK_KEY)) || {}) }; }
+  catch (e) { return { ...LOOK_DEF }; }
+}
+function saveLook() { try { localStorage.setItem(LOOK_KEY, JSON.stringify(S.look)); } catch (e) {} }
+/* 선 키 → 색 묶음. 레일 버튼 색과 1:1 로 맞아야 합니다 (BASELINE 1-20) */
+const GROUP_OF = { v2: "inner", front: "inner", frontThickness: "inner",
+                   v6: "arch", h2: "arch", archThickness: "arch",
+                   v4: "tail", h3: "tail" };
+const groupColor = (key) => (S.look && S.look[GROUP_OF[key]]) || null;
+/* 상대 휘도 — 테두리 「자동」이 밝은 선엔 먹, 짙은 선엔 흰색을 고르는 근거 */
+function relLum(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+}
+const EDGE_LIGHT = "#FFFFFF", EDGE_DARK = "#0A0D14";
+function edgeColorFor(hex) {
+  if (S.look.edgeC === "light") return EDGE_LIGHT;
+  if (S.look.edgeC === "dark") return EDGE_DARK;
+  return relLum(hex) > 0.32 ? EDGE_DARK : EDGE_LIGHT;   /* 자동 = 대비색 */
+}
+/* 고유색 선 하나 — 테두리(있으면) 먼저, 그 위에 색. 깜빡임 클래스는 둘 다에 붙인다 */
+function drawLive(frag, x1, y1, x2, y2, hex, w, cls) {
+  const op = S.look.alpha;
+  if (S.look.edge > 0) drawLine(frag, x1, y1, x2, y2, edgeColorFor(hex),
+                                w * (1 + 2 * S.look.edge / 100), op * 0.9, cls);
+  drawLine(frag, x1, y1, x2, y2, hex, w, op, cls);
+}
+
 /* ═══════════ 3. state ═══════════ */
 const S = {
   g: { ...DEFAULT_GUIDE },
@@ -445,6 +529,8 @@ const S = {
   locked: false,
   guideOn: false, guideCur: null,   // 가이드 플로우 (v1.42.0)
   dragOn: false,         // 선을 잡고 움직이는 중 (v1.55.0 — 짙은 회색 + 살구색 테두리)
+  look: loadLook(),      // 선 모양 설정 (v1.56.0) — 색·테두리·굵기·길이·투명도
+  lookSnap: null,        // 설정 시트를 연 순간의 값 (「현재 세트」 카드)
   dim: { W: 0, H: 0 },
   iw: 0, ih: 0, s0: 1, fitW: 0, fitH: 0,
   hiddenSnapshot: null,
@@ -577,7 +663,8 @@ function drawGrab(frag, x1, y1, x2, y2, w) {
   drawLine(frag, x1, y1, x2, y2, APRICOT, w + GRAB_RING, 0.95);
   drawLine(frag, x1, y1, x2, y2, HALF_GREY, w, 1);
 }
-const SEG_HALF = 0.19;           // 자 반폭 (눈썹 폭 기준)
+const SEG_HALF = 0.19;           // 자 반폭 기본값 — 실제 값은 S.look.hlen (v1.56.0 설정)
+const segHalf = () => (S.look && S.look.hlen) || SEG_HALF;
 const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
 const VPAD = 0.045;              // 세로선(긴 것)이 위아래로 더 나가는 여유
 const VPAD_TIGHT = 0.025;        // 짧은 세로선의 여유 — 눈까지 내려오지 않는다 (v1.33.0)
@@ -591,7 +678,7 @@ function segPx(sp) {
     return [[cl0(lo), cl0(2 * g.v1 - lo)]];
   }
   const aL = g[sp.anchor], aR = 2 * g.v1 - aL;
-  const half = SEG_HALF * (sp.halfK || 1) * (Math.abs(g.v2 - g.v4) || 0.12);
+  const half = segHalf() * (sp.halfK || 1) * (Math.abs(g.v2 - g.v4) || 0.12);
   return [[cl0(aL - half), cl0(aL + half)], [cl0(aR - half), cl0(aR + half)]];
 }
 
@@ -616,7 +703,8 @@ function renderGuides() {
      (안 그러면 아우터·아치선처럼 플로우 밖 선을 골라도 아무 표시가 없다 — 회귀 51).
      플로우 진행 중엔 움직인 선이 곧 선택이라 실제로는 하나만 켜진 것처럼 보인다. */
   const emph = (sp) => (S.guideOn && S.guideCur === sp.key) || isSelected(sp.key);
-  const liveColor = (sp) => sp.color;
+  /* v1.56.0 — 고유색은 **설정에서 고른 묶음 색**이 먼저. 설정에 없는 선(눈·센터)만 스펙 색 */
+  const liveColor = (sp) => groupColor(sp.key) || sp.color;
   /* ⚠️ v1.48.0 — 연한 상태를 **알파로 만들지 않는다** (원장님 지시 2026-08-22).
      알파로 흐리게 하면 그 색이 피부와 섞여 고른 색과 전혀 다른 탁한 색이 화면에 나온다
      (딥 틸 0.45 → #617F6A). `dimColor` 가 있는 스펙은 **그 색을 불투명하게 그대로** 그린다.
@@ -689,8 +777,8 @@ function renderGuides() {
         }
         /* ⚠️ v1.55.0 — 세 상태 (위 상수 주석 참고). 자를 색/회색으로 쪼개지 않는다 */
         if (bad) { drawLine(frag, xa, y, xb, y, BAL_RED, sp.w + 2.2, 1); return; }
-        if (sel && S.dragOn) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
-        if (sel) { drawLine(frag, xa, y, xb, y, liveColor(sp), sp.w + 1.8, 1, "blink"); return; }
+        if (sel && S.dragOn) { drawGrab(frag, xa, y, xb, y, (sp.w + 1.8) * S.look.weight); return; }
+        if (sel) { drawLive(frag, xa, y, xb, y, liveColor(sp), (sp.w + 1.8) * S.look.weight, "blink"); return; }
         drawLine(frag, xa, y, xb, y, HALF_GREY, HALF_W, HALF_OP);
       });
     }
@@ -712,8 +800,9 @@ function renderGuides() {
       const lc = lineColor(sp, sel);
       const draw = (x) => {
         if (full) {
-          if (sel && S.dragOn) { drawGrab(frag, x, 0, x, H, w); return; }
-          drawLine(frag, x, 0, x, H, lc, w, op, sel ? "blink" : null); return;
+          if (sel && S.dragOn) { drawGrab(frag, x, 0, x, H, w * S.look.weight); return; }
+          if (sel) { drawLive(frag, x, 0, x, H, lc, w * S.look.weight, "blink"); return; }
+          drawLine(frag, x, 0, x, H, lc, w, op); return;
         }
         frag.appendChild(mk("line", {                       // 라벨 ↔ 선 연결 (헤일로 없음)
           x1: x, y1: 0, x2: x, y2: H, stroke: lc,
@@ -721,8 +810,8 @@ function renderGuides() {
         }));
         /* v1.52.0 — 잡은(강조) 세로선은 **전체 길이 고유색**: "세로줄 = 좌우 이동" 신호.
            조용할 땐 **전체가 회색 한 줄** — 색과 토막이 없어 자의 색 토막과 헷갈리지 않는다 */
-        if (sel && S.dragOn) { drawGrab(frag, x, by0, x, by1, w); return; }
-        if (sel) { drawLine(frag, x, by0, x, by1, lc, w, op, "blink"); return; }
+        if (sel && S.dragOn) { drawGrab(frag, x, by0, x, by1, w * S.look.weight); return; }
+        if (sel) { drawLive(frag, x, by0, x, by1, lc, w * S.look.weight, "blink"); return; }
         drawLine(frag, x, by0, x, by1, HALF_GREY, VGREY_W, VGREY_OP);
       };
       const x = g[sp.key] * W;
@@ -1269,7 +1358,8 @@ function updateButtons() {
     const vis = S.g[b.dataset.vis];
     /* v1.20.0 — 버튼 전체를 선 색으로 칠하지 않는다 (가이드 선과 색이 싸움).
        왼쪽 색 띠 = 어느 선인지 / 채움 = 선택됨. BASELINE 1-13 참고. */
-    b.style.setProperty("--dot", spec.dot || spec.color);
+    /* v1.56.0 — 설정에서 색을 바꾸면 **레일 띠도 같이 바뀐다** (선 색 = 띠 색 · BASELINE 1-20) */
+    b.style.setProperty("--dot", groupColor(spec.key) || spec.dot || spec.color);
     b.classList.toggle("hidden-line", !vis);
     b.classList.toggle("sel", isSelected(spec.key));
   });
@@ -2346,6 +2436,102 @@ function loadPhoto(file) {
 /* ═══════════ 모달 ═══════════ */
 const openMask = (id) => $(id).classList.add("on");
 const closeMask = (id) => $(id).classList.remove("on");
+/* ═══════════ 설정 시트 (v1.56.0) ═══════════
+   값은 **누르는 즉시** 적용되고 저장됩니다 — 확인 버튼을 찾을 필요가 없게 (시술 중 손을 아끼려고).
+   ⛔ 미리보기(`lookPreview`)는 실제 `S.look` 을 그대로 쓰는 그림입니다. 별도 색을 하드코딩하면
+      「선택 시 어떤 색상이 화면에 보일지」가 거짓말이 됩니다. */
+const SKIN_PREV = "#D7AA8C";      /* 미리보기 왼쪽 = 밝은 피부 */
+const BROW_PREV = "#37281F";      /* 미리보기 오른쪽 = 짙은 눈썹/어두운 화면 */
+
+function segBtn(label, on, fn) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = label; if (on) b.classList.add("on");
+  b.onclick = fn; return b;
+}
+function swatchBtn(hex, on, fn) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "sw" + (on ? " on" : "");
+  b.style.background = hex; b.title = hex; b.onclick = fn; return b;
+}
+function lookSet(patch) {
+  Object.assign(S.look, patch);
+  saveLook(); buildLookUI(); render(); updateButtons();
+}
+function buildLookUI() {
+  const L = S.look, nm = (p) => (LANG === "ko" ? p.ko : p.en);
+  /* ① 조합 3개 — 첫 칸 「현재 세트」는 지금 값 그대로 */
+  const combo = $("lookCombo"); combo.innerHTML = "";
+  /* 「현재 세트」는 **시트를 연 순간의 값**을 담아 둔다 — 추천을 눌러 보고 되돌아올 자리 */
+  const matches = (v) => ["inner", "arch", "tail"].every((k) => v[k] === L[k])
+                      && v.edge === L.edge && v.edgeC === L.edgeC;
+  const hit = LOOK_COMBOS.some((c) => c.v && matches(c.v));
+  LOOK_COMBOS.forEach((c) => {
+    const v = c.v || S.lookSnap || L;
+    const b = document.createElement("button");
+    b.type = "button";
+    if (c.v ? matches(c.v) : (!hit && matches(v))) b.classList.add("on");
+    b.innerHTML = `<b>${t(c.name)}</b><i>${t(c.desc)}</i><em>`
+      + ["inner", "arch", "tail"].map((k) => `<s style="background:${v[k]}"></s>`).join("") + "</em>";
+    b.onclick = () => lookSet({ ...v });
+    combo.appendChild(b);
+  });
+  /* ② 묶음별 색상표 */
+  [["swInner", "inner"], ["swArch", "arch"], ["swTail", "tail"]].forEach(([id, key]) => {
+    const box = $(id); box.innerHTML = "";
+    PALETTE.forEach((p) => box.appendChild(swatchBtn(p.hex, L[key] === p.hex, () => lookSet({ [key]: p.hex }))));
+  });
+  /* ③ 테두리 · 굵기 · 길이 */
+  const edge = $("segEdge"); edge.innerHTML = "";
+  [[0, t("set_none")], [40, "40%"], [70, "70%"], [100, "100%"]]
+    .forEach(([v, lb]) => edge.appendChild(segBtn(lb, L.edge === v, () => lookSet({ edge: v }))));
+  const edgeC = $("segEdgeC"); edgeC.innerHTML = "";
+  [["auto", t("set_auto")], ["light", t("set_light")], ["dark", t("set_dark")]]
+    .forEach(([v, lb]) => edgeC.appendChild(segBtn(lb, L.edgeC === v, () => lookSet({ edgeC: v }))));
+  const sw = $("segW"); sw.innerHTML = "";
+  [[0.8, t("set_thin")], [1, t("set_mid")], [1.35, t("set_thick")]]
+    .forEach(([v, lb]) => sw.appendChild(segBtn(lb, L.weight === v, () => lookSet({ weight: v }))));
+  const sl = $("segLen"); sl.innerHTML = "";
+  [[0.14, t("set_short")], [0.19, t("set_mid")], [0.25, t("set_long")]]
+    .forEach(([v, lb]) => sl.appendChild(segBtn(lb, L.hlen === v, () => lookSet({ hlen: v }))));
+  $("rngAlpha").value = Math.round(L.alpha * 100);
+  $("alphaVal").textContent = Math.round(L.alpha * 100) + "%";
+  lookPreview();
+}
+/* 미리보기 — 왼쪽 밝은 피부 / 오른쪽 어두운 눈썹. 세 묶음 색을 실제 규칙 그대로 그린다 */
+function lookPreview() {
+  const svgP = $("lookPrev"); if (!svgP) return;
+  svgP.innerHTML = "";
+  const f = document.createDocumentFragment();
+  f.appendChild(mk("rect", { x: 0, y: 0, width: 360, height: 96, fill: SKIN_PREV }));
+  f.appendChild(mk("rect", { x: 360, y: 0, width: 360, height: 96, fill: BROW_PREV }));
+  const L = S.look;
+  [["inner", 24], ["arch", 50], ["tail", 76]].forEach(([k, y]) => {
+    const hex = L[k], w = 3.0 * L.weight;
+    const put = (x1, x2) => {
+      if (L.edge > 0) f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: edgeColorFor(hex),
+        "stroke-width": w * (1 + 2 * L.edge / 100), "stroke-opacity": L.alpha * 0.9, "stroke-linecap": "round" }));
+      f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: hex,
+        "stroke-width": w, "stroke-opacity": L.alpha, "stroke-linecap": "round" }));
+    };
+    const half = 300 * (L.hlen / 0.19) / 2;        /* 길이 설정이 눈에 보이도록 같은 비율로 */
+    put(180 - half, 180 + half);
+    put(540 - half, 540 + half);
+  });
+  svgP.appendChild(f);
+}
+$("btnLook").onclick = () => { S.lookSnap = { ...S.look }; buildLookUI(); $("mLook").classList.add("on"); };
+$("lookAll").onclick = () => lookSet({ arch: S.look.inner, tail: S.look.inner });
+$("lookReset").onclick = () => lookSet({ ...LOOK_DEF });
+$("rngAlpha").addEventListener("input", (e) => {
+  S.look.alpha = +e.target.value / 100;
+  $("alphaVal").textContent = e.target.value + "%";
+  lookPreview(); render();
+});
+$("rngAlpha").addEventListener("change", () => { saveLook(); buildLookUI(); });
+document.querySelectorAll("[data-closesheet]").forEach((b) =>
+  b.addEventListener("click", () => { $(b.dataset.closesheet).classList.remove("on"); toast(t("set_saved")); }));
+$("mLook").addEventListener("click", (e) => { if (e.target.id === "mLook") $("mLook").classList.remove("on"); });
+
 document.querySelectorAll("[data-close]").forEach((b) =>
   b.addEventListener("click", () => closeMask(b.dataset.close)));
 document.querySelectorAll(".mask").forEach((m) =>
@@ -2358,9 +2544,7 @@ function applyI18n() {
   });
   $("langKo").classList.toggle("on", LANG === "ko");
   $("langEn").classList.toggle("on", LANG === "en");
-  /* 편집 화면 한/영 칩 (v1.19.0) — 현재 언어만 색이 켜진다 */
-  document.querySelectorAll("#railLang button").forEach((b) =>
-    b.classList.toggle("on", b.dataset.lang === LANG));
+  /* v1.56.0 — 편집 화면 한/영 칩은 제거됐다(언어는 사진 선택 화면에서 고른다) */
   /* 라인 버튼 이름은 i18n 키로 만들어지므로 언어가 바뀌면 다시 그린다 */
   document.querySelectorAll(".lbtn").forEach((b) => {
     const sp = specOf(b.dataset.key);
@@ -2385,8 +2569,6 @@ function setLang(l) {
 /* ═══════════ 이벤트 배선 ═══════════ */
 $("langKo").onclick = () => setLang("ko");
 $("langEn").onclick = () => setLang("en");
-document.querySelectorAll("#railLang button").forEach((b) =>
-  b.addEventListener("click", () => { setLang(b.dataset.lang); render(); }));
 
 /* ═══ 사진 선택 중에는 화면을 어둡게 (v1.27.0) ═══════════════
    iOS 사진 선택 시트는 웹페이지 **바깥에서 OS 가 그리므로** 앱이 회전시킬 수 없다.
@@ -2904,4 +3086,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
-  applyLayout, openPicker, endPicking };
+  applyLayout, openPicker, endPicking, setLang,
+  PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum };

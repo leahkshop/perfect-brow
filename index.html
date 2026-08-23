@@ -424,10 +424,54 @@ body:not(.land) #railExtra{display:none}
 /* 한/영 (v1.19.0) — 왼쪽 버튼들 맨 위. 현재 언어만 색이 켜진다 */
 #railLang{position:relative;display:flex;gap:4px;width:100%;justify-content:center;padding-bottom:11px}
 #railLang::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--hair)}
-#railLang button{width:24px;height:24px;border-radius:8px;font-size:11px;font-weight:700;
+#railLang button{width:52px;height:24px;border-radius:8px;font-size:12px;font-weight:700;
   background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.45);
   display:flex;align-items:center;justify-content:center;padding:0}
 #railLang button.on{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.30);color:#fff}
+#btnLook{gap:4px;color:rgba(255,255,255,.78);background:rgba(255,255,255,.07);
+  border-color:rgba(255,255,255,.16)}
+#btnLook span{font-size:12px;line-height:1}
+#btnLook b{font-size:10px;font-weight:800}
+
+/* ═══ v1.56.0 설정(선 모양) 시트 — 원장님 지시 2026-08-23 ═══════════════════
+   「직관적인 설정 시스템으로 깔끔하지만 사용자가 상황에 맞게 변경할 수 있게」
+   가로 전용이라 **한 화면에 다 보이되, 넘치면 세로 스크롤**. 값은 누르는 즉시 반영됩니다. */
+.sheet{position:fixed;inset:0;display:none;z-index:60;background:rgba(4,6,10,.72);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:10px}
+.sheet.on{display:flex}
+.sheet-in{width:min(820px,97vw);max-height:96vh;overflow:auto;background:var(--surface);
+  border:1px solid var(--hair);border-radius:14px;padding:9px 11px;color:var(--fg);
+  box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sheet-hd h3{margin:0;font-size:13px;font-weight:800}
+.sheet-x{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.06);
+  border:1px solid var(--hair);color:var(--fg);font-size:13px}
+/* 가로 화면(390px 높이)에 한 화면으로 들어가야 하므로 아래쪽은 **2단**으로 나눈다 */
+.setcols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.setrow{display:flex;align-items:center;gap:5px;margin:4px 0;flex-wrap:nowrap}
+.setrow>.lb{width:56px;flex:none;font-size:10px;font-weight:700;color:var(--faint)}
+.seg{display:flex;gap:3px}
+.seg button{height:24px;padding:0 8px;border-radius:8px;font-size:10px;font-weight:700;
+  background:rgba(255,255,255,.05);border:1px solid var(--hair);color:rgba(255,255,255,.62)}
+.seg button.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);box-shadow:0 0 12px var(--glow)}
+.pal{display:flex;gap:5px}
+.pal button.sw{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.18);flex:none;padding:0}
+.pal button.sw.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35),0 0 10px var(--glow)}
+.setsep{height:1px;background:var(--hair);margin:5px 0}
+#lookPrev{width:100%;height:58px;border-radius:10px;display:block;background:#000}
+.setnote{font-size:9px;color:var(--faint);line-height:1.4;margin:3px 0 0}
+.combo{display:flex;gap:5px}
+.combo button{flex:1;min-height:36px;border-radius:10px;padding:5px 7px;text-align:left;
+  background:rgba(255,255,255,.05);border:1px solid var(--hair);color:var(--fg)}
+.combo button.on{border-color:var(--a1);box-shadow:0 0 14px var(--glow);background:rgba(255,255,255,.10)}
+.combo b{display:block;font-size:10.5px;font-weight:800}
+.combo i{display:block;font-style:normal;font-size:8.5px;color:var(--faint);margin-top:1px}
+.combo em{display:inline-flex;gap:3px;margin-top:3px}
+.combo em s{width:10px;height:10px;border-radius:50%;display:block;text-decoration:none}
+#lookAll{height:24px;padding:0 8px;border-radius:8px;font-size:10px;font-weight:700;
+  background:rgba(255,255,255,.05);border:1px solid var(--hair);color:rgba(255,255,255,.72)}
+.sheet .modal-row button{height:32px;font-size:12px}
+input[type=range].slim{flex:1;min-width:90px;accent-color:var(--a1)}
 body:not(.land) #railLang{display:none}
 
 /* Modal */
@@ -489,7 +533,7 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor #railExtra{padding-top:5px;gap:2px}
   body.land.compact #editor #railExtra .chip{padding:4px 3px;font-size:8px}
   body.land.compact #editor #railLang{gap:3px}
-  body.land.compact #editor #railLang button{width:26px;height:22px;font-size:9px}
+  body.land.compact #editor #railLang button{width:52px;height:22px;font-size:11px}
   body.land.compact #editor #railExtra .chip{width:56px;padding:4px 3px;font-size:8px}
   body.land.compact #editor .chip{padding:5px 8px;font-size:10px}
   body.land.compact #editor .posctl{padding:4px;gap:5px}
@@ -649,10 +693,10 @@ body:not(.land) #railLang{display:none}
   </div>
 
   <aside id="lineRail">
-    <!-- 한/영 (v1.19.0) — 왼쪽 버튼들 맨 위. 다른 언어를 추가할 때도 이 줄에 칩을 더합니다 -->
+    <!-- v1.56.0 — 한/영 칩 제거(언어는 사진 선택 화면에 있음), 그 자리에 **설정** 배지
+         (원장님 지시 2026-08-23: 「눈썹 위에 한/영 버튼 제거 후 그자리에 설정 배지 하나 추가」) -->
     <div id="railLang">
-      <button id="langKoR" data-lang="ko">한</button>
-      <button id="langEnR" data-lang="en">영</button>
+      <button id="btnLook" title="설정"><span>⚙</span><b data-i18n="set_badge">설정</b></button>
     </div>
     <div id="railExtra">
       <button class="chip" id="btnPivot" data-i18n="editor_inner_angle">V Center Pivot</button>
@@ -660,6 +704,57 @@ body:not(.land) #railLang{display:none}
     </div>
   </aside>
 </section>
+
+<!-- ═══════════ 설정(선 모양) 시트 · v1.56.0 ═══════════ -->
+<div class="sheet" id="mLook">
+  <div class="sheet-in">
+    <div class="sheet-hd">
+      <h3 data-i18n="set_title">설정 — 선 모양</h3>
+      <button class="sheet-x" data-closesheet="mLook">✕</button>
+    </div>
+
+    <!-- ① 조합 3개: 현재 세트 + 추천 2 (원장님 지시: 「맨 위에 추천 3개 조합」) -->
+    <div class="combo" id="lookCombo"></div>
+
+    <div class="setsep"></div>
+    <div class="setcols">
+      <!-- ② 왼쪽 — 미리보기 + 묶음별 색 -->
+      <div>
+        <svg id="lookPrev" viewBox="0 0 720 96" preserveAspectRatio="none"></svg>
+        <p class="setnote" data-i18n="set_prev_note">왼쪽 = 밝은 피부 · 오른쪽 = 어두운 눈썹 위. 두 쪽 다 잘 보이는 조합을 고르세요.</p>
+      </div>
+      <!-- ③ 오른쪽 — 색상표 -->
+      <div>
+        <div class="setrow"><span class="lb" data-i18n="set_inner">이너 묶음</span><span class="pal" id="swInner"></span></div>
+        <div class="setrow"><span class="lb" data-i18n="set_arch">아치 묶음</span><span class="pal" id="swArch"></span></div>
+        <div class="setrow"><span class="lb" data-i18n="set_tail">꼬리 묶음</span><span class="pal" id="swTail"></span></div>
+        <div class="setrow"><span class="lb"></span><button id="lookAll" data-i18n="set_all">모두 이 색</button></div>
+      </div>
+    </div>
+
+    <!-- ④ 테두리 · 굵기 · 길이 · 투명도 -->
+    <div class="setsep"></div>
+    <div class="setcols">
+      <div>
+        <div class="setrow"><span class="lb" data-i18n="set_edge">테두리</span><span class="seg" id="segEdge"></span></div>
+        <div class="setrow"><span class="lb"></span><span class="seg" id="segEdgeC"></span></div>
+      </div>
+      <div>
+        <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span><span class="seg" id="segW"></span>
+          <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_hlen">가로 길이</span><span class="seg" id="segLen"></span></div>
+        <div class="setrow"><span class="lb" data-i18n="set_alpha">투명도</span>
+          <input type="range" class="slim" id="rngAlpha" min="50" max="100" step="5" value="100">
+          <span id="alphaVal" style="font-size:10px;font-weight:700;width:34px">100%</span></div>
+      </div>
+    </div>
+
+    <div class="setsep"></div>
+    <div class="modal-row">
+      <button id="lookReset" data-i18n="set_reset">기본으로</button>
+      <button class="pri" data-closesheet="mLook" data-i18n="set_done">완료</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════ MODALS ═══════════ -->
 <div class="mask" id="mSave">

@@ -893,22 +893,25 @@ console.log("[세로 모드 · 기능]");
     S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; window.PB.render();
   });
 
-  // 60. 한/영 — 왼쪽 라인 버튼 이름이 언어를 따라간다
+  /* 60. 한/영 — 라인 버튼 이름이 언어를 따라간다.
+     ⚠️ v1.56.0 — 편집 화면의 한/영 칩은 **제거**됐다 (언어는 사진 선택 화면에서 고른다.
+        원장님 지시 2026-08-23: 「언어선택은 사진선택 시 있으니 눈썹 위에 한/영 버튼 제거」).
+        그 자리에는 **설정 배지 하나**만 있어야 한다 — 아래에서 함께 확인한다. */
   const lang = await p.evaluate(() => {
     const btn = (k) => document.querySelector(`.lbtn[data-key="${k}"]`).textContent.trim();
-    const on = (id) => document.getElementById(id).classList.contains("on");
-    document.getElementById("langKoR").click();
-    const ko = { eye: btn("h1"), center: btn("v1"), pivot: document.getElementById("btnPivot").textContent.trim(), koOn: on("langKoR"), enOn: on("langEnR") };
-    document.getElementById("langEnR").click();
-    const en = { eye: btn("h1"), center: btn("v1"), koOn: on("langKoR"), enOn: on("langEnR") };
-    document.getElementById("langKoR").click();
-    return { ko, en };
+    window.PB.setLang("ko");
+    const ko = { eye: btn("h1"), center: btn("v1"), pivot: document.getElementById("btnPivot").textContent.trim() };
+    window.PB.setLang("en");
+    const en = { eye: btn("h1"), center: btn("v1") };
+    window.PB.setLang("ko");
+    const rail = [...document.querySelectorAll("#railLang button")].map((b) => b.id);
+    return { ko, en, rail, homeLang: !!document.getElementById("langKo") };
   });
-  check("60. 한/영 전환 — 라인 버튼 이름 · 현재 언어만 색 켜짐",
+  check("60. 한/영 전환 — 라인 버튼 이름 · 편집 화면 칩은 제거되고 설정 배지만 남음",
     lang.ko.eye === "눈" && lang.ko.center === "센터" && lang.ko.pivot === "V 센터 피봇"
-      && lang.ko.koOn && !lang.ko.enOn
-      && lang.en.eye === "Eye" && lang.en.center === "Center" && lang.en.enOn && !lang.en.koOn,
-    `한=[${lang.ko.eye}/${lang.ko.center}/${lang.ko.pivot}] 영=[${lang.en.eye}/${lang.en.center}]`);
+      && lang.en.eye === "Eye" && lang.en.center === "Center"
+      && lang.rail.length === 1 && lang.rail[0] === "btnLook" && lang.homeLang,
+    `한=[${lang.ko.eye}/${lang.ko.center}/${lang.ko.pivot}] 영=[${lang.en.eye}/${lang.en.center}] · 레일=[${lang.rail}] · 홈 언어선택=${lang.homeLang}`);
 
   // 61. 기본값 — 눈 기준선 0.60 · V 피봇 위 10% · V 앵글 아래 45°
   const defs = await p.evaluate(() => {
@@ -2538,6 +2541,106 @@ console.log("\n[밸런스 판정]");
       + `애니 ${r.animName}/${r.animDur}/${r.animIter} · 밝은쪽=1 ${brightEnds} · 조금만 투명 ${dipsPartly} · `
       + `잡음 테두리 ${r.ring && r.ring.c} w${r.ring && r.ring.w} / 심 ${r.core && r.core.c} w${r.core && r.core.w} · `
       + `잡는 동안 깜빡임 정지 ${!r.blinkOnGrab} · 저장본 선명 ${exportClean} · JS타이머 없음 ${noTimer}`);
+  }
+
+  /* 109. ⚠️ v1.56.0 설정 — 선 모양 (원장님 지시 2026-08-23)
+     「각 선마다 선호 색상 … 색상표와 미리보기 … 테두리 유무/퍼센트/색(대비색) …
+       선 굵기 · 가로선 길이 · 투명도 … 맨 위에 추천 3개 조합 … 하나 색 전체 적용」
+     ⚠️ 색상표 7개는 **밝은 피부·짙은 눈썹 양쪽에 밝기 대비 2:1 을 넘는 색이 없다**는
+        측정 결과 위에 세워졌습니다: 색은 **피부 주황(25°)에서 먼 색상(hue)** 으로 고르고,
+        밝기 대비는 **테두리(대비색)** 가 만듭니다. 이 역할 분담을 깨지 마세요.
+     ⛔ 설정 값을 바꿔도 **선 색 = 레일 띠 색**은 계속 맞아야 합니다 (BASELINE 1-20). */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = [];
+      const segsAt = (y) => [...document.getElementById("guides").querySelectorAll("line")]
+        .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+                       y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+                       c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+                       o: +(l.getAttribute("stroke-opacity") || 1) }))
+        .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
+                    && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3 && Math.max(l.x1, l.x2) < S.g.v1 * W);
+      const front = () => segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
+      const railColor = () => { const b = document.querySelector('.lbtn[data-key="front"]');
+        return b ? b.style.getPropertyValue("--dot").trim() : ""; };
+      const lenOf = () => { const q = PBx.segPx(PBx.H_SPECS.find((x) => x.key === "front"))[0]; return q[1] - q[0]; };
+
+      /* ① 기본값 · 색상표 7개 · 모두 다른 색 */
+      S.look = { ...PBx.LOOK_DEF }; S.sel = "front"; PBx.render();
+      const pal = PBx.PALETTE.map((x) => x.hex);
+      const palOk = pal.length === 7 && new Set(pal).size === 7;
+      const base = front()[0], baseRail = railColor(), baseW = base.w, baseLen = lenOf();
+
+      /* ② 색을 바꾸면 선과 레일 띠가 함께 바뀐다 */
+      S.look.inner = "#FF4D94"; PBx.render();
+      const changed = front()[0], changedRail = railColor();
+
+      /* ③ 테두리 — 대비색이 한 겹 더, 색 선보다 굵게. 자동은 밝은 색엔 먹 / 짙은 색엔 흰색 */
+      S.look.inner = "#5EEAD4"; S.look.edge = 70; S.look.edgeC = "auto"; PBx.render();
+      const eLight = front();                       /* 민트(밝음) → 먹 테두리 */
+      S.look.inner = "#14161B"; PBx.render();
+      const eDark = front();                        /* 먹(짙음) → 흰 테두리 */
+      const autoLight = PBx.edgeColorFor("#5EEAD4"), autoDark = PBx.edgeColorFor("#14161B");
+
+      /* ④ 굵기 · 가로 길이 · 투명도 */
+      S.look = { ...PBx.LOOK_DEF, weight: 1.35 }; PBx.render();
+      const thickW = front()[0].w;
+      S.look = { ...PBx.LOOK_DEF, weight: 0.8 }; PBx.render();
+      const thinW = front()[0].w;
+      S.look = { ...PBx.LOOK_DEF, hlen: 0.25 }; PBx.render();
+      const longLen = lenOf();
+      S.look = { ...PBx.LOOK_DEF, hlen: 0.14 }; PBx.render();
+      const shortLen = lenOf();
+      S.look = { ...PBx.LOOK_DEF, alpha: 0.6 }; PBx.render();
+      const dimOp = front()[0].o;
+
+      /* ⑤ 조합 3개 · 「모두 이 색」 · 저장 */
+      S.look = { ...PBx.LOOK_DEF }; PBx.buildLookUI();
+      const comboN = document.querySelectorAll("#lookCombo button").length;
+      const swN = document.querySelectorAll("#swInner button.sw").length;
+      document.querySelectorAll("#lookCombo button")[1].click();      /* 밝은 사진 */
+      const brightApplied = { ...S.look };
+      document.getElementById("lookAll").click();
+      const allSame = S.look.inner === S.look.arch && S.look.arch === S.look.tail;
+      const stored = JSON.parse(localStorage.getItem("pb_look_v1") || "{}");
+      document.getElementById("lookReset").click();
+      const afterReset = { ...S.look };
+      return {
+        palOk, pal,
+        baseC: base.c, baseRail, changedC: changed.c, changedRail,
+        edgeLightPair: eLight.map((l) => l.c), edgeDarkPair: eDark.map((l) => l.c),
+        edgeThicker: eLight.length >= 2 && eLight[0].w > eLight[1].w,
+        autoLight, autoDark,
+        baseW, thickW, thinW, baseLen, longLen, shortLen, dimOp,
+        comboN, swN, brightEdge: brightApplied.edge, brightEdgeC: brightApplied.edgeC,
+        allSame, storedInner: stored.inner, resetOk: afterReset.inner === PBx.LOOK_DEF.inner && afterReset.edge === 0,
+      };
+    });
+    await ctx.close();
+    check("109. 설정 — 색상표 7개 · 선=레일 띠 같이 바뀜 · 테두리 대비색 · 굵기/길이/투명도 · 추천 3조합",
+      r.palOk
+        && r.baseC === "#5EEAD4" && r.baseRail === "#5EEAD4"
+        && r.changedC === "#FF4D94" && r.changedRail === "#FF4D94"
+        && r.edgeThicker && r.edgeLightPair[0] === "#0A0D14" && r.edgeDarkPair[0] === "#FFFFFF"
+        && r.autoLight === "#0A0D14" && r.autoDark === "#FFFFFF"
+        && r.thickW > r.baseW && r.thinW < r.baseW
+        && r.longLen > r.baseLen && r.shortLen < r.baseLen
+        && Math.abs(r.dimOp - 0.6) < 0.01
+        && r.comboN === 3 && r.swN === 7
+        && r.brightEdge === 70 && r.brightEdgeC === "light"
+        && r.allSame && r.storedInner && r.resetOk,
+      `색상표 ${r.pal.length}개 · 선 ${r.baseC}→${r.changedC} / 띠 ${r.baseRail}→${r.changedRail} · `
+      + `테두리 밝은색→${r.edgeLightPair[0]} 짙은색→${r.edgeDarkPair[0]} 더굵음=${r.edgeThicker} · `
+      + `굵기 ${r.thinW}/${r.baseW}/${r.thickW} · 길이 ${Math.round(r.shortLen)}/${Math.round(r.baseLen)}/${Math.round(r.longLen)} · `
+      + `투명도 ${r.dimOp} · 조합 ${r.comboN}개 · 모두같은색 ${r.allSame} · 저장 ${r.storedInner} · 기본으로 ${r.resetOk}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
