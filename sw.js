@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v55";  /* v1.56.0 — 설정(선 모양): 색상표 7 · 테두리 대비색 · 굵기/길이/투명도 · 추천 3조합 */
+const VERSION = "pb-v56";  /* v1.57.0 — 설정에 잡은 선(드래그) 심·테두리 색 · 「이전 설정으로」 복귀 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

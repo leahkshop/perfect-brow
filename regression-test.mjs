@@ -2602,15 +2602,27 @@ console.log("\n[밸런스 판정]");
       S.look = { ...PBx.LOOK_DEF, alpha: 0.6 }; PBx.render();
       const dimOp = front()[0].o;
 
-      /* ⑤ 조합 3개 · 「모두 이 색」 · 저장 */
-      S.look = { ...PBx.LOOK_DEF }; PBx.buildLookUI();
+      /* ⑤ 잡은 선(드래그) 심·테두리 — 두 번째 컨셉 (v1.57.0) */
+      S.look = { ...PBx.LOOK_DEF, dragCore: "#FFFFFF", dragEdge: "#2E8BFF" };
+      S.sel = "front"; S.dragOn = true; PBx.render();
+      const grab = segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
+      const dragRing = grab[0] && grab[0].c, dragCore = grab[1] && grab[1].c;
+      S.dragOn = false;
+
+      /* ⑥ 조합 3개 · 「모두 이 색」 · 저장 · 이전 설정으로 */
+      S.look = { ...PBx.LOOK_DEF }; S.lookSnap = { ...PBx.LOOK_DEF }; PBx.buildLookUI();
       const comboN = document.querySelectorAll("#lookCombo button").length;
       const swN = document.querySelectorAll("#swInner button.sw").length;
+      const dragSwN = document.querySelectorAll("#swDragC button.sw").length;
       document.querySelectorAll("#lookCombo button")[1].click();      /* 밝은 사진 */
       const brightApplied = { ...S.look };
       document.getElementById("lookAll").click();
       const allSame = S.look.inner === S.look.arch && S.look.arch === S.look.tail;
       const stored = JSON.parse(localStorage.getItem("pb_look_v1") || "{}");
+      /* 조작하다 별로면 — 「이전 설정으로」가 시트를 연 순간 값으로 복귀 (원장님 지시) */
+      document.getElementById("lookBack").click();
+      const backOk = S.look.inner === PBx.LOOK_DEF.inner && S.look.edge === PBx.LOOK_DEF.edge;
+      S.look.inner = "#FF4D94";
       document.getElementById("lookReset").click();
       const afterReset = { ...S.look };
       return {
@@ -2620,12 +2632,13 @@ console.log("\n[밸런스 판정]");
         edgeThicker: eLight.length >= 2 && eLight[0].w > eLight[1].w,
         autoLight, autoDark,
         baseW, thickW, thinW, baseLen, longLen, shortLen, dimOp,
-        comboN, swN, brightEdge: brightApplied.edge, brightEdgeC: brightApplied.edgeC,
+        comboN, swN, dragSwN, dragRing, dragCore, backOk,
+        brightEdge: brightApplied.edge, brightEdgeC: brightApplied.edgeC,
         allSame, storedInner: stored.inner, resetOk: afterReset.inner === PBx.LOOK_DEF.inner && afterReset.edge === 0,
       };
     });
     await ctx.close();
-    check("109. 설정 — 색상표 7개 · 선=레일 띠 같이 바뀜 · 테두리 대비색 · 굵기/길이/투명도 · 추천 3조합",
+    check("109. 설정 — 색상표 · 테두리 대비색 · 굵기/길이/투명도 · 잡은 선 심/테두리 · 이전 설정으로",
       r.palOk
         && r.baseC === "#5EEAD4" && r.baseRail === "#5EEAD4"
         && r.changedC === "#FF4D94" && r.changedRail === "#FF4D94"
@@ -2634,13 +2647,15 @@ console.log("\n[밸런스 판정]");
         && r.thickW > r.baseW && r.thinW < r.baseW
         && r.longLen > r.baseLen && r.shortLen < r.baseLen
         && Math.abs(r.dimOp - 0.6) < 0.01
-        && r.comboN === 3 && r.swN === 7
+        && r.comboN === 3 && r.swN === 7 && r.dragSwN === 8
+        && r.dragRing === "#2E8BFF" && r.dragCore === "#FFFFFF" && r.backOk
         && r.brightEdge === 70 && r.brightEdgeC === "light"
         && r.allSame && r.storedInner && r.resetOk,
       `색상표 ${r.pal.length}개 · 선 ${r.baseC}→${r.changedC} / 띠 ${r.baseRail}→${r.changedRail} · `
       + `테두리 밝은색→${r.edgeLightPair[0]} 짙은색→${r.edgeDarkPair[0]} 더굵음=${r.edgeThicker} · `
       + `굵기 ${r.thinW}/${r.baseW}/${r.thickW} · 길이 ${Math.round(r.shortLen)}/${Math.round(r.baseLen)}/${Math.round(r.longLen)} · `
-      + `투명도 ${r.dimOp} · 조합 ${r.comboN}개 · 모두같은색 ${r.allSame} · 저장 ${r.storedInner} · 기본으로 ${r.resetOk}`);
+      + `투명도 ${r.dimOp} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(8색 ${r.dragSwN === 8}) · `
+      + `이전설정복귀 ${r.backOk} · 모두같은색 ${r.allSame} · 저장 ${r.storedInner} · 기본으로 ${r.resetOk}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서

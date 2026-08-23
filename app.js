@@ -44,7 +44,9 @@ const I18N = {
     editor_guide: "가이드",
     editor_preset_save: "현재 설정 저장",
     /* v1.56.0 설정 시트 */
-    set_title: "설정 — 선 모양", set_badge: "설정", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
+    set_title: "설정 — 선 모양", set_badge: "설정",
+    set_dragc: "잡은 선 심", set_drage: "잡은 선 테두리", set_back: "이전 설정으로",
+    set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
     set_prev_note: "왼쪽 = 밝은 피부 · 오른쪽 = 어두운 눈썹 위. 두 쪽 다 잘 보이는 조합을 고르세요.",
@@ -184,7 +186,9 @@ const I18N = {
     editor_align: "Pupil Align",
     editor_preset: "Presets",
     editor_preset_save: "Save current",
-    set_title: "Settings — Line look", set_badge: "Set", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
+    set_title: "Settings — Line look", set_badge: "Set",
+    set_dragc: "Grab core", set_drage: "Grab outline", set_back: "Undo changes",
+    set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
     set_prev_note: "Left = bright skin · Right = dark brow. Pick a set that reads on both.",
@@ -313,7 +317,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.56.0";
+const APP_VERSION = "v1.57.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -466,7 +470,8 @@ const PALETTE = [
 ];
 const LOOK_KEY = "pb_look_v1";
 const LOOK_DEF = { inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
-                   edge: 0, edgeC: "auto", weight: 1, hlen: 0.19, alpha: 1 };
+                   edge: 0, edgeC: "auto", weight: 1, hlen: 0.19, alpha: 1,
+                   dragCore: "#14161B", dragEdge: "#FFC9A3" };   /* 잡은 선 = 먹 심 + 살구 테두리 */
 /* 맨 위 3개 조합 — 첫 칸은 늘 「현재 세트」(지금 값), 나머지 둘은 상황별 추천 */
 const LOOK_COMBOS = [
   { id: "now",    name: "set_c_now",    desc: "set_c_now_d" },
@@ -657,11 +662,14 @@ const TAIL_EXT = true;                 // 꼬리 자 바깥의 얇은 회색 참
    ⛔ 자를 색+회색으로 나누던 v1.51~1.53 방식으로 되돌리지 마세요 — 「1개선」이 지시입니다.
    ⛔ 깜빡임은 CSS(`#guides line.blink`)가 돌립니다. JS 타이머로 되돌리면 드래그가 버벅입니다.
    ⛔ 저장(내보내기)은 SVG를 직렬화하므로 CSS 애니메이션이 안 붙습니다 → 늘 선명하게 찍힙니다. */
-const APRICOT = "#FFC9A3";              // 살구색 테두리 — 잡고 있는 선 하나만
+const APRICOT = "#FFC9A3";              // 살구색 — 잡은 선 테두리의 기본값
 const GRAB_RING = 3.2;                  // 테두리가 심보다 넓은 양(px)
+/* v1.57.0 — 잡은 선의 심·테두리 색도 설정에서 고른다 (원장님 지시 2026-08-23:
+   「색상 변경은 두 개 컨셉 — 선택하기 전 / 선택 후 움직이는 것. 설정에서 두 개 선 선택」) */
 function drawGrab(frag, x1, y1, x2, y2, w) {
-  drawLine(frag, x1, y1, x2, y2, APRICOT, w + GRAB_RING, 0.95);
-  drawLine(frag, x1, y1, x2, y2, HALF_GREY, w, 1);
+  const L = S.look || {};
+  drawLine(frag, x1, y1, x2, y2, L.dragEdge || APRICOT, w + GRAB_RING, 0.95);
+  drawLine(frag, x1, y1, x2, y2, L.dragCore || HALF_GREY, w, 1);
 }
 const SEG_HALF = 0.19;           // 자 반폭 기본값 — 실제 값은 S.look.hlen (v1.56.0 설정)
 const segHalf = () => (S.look && S.look.hlen) || SEG_HALF;
@@ -2480,6 +2488,13 @@ function buildLookUI() {
     const box = $(id); box.innerHTML = "";
     PALETTE.forEach((p) => box.appendChild(swatchBtn(p.hex, L[key] === p.hex, () => lookSet({ [key]: p.hex }))));
   });
+  /* v1.57.0 — 잡은 선(드래그)의 심·테두리. 두 번째 컨셉 (원장님 지시 2026-08-23).
+     테두리 줄에는 기본 살구색을, 심 줄에는 흰색을 더해 8칸 */
+  [["swDragC", "dragCore", "#FFFFFF"], ["swDragE", "dragEdge", APRICOT]].forEach(([id, key, extra]) => {
+    const box = $(id); if (!box) return; box.innerHTML = "";
+    [...PALETTE.map((p) => p.hex), extra].forEach((hex) =>
+      box.appendChild(swatchBtn(hex, L[key] === hex, () => lookSet({ [key]: hex }))));
+  });
   /* ③ 테두리 · 굵기 · 길이 */
   const edge = $("segEdge"); edge.innerHTML = "";
   [[0, t("set_none")], [40, "40%"], [70, "70%"], [100, "100%"]]
@@ -2505,7 +2520,7 @@ function lookPreview() {
   f.appendChild(mk("rect", { x: 0, y: 0, width: 360, height: 96, fill: SKIN_PREV }));
   f.appendChild(mk("rect", { x: 360, y: 0, width: 360, height: 96, fill: BROW_PREV }));
   const L = S.look;
-  [["inner", 24], ["arch", 50], ["tail", 76]].forEach(([k, y]) => {
+  [["inner", 18], ["arch", 40], ["tail", 62]].forEach(([k, y]) => {
     const hex = L[k], w = 3.0 * L.weight;
     const put = (x1, x2) => {
       if (L.edge > 0) f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: edgeColorFor(hex),
@@ -2517,11 +2532,25 @@ function lookPreview() {
     put(180 - half, 180 + half);
     put(540 - half, 540 + half);
   });
+  /* 맨 아래 줄 = **잡고 움직일 때** — 심 + 테두리 그대로 (v1.57.0) */
+  {
+    const y = 84, w = 3.0 * L.weight, half = 300 * (L.hlen / 0.19) / 2;
+    const put = (x1, x2) => {
+      f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: L.dragEdge || APRICOT,
+        "stroke-width": w + 4, "stroke-opacity": 0.95, "stroke-linecap": "round" }));
+      f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: L.dragCore || "#14161B",
+        "stroke-width": w, "stroke-opacity": 1, "stroke-linecap": "round" }));
+    };
+    put(180 - half, 180 + half);
+    put(540 - half, 540 + half);
+  }
   svgP.appendChild(f);
 }
 $("btnLook").onclick = () => { S.lookSnap = { ...S.look }; buildLookUI(); $("mLook").classList.add("on"); };
 $("lookAll").onclick = () => lookSet({ arch: S.look.inner, tail: S.look.inner });
 $("lookReset").onclick = () => lookSet({ ...LOOK_DEF });
+/* 조작하다 별로면 **시트를 연 순간의 값**으로 한 번에 복귀 (원장님 지시 2026-08-23) */
+$("lookBack").onclick = () => { if (S.lookSnap) { lookSet({ ...S.lookSnap }); showHud(t("set_backed"), 1400); } };
 $("rngAlpha").addEventListener("input", (e) => {
   S.look.alpha = +e.target.value / 100;
   $("alphaVal").textContent = e.target.value + "%";
