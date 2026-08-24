@@ -47,6 +47,14 @@ const I18N = {
     set_title: "설정 — 선 모양", set_badge: "설정",
     set_dragc: "잡은 선 심", set_drage: "잡은 선 테두리", set_back: "이전 설정으로",
     set_cycle: "선 색", set_c_mine: "내 세트",
+    /* v1.64.0 가이드 스텝 프롬프트 — 지금 무엇을 맞추는지 한 줄로 */
+    tip_v2: "이너 — 콧방울·내안각 기준선에 맞추세요",
+    tip_frontThickness: "앞두께 — 앞머리 아래선에 맞추세요",
+    tip_front: "앞머리 — 앞머리 윗선에 맞추세요",
+    tip_h2: "아치 — 눈썹 산의 제일 높은 곳에 맞추세요",
+    tip_archThickness: "아치두께 — 산 아래선에 맞추세요",
+    tip_h3: "꼬리 + 아우터 — <b>십자의 안쪽 모서리</b>를 꼬리 끝에 얹으세요 (사선으로 끌면 둘이 함께)",
+    tip_v6: "아치선 — 산 위를 지나도록 좌우로 맞추세요",
     set_tab_base: "기본 선 · 차례", set_tab_grab: "잡은 선 · 움직일 때",
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
@@ -192,6 +200,13 @@ const I18N = {
     set_title: "Settings — Line look", set_badge: "Set",
     set_dragc: "Grab core", set_drage: "Grab outline", set_back: "Undo changes",
     set_cycle: "Colors", set_c_mine: "My set",
+    tip_v2: "Inner — align to the nostril / inner-canthus line",
+    tip_frontThickness: "Front thickness — align to the lower edge of the front",
+    tip_front: "Front — align to the upper edge of the front",
+    tip_h2: "Arch — align to the highest point of the brow",
+    tip_archThickness: "Arch thickness — align to the lower edge of the arch",
+    tip_h3: "Tail + Outer — put the <b>inner corner of the cross</b> on the tail tip (drag diagonally to move both)",
+    tip_v6: "Arch line — move left/right so it passes over the peak",
     set_tab_base: "Base lines", set_tab_grab: "Grabbed line",
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
@@ -323,7 +338,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.63.0";
+const APP_VERSION = "v1.64.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -333,9 +348,16 @@ const APP_VERSION = "v1.63.0";
    · 어떤 선이든 순서와 무관하게 자유롭게 움직일 수 있다
    · 꼬리(마지막) 뒤로는 **처음으로 돌아가지 않는다** — 플로우 종료
    · 가이드를 끄면 즉시 종료 */
-/* v1.47.2 원장님 지시 — 꼬리(가로) 뒤에 **아치 세로선(v6) → 아우터(v4)** 를 추가.
-   플로우는 아우터에서 끝난다 (처음으로 돌아가지 않음). */
-const GUIDE_FLOW = ["v2", "frontThickness", "front", "archThickness", "h2", "h3", "v6", "v4"];
+/* ⚠️ v1.64.0 원장님 지시 2026-08-23 — 플로우 재정렬
+   「앞두께에서 아치 - 아치두께로 변경. 플로우가 아치 - 아치두께 - 꼬리+아우터 동시적용 - 아치선」
+   · 아치두께↔아치 **순서를 바꿨다** — 아치(산 높이)를 먼저 잡고 그 위에 두께를 얹는다
+   · 꼬리와 아우터는 **한 스텝**이다 (v1.61.0 사선 이동으로 한 점처럼 움직이므로).
+     그 스텝에서 위아래 바 = 꼬리, 좌우 바 = 아우터 (TAIL_PAIR 참고)
+   · 아치선(v6)이 마지막 — 플로우는 여기서 끝난다 (처음으로 돌아가지 않음)
+   ⛔ 아우터(v4)를 다시 독립 스텝으로 넣지 마세요 — 꼬리와 한 점입니다 (BASELINE 1-27) */
+const GUIDE_FLOW = ["v2", "frontThickness", "front", "h2", "archThickness", "h3", "v6"];
+/* 꼬리 스텝이 함께 잡는 세로선 — 좌우 바가 이 선을 잡는다 */
+const TAIL_PAIR = { step: "h3", lr: "v4" };
 /* v1.46.0 — 기본 회색(GREY_LINE) 폐지 (원장님: 「회색이라 내 드로잉과 겹쳐 잘 안 보인다」).
    모든 선은 **항상 자기 고유색**: 차례/선택이 아니면 연하게(투명도↓), 차례면 진하게+굵게.
    색만 봐도 어떤 선인지 알 수 있어 가이드를 모르는 사용자도 위쪽 칩 색과 바로 짝지을 수 있다. */
@@ -924,7 +946,35 @@ function renderGuides() {
     frag.appendChild(mk("circle", { cx: pt.x, cy: pt.y, r: 2.5, fill: "#7A6FD8" }));
   }
 
+  /* ⚠️ v1.64.0 — 꼬리 스텝의 **십자 안쪽 모서리** 표식 (원장님 지시 2026-08-23:
+     「두 선이 맞닿아 십자가 모양의 내측을 포인트로 꼬리 자동 정렬 찾는 프롬프트로 넣을 것」)
+     꼬리 자(h3 = 꼬리 **윗선**)와 아우터(v4)가 만나는 점에서, 눈썹 몸통 쪽(안쪽·아래쪽)으로
+     ㄱ자 팔을 그린다 — 원장님이 빨간 펜으로 그려주신 그 모양입니다.
+     이 모서리를 드로잉의 꼬리 끝에 얹으면 꼬리·아우터가 한 번에 맞습니다.
+     ⛔ 가이드가 꼬리 차례일 때만 그립니다 — 늘 그리면 화면이 시끄러워집니다. */
+  if (S.guideOn && S.guideCur === "h3" && g.h3Visible && g.v4Visible) {
+    const y = g.h3 * H, arm = Math.max(16, Math.min(W, H) * 0.045);
+    for (const [x, inward] of [[g.v4 * W, 1], [(2 * g.v1 - g.v4) * W, -1]]) {
+      if (x < 2 || x > workRight() * W) continue;
+      const d = `M ${x + inward * arm} ${y} L ${x} ${y} L ${x} ${y + arm}`;
+      frag.appendChild(mk("path", { d, fill: "none", stroke: "#0A0D14",
+        "stroke-width": 5.5, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-opacity": 0.55 }));
+      frag.appendChild(mk("path", { d, fill: "none", stroke: liveColor(H_SPECS.find((q) => q.key === "h3")),
+        "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round", class: "blink" }));
+    }
+  }
+
   svg.replaceChildren(frag);
+}
+
+/* v1.64.0 — 지금 차례인 선의 프롬프트 한 줄. 가이드가 꺼져 있으면 숨긴다 */
+function updateGuideTip() {
+  const el = $("guideTip"); if (!el) return;
+  const key = S.guideOn ? S.guideCur : null;
+  const msg = key ? t("tip_" + key) : "";
+  if (!key || msg === "tip_" + key) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = msg;
 }
 
 function render() {
@@ -932,6 +982,7 @@ function render() {
   renderGuides();
   updateButtons();
   updatePanels();
+  updateGuideTip();
   alignCenterDock();
 }
 
@@ -1241,6 +1292,8 @@ function endPointer(e) {
    마지막(꼬리) 뒤로는 처음으로 돌아가지 않는다 — 플로우 종료 (원장님 지시 2026-08-21) */
 function guideAdvance(key) {
   if (!S.guideOn) return;
+  /* 꼬리 스텝에서 아우터를 움직였어도 **그 스텝을 끝낸 것**으로 친다 (v1.64.0) */
+  if (key === TAIL_PAIR.lr && S.guideCur === TAIL_PAIR.step) key = TAIL_PAIR.step;
   const i = GUIDE_FLOW.indexOf(key);
   if (i < 0) return;                                   // 플로우 밖의 선은 순서에 영향 없음
   const next = i + 1 < GUIDE_FLOW.length ? GUIDE_FLOW[i + 1] : null;
@@ -1362,6 +1415,8 @@ function noteSel(key) {
      잠시 내리고(null), 플로우 안 선을 다시 고르면 **그 선부터 재개**한다.
      ⚠️ 이 두 줄을 지우면 밝은 선이 두 개가 되는 문제가 그대로 돌아옵니다. */
   if (S.guideOn) S.guideCur = GUIDE_FLOW.includes(key) ? key : null;
+  /* v1.64.0 — 꼬리 스텝은 **꼬리+아우터 동시**: 위아래 바=꼬리, 좌우 바=아우터 */
+  if (S.guideOn && S.guideCur === TAIL_PAIR.step) S.selLR = TAIL_PAIR.lr;
 }
 function setSel(key) {
   noteSel(key);
@@ -1489,12 +1544,16 @@ function applyPos(v, key) {
 function photoConfig() {
   const p = S.p, lim = panLimit();
   switch (S.photoMode) {
+    /* ⚠️ v1.64.0 — 화살표 한 번의 이동량 (원장님 지시 2026-08-23: 「화살표 눌렀을 때의
+       이동이 매우 큼 — 아주 미세하게」). 줌 0.03→0.004 · 위아래/좌우 0.012→0.002 (한 번에 1~2px).
+       바를 끌면 여전히 크게 움직이니, 화살표는 **마무리 미세조정** 전용입니다.
+       ⛔ 다시 키우지 마세요 — 시술 중 한 번 눌러 튀면 처음부터 다시 맞춰야 합니다. */
     case "zoom":
-      return { name: t("editor_zoom"), v: Math.log(p.zoom / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN), disp: p.zoom.toFixed(2) + "×", step: 0.03 };
+      return { name: t("editor_zoom"), v: Math.log(p.zoom / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN), disp: p.zoom.toFixed(2) + "×", step: 0.004 };
     case "vertical":
-      return { name: t("editor_vertical"), v: clamp(p.oy / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.oy * 100), step: 0.012 };
+      return { name: t("editor_vertical"), v: clamp(p.oy / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.oy * 100), step: 0.002 };
     case "horizontal":
-      return { name: t("editor_horizontal"), v: clamp(p.ox / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.ox * 100), step: 0.012 };
+      return { name: t("editor_horizontal"), v: clamp(p.ox / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.ox * 100), step: 0.002 };
     case "balance":
       return { name: t("editor_balance"), v: p.rot / (2 * ROT_MAX) + 0.5, disp: p.rot.toFixed(1) + "°", step: 0.008 };
   }
@@ -3226,4 +3285,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking, setLang,
-  PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum };
+  PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
+  GUIDE_FLOW, TAIL_PAIR, updateGuideTip };

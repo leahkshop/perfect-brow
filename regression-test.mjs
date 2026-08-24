@@ -557,13 +557,18 @@ console.log("[세로 모드 · 기능]");
       rightEnd: st.right - h.right > st.width * 0.015 && st.right - h.right < st.width * 0.06
                 && Math.abs(m.right - h.right) < 2,
       bottomEnd: st.bottom - h.bottom < 20,
-      /* v1.44.1 — 바 폭 = 줌~밸런스 행 폭, 양쪽 끝 모두 일치 (원장님: "안길어 졌다" 재발 방지) */
-      spansRow: Math.abs(m.width - h.width) < 2 && Math.abs(m.left - h.left) < 2,
+      /* ⚠️ v1.64.0 — 바는 줌~밸런스 행보다 **10% 더 길다** (원장님 지시 2026-08-23).
+         오른쪽 끝은 그대로 맞추고 **왼쪽으로만** 늘어난다 (오른쪽으로 나가면 화면 밖). */
+      spansRow: Math.abs(h.width - m.width * 1.1) < 3 && Math.abs(m.right - h.right) < 2
+                && h.left < m.left - 2,
+      /* 화살표 오폭 방지 — 버튼 행과 바 사이 갭 (원장님: 「위 버튼이 실수로 눌리지 않도록」) */
+      gap: Math.round(h.top - m.bottom),
     };
   });
   check("38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 바 = 줌~밸런스 행과 같은 폭·정렬",
-    dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd && dockOrder.spansRow,
-    `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd} 폭일치=${dockOrder.spansRow}`);
+    dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd && dockOrder.spansRow
+      && dockOrder.gap >= 12,
+    `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd} 폭=행×1.1 ${dockOrder.spansRow} · 버튼행↔바 갭 ${dockOrder.gap}px(≥12)`);
 
   /* 39. 오른쪽 도크 순서 (v1.45.0 · 원장님 지시 2026-08-21)
      위에서부터 **초기화 → 위아래 조절 바 → 다시실행 → 되돌리기**. */
@@ -2106,15 +2111,16 @@ console.log("\n[밸런스 판정]");
       /* v1.47.0 — 사진이 올라오면 가이드는 **저절로 켜져** 이너부터 시작한다 (원장님 지시).
          버튼 클릭은 켜기 위해서가 아니라 **끄기 위해서만** 필요하다. */
       const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
-      /* 앞머리(front) 를 슬라이더로 움직인다 → 움직이는 동안 front 가 켜지고, 끝나면 다음(아치두께) */
+      /* ⚠️ v1.64.0 플로우: 이너 → 앞두께 → 앞머리 → **아치 → 아치두께** → 꼬리+아우터 → 아치선
+         앞머리를 슬라이더로 움직이면 끝난 뒤 다음은 **아치(h2)** 다 */
       S.selUD = "front";
       const sl = document.getElementById("posSliderV") || document.querySelector(".posctl.axis-v input");
       sl.dispatchEvent(new Event("input", { bubbles: true }));
       const duringFront = S.guideCur === "front";
       sl.dispatchEvent(new Event("change", { bubbles: true }));
-      const afterFront = S.guideCur === "archThickness";
+      const afterFront = S.guideCur === "h2";
       PBx.render();
-      const atLit = lineColorOf("archThickness").own;
+      const atLit = lineColorOf("h2").own;
       /* 이너(v2) 를 다시 움직이면 이너가 켜지고, 끝나면 이너의 다음(앞두께) */
       S.selUD = "v2";   // v2 는 세로선 — 좌우 슬라이더 담당이지만 guide 훅 검증은 가로 슬라이더 방식과 동일하므로 selLR 로
       S.selLR = "v2"; S.hMode = "line";
@@ -2123,25 +2129,28 @@ console.log("\n[밸런스 판정]");
       const duringInner = S.guideCur === "v2";
       sh.dispatchEvent(new Event("change", { bubbles: true }));
       const afterInner = S.guideCur === "frontThickness";
-      /* v1.47.2 — 꼬리(h3) 다음은 **아치 세로선(v6) → 아우터(v4)**, 아우터 뒤 종료 */
-      S.selUD = "h3";
-      sl.dispatchEvent(new Event("input", { bubbles: true }));
+      /* ⚠️ v1.64.0 — 꼬리(h3)는 **아우터(v4)와 한 스텝**. 꼬리 차례에는 좌우 바가 아우터를 잡고,
+         아우터를 움직여 끝내도 같은 스텝을 끝낸 것으로 쳐서 다음(아치선 v6)으로 간다.
+         아치선이 마지막 — 그 뒤로는 종료(null). */
+      /* 아치두께를 끝내면 다음이 꼬리 스텝 — 그때 좌우 바가 아우터를 잡아야 한다 */
+      S.selUD = "archThickness";
       sl.dispatchEvent(new Event("change", { bubbles: true }));
+      const tailPairsOuter = S.guideCur === "h3" && S.selLR === "v4";
+      S.hMode = "line";
+      sh.dispatchEvent(new Event("change", { bubbles: true }));   /* 아우터를 움직여 끝냄 */
       const afterTailArchV = S.guideCur === "v6";
-      S.selLR = "v6"; S.hMode = "line";
+      S.selLR = "v6";
       sh.dispatchEvent(new Event("change", { bubbles: true }));
-      const afterArchVOuter = S.guideCur === "v4";
-      S.selLR = "v4";
-      sh.dispatchEvent(new Event("change", { bubbles: true }));
-      const endsAfterTail = afterTailArchV && afterArchVOuter
+      const endsAfterTail = tailPairsOuter && afterTailArchV
                             && S.guideCur === null && S.guideOn === true;
       /* 가이드 끄면 즉시 종료 */
       document.getElementById("btnGuide").click();
       const offEnds = S.guideOn === false && S.guideCur === null;
-      return { greyByDefault, noneAtStart, duringFront, afterFront, atLit, duringInner, afterInner, endsAfterTail, offEnds };
+      return { greyByDefault, noneAtStart, duringFront, afterFront, atLit, duringInner, afterInner,
+               tailPairsOuter, endsAfterTail, offEnds };
     });
     await ctx.close();
-    check("101. 가이드 플로우 — 기본 고유색 연하게(v1.46.0) · 움직인 선이 켜지고 끝나면 다음 순서 · 꼬리 뒤 종료 · 끄면 종료",
+    check("101. 가이드 플로우 — 이너→앞두께→앞머리→아치→아치두께→꼬리+아우터→아치선 · 끄면 종료",
       g101.greyByDefault && g101.noneAtStart && g101.duringFront && g101.afterFront && g101.atLit
         && g101.duringInner && g101.afterInner && g101.endsAfterTail && g101.offEnds,
       Object.entries(g101).map(([k, v]) => `${k}=${v}`).join(" "));
@@ -2854,6 +2863,73 @@ console.log("\n[밸런스 판정]");
       `왼쪽 꼬리자 사선 Δy=${d1y.toFixed(1)}(30) Δx=${d1x.toFixed(1)}(-24) · `
       + `오른쪽 아우터 사선 Δx=${d2x.toFixed(1)}(-26·반전) Δy=${d2y.toFixed(1)}(-18) · `
       + `앞머리자는 위아래만=${frontMoved}/${v2Still}`);
+  }
+
+  /* 114. ⚠️ v1.64.0 (원장님 지시 2026-08-23)
+     ① 화살표 한 번의 이동량 — 「줌·위아래·좌우 화살표 이동이 매우 큼 → 아주 미세하게」
+     ② 가이드 프롬프트 칩 — 지금 차례가 무엇을 맞추는지 한 줄
+     ③ 꼬리 스텝의 **십자 안쪽 모서리** 표식 — 「두 선이 맞닿아 십자 모양의 내측을 포인트로」
+     ⛔ 화살표 step 을 다시 키우지 마세요 — 시술 중 한 번 눌러 튀면 처음부터 다시 맞춥니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      /* ① 화살표 이동량 — 실제로 버튼을 눌러 사진이 얼마나 움직이는지 잰다 */
+      const arrow = (mode) => {
+        document.querySelector(`#photoModes button[data-mode="${mode}"]`).click();
+        const before = mode === "zoom" ? S.p.zoom : (mode === "vertical" ? S.p.oy : S.p.ox);
+        document.getElementById("posPlusH").click();
+        const after = mode === "zoom" ? S.p.zoom : (mode === "vertical" ? S.p.oy : S.p.ox);
+        return { before, after, d: Math.abs(after - before) };
+      };
+      const az = arrow("zoom"), av = arrow("vertical"), ah = arrow("horizontal");
+      const zoomPct = Math.abs(az.after / az.before - 1);       /* 줌은 배율 변화율로 */
+
+      /* ② 가이드 프롬프트 — 스텝마다 문구가 있고, 가이드를 끄면 숨는다 */
+      S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 };
+      S.guideOn = true; S.guideCur = "v2"; PBx.render();
+      const tipEl = document.getElementById("guideTip");
+      const tipAtInner = !tipEl.hidden && tipEl.textContent.length > 4;
+      S.guideCur = "h3"; PBx.render();
+      const tipAtTail = tipEl.innerHTML.includes("<b>");        /* 십자 모서리를 굵게 강조 */
+      const everyStep = PBx.GUIDE_FLOW.every((k) => {
+        S.guideCur = k; PBx.render();
+        return !tipEl.hidden && tipEl.textContent.trim().length > 4;
+      });
+      S.guideOn = false; S.guideCur = null; PBx.render();
+      const tipHiddenOff = tipEl.hidden;
+
+      /* ③ 십자 안쪽 모서리 표식 — 꼬리 차례에만, 좌우 2개, 꼬리·아우터 교점에서 시작 */
+      const corners = () => [...document.getElementById("guides").querySelectorAll("path")]
+        .map((q) => q.getAttribute("d"))
+        .filter((d) => d && /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+$/.test(d));
+      S.guideOn = true; S.guideCur = "h2"; PBx.render();
+      const noneAtArch = corners().length === 0;
+      S.guideCur = "h3"; PBx.render();
+      const cs = corners();
+      const W = S.dim.W, H = S.dim.H;
+      const hit = cs.some((d) => {
+        const n = d.match(/[\d.]+/g).map(Number);
+        return Math.abs(n[2] - S.g.v4 * W) < 2 && Math.abs(n[3] - S.g.h3 * H) < 2;
+      });
+      return { zoomPct, dv: av.d, dh: ah.d, tipAtInner, tipAtTail, everyStep, tipHiddenOff,
+               noneAtArch, cornerPairs: cs.length, hit };
+    });
+    await ctx.close();
+    check("114. 화살표 미세 이동 · 가이드 프롬프트 · 꼬리 십자 모서리 표식",
+      r.zoomPct > 0 && r.zoomPct < 0.018                /* 줌 한 칸 1.8% 미만 */
+        && r.dv > 0 && r.dv < 0.005 && r.dh > 0 && r.dh < 0.005   /* 캔버스의 0.5% 미만 = 약 2px */
+        && r.tipAtInner && r.tipAtTail && r.everyStep && r.tipHiddenOff
+        && r.noneAtArch && r.cornerPairs >= 2 && r.hit,
+      `줌 한 칸 ${(r.zoomPct * 100).toFixed(2)}%(<1.8%) · 위아래 ${r.dv.toFixed(4)} / 좌우 ${r.dh.toFixed(4)}(<0.005) · `
+      + `프롬프트 이너=${r.tipAtInner} 꼬리강조=${r.tipAtTail} 전스텝=${r.everyStep} 끄면숨김=${r.tipHiddenOff} · `
+      + `십자표식 아치때없음=${r.noneAtArch} 개수=${r.cornerPairs} 교점일치=${r.hit}`);
   }
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
