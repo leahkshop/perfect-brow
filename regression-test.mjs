@@ -2155,7 +2155,7 @@ console.log("\n[밸런스 판정]");
       /* v1.47.0 — 사진이 올라오면 가이드는 **저절로 켜져** 이너부터 시작한다 (원장님 지시).
          버튼 클릭은 켜기 위해서가 아니라 **끄기 위해서만** 필요하다. */
       const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
-      /* ⚠️ v1.64.0 플로우: 이너 → 앞두께 → 앞머리 → **아치 → 아치두께** → 꼬리+아우터 → 아치선
+      /* ⚠️ v1.67.0 플로우: 이너 → 앞두께 → 앞머리 → **아치(+아치선)** → 아치두께 → 꼬리(+아우터) → 끝
          앞머리를 슬라이더로 움직이면 끝난 뒤 다음은 **아치(h2)** 다 */
       S.selUD = "front";
       const sl = document.getElementById("posSliderV") || document.querySelector(".posctl.axis-v input");
@@ -2173,28 +2173,34 @@ console.log("\n[밸런스 판정]");
       const duringInner = S.guideCur === "v2";
       sh.dispatchEvent(new Event("change", { bubbles: true }));
       const afterInner = S.guideCur === "frontThickness";
+      /* ⚠️ v1.67.0 — 아치(h2)는 **아치선(v6)과 한 스텝**이다. 아치 차례에는 좌우 바가 아치선을
+         잡고, 아치선을 움직여 끝내도 같은 스텝을 끝낸 것으로 쳐서 다음(아치두께)으로 간다. */
+      S.selUD = "frontThickness";
+      sl.dispatchEvent(new Event("change", { bubbles: true }));   /* 앞두께 끝 → 앞머리 */
+      S.selUD = "front";
+      sl.dispatchEvent(new Event("change", { bubbles: true }));   /* 앞머리 끝 → 아치 */
+      const archPairsArchV = S.guideCur === "h2" && S.selLR === "v6";
+      S.hMode = "line";
+      sh.dispatchEvent(new Event("change", { bubbles: true }));   /* 아치선을 움직여 끝냄 */
+      const afterArch = S.guideCur === "archThickness";
       /* ⚠️ v1.64.0 — 꼬리(h3)는 **아우터(v4)와 한 스텝**. 꼬리 차례에는 좌우 바가 아우터를 잡고,
-         아우터를 움직여 끝내도 같은 스텝을 끝낸 것으로 쳐서 다음(아치선 v6)으로 간다.
-         아치선이 마지막 — 그 뒤로는 종료(null). */
-      /* 아치두께를 끝내면 다음이 꼬리 스텝 — 그때 좌우 바가 아우터를 잡아야 한다 */
+         아우터를 움직여 끝내도 같은 스텝을 끝낸 것으로 친다.
+         v1.67.0 — **꼬리가 마지막**이다 (아치선이 아치와 합쳐져 독립 스텝이 사라짐). */
       S.selUD = "archThickness";
       sl.dispatchEvent(new Event("change", { bubbles: true }));
       const tailPairsOuter = S.guideCur === "h3" && S.selLR === "v4";
       S.hMode = "line";
       sh.dispatchEvent(new Event("change", { bubbles: true }));   /* 아우터를 움직여 끝냄 */
-      const afterTailArchV = S.guideCur === "v6";
-      S.selLR = "v6";
-      sh.dispatchEvent(new Event("change", { bubbles: true }));
-      const endsAfterTail = tailPairsOuter && afterTailArchV
+      const endsAfterTail = archPairsArchV && afterArch && tailPairsOuter
                             && S.guideCur === null && S.guideOn === true;
       /* 가이드 끄면 즉시 종료 */
       document.getElementById("btnGuide").click();
       const offEnds = S.guideOn === false && S.guideCur === null;
       return { greyByDefault, noneAtStart, duringFront, afterFront, atLit, duringInner, afterInner,
-               tailPairsOuter, endsAfterTail, offEnds };
+               archPairsArchV, afterArch, tailPairsOuter, endsAfterTail, offEnds };
     });
     await ctx.close();
-    check("101. 가이드 플로우 — 이너→앞두께→앞머리→아치→아치두께→꼬리+아우터→아치선 · 끄면 종료",
+    check("101. 가이드 플로우 — 이너→앞두께→앞머리→아치+아치선→아치두께→꼬리+아우터 · 끄면 종료",
       g101.greyByDefault && g101.noneAtStart && g101.duringFront && g101.afterFront && g101.atLit
         && g101.duringInner && g101.afterInner && g101.endsAfterTail && g101.offEnds,
       Object.entries(g101).map(([k, v]) => `${k}=${v}`).join(" "));
@@ -2909,6 +2915,86 @@ console.log("\n[밸런스 판정]");
       + `앞머리자는 위아래만=${frontMoved}/${v2Still}`);
   }
 
+  /* 117. ⚠️ v1.67.0 — 아치·아치선 사선 이동 + 아치두께 동반 (원장님 지시 2026-08-24)
+     「아치선 세로선도 꼬리와 마찬가지로 아치 가로선을 움직일 때 함께 사방으로 움직이도록.
+       아치선을 움직일 때 아치세로선이 따라 움직이고, **아치두께 가로선도 이에 따라 함께 따라온다.**
+       대신 아치두께선을 움직일 땐 양방향 아니고 **위아래만** 움직이는 것 유지한다」
+     산꼭대기 = (아치선 x, 아치 y) **한 점**. 그 점을 한 손짓으로 놓고, 두께는 그대로 따라온다.
+     ⛔ 아치두께에 사선을 퍼뜨리지 마세요 — 두께를 재는 선이라 x 가 흔들리면 잰 값이 무너집니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const reset = () => p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.multi = false; S.selSet = []; S.locked = true; S.guideOn = false; S.guideCur = null;
+      PBx.render();
+    });
+    await reset();
+    const box = await (await p.$("#touch")).boundingBox();
+    const dim = await p.evaluate(() => ({ W: window.PB.S.dim.W, H: window.PB.S.dim.H }));
+    const drag = async (x0, y0, dx, dy) => {
+      await p.mouse.move(box.x + x0, box.y + y0);
+      await p.mouse.down();
+      await p.mouse.move(box.x + x0 + dx, box.y + y0 + dy, { steps: 10 });
+      await p.mouse.up();
+      await p.waitForTimeout(100);
+    };
+    const g = () => p.evaluate(() => { const q = window.PB.S.g;
+      return { h2: q.h2, v6: q.v6, at: q.archThickness, h3: q.h3, front: q.front }; });
+    /* ① 아치 자를 사선으로 → 아치(h2)는 아래로, 아치선(v6)은 코 쪽으로, 아치두께는 **같은 만큼** 따라온다 */
+    const p1 = await p.evaluate(() => { const S = window.PB.S;
+      const q = window.PB.segPx(window.PB.H_SPECS.find((x) => x.key === "h2"))[0];
+      return { x: (q[0] + q[1]) / 2, y: S.g.h2 * S.dim.H }; });
+    const b1 = await g();
+    await drag(p1.x, p1.y, -24, 30);
+    const a1 = await g();
+    const d1y = (a1.h2 - b1.h2) * dim.H, d1x = (a1.v6 - b1.v6) * dim.W;
+    const d1t = (a1.at - b1.at) * dim.H;                       /* 아치두께가 따라온 양 */
+    const tailStill = Math.abs(a1.h3 - b1.h3) < 1e-9;
+    /* ② 오른쪽(거울) 아치선 세로선을 사선으로 → dx 부호 반전 · 아치·아치두께도 함께 */
+    await reset();
+    const p2 = await p.evaluate(() => { const S = window.PB.S;
+      return { x: (2 * S.g.v1 - S.g.v6) * S.dim.W, y: (S.g.h2 + 0.06) * S.dim.H }; });
+    const b2 = await g();
+    await drag(p2.x, p2.y, 26, -18);
+    const a2 = await g();
+    const d2x = (a2.v6 - b2.v6) * dim.W, d2y = (a2.h2 - b2.h2) * dim.H, d2t = (a2.at - b2.at) * dim.H;
+    /* ③ 아치두께는 **위아래만** — 사선으로 끌어도 아치선(v6)·아치(h2)는 그대로 */
+    await reset();
+    const p3 = await p.evaluate(() => { const S = window.PB.S;
+      const q = window.PB.segPx(window.PB.H_SPECS.find((x) => x.key === "archThickness"))[0];
+      return { x: (q[0] + q[1]) / 2, y: S.g.archThickness * S.dim.H }; });
+    const b3 = await g();
+    await drag(p3.x, p3.y, 30, 22);
+    const a3 = await g();
+    const atMoved = Math.abs((a3.at - b3.at) * dim.H - 22) < 4;
+    const atKeepsX = Math.abs(a3.v6 - b3.v6) < 1e-9 && Math.abs(a3.h2 - b3.h2) < 1e-9;
+    /* ④ 바·화살표로 아치를 움직여도 아치두께가 같은 만큼 따라온다 (손 사선과 같은 규칙) */
+    await reset();
+    const b4 = await g();
+    const a4 = await p.evaluate(() => {
+      const S = window.PB.S;
+      S.selUD = "h2"; S.hMode = "line";
+      document.getElementById("posPlusV").click();
+      return { h2: S.g.h2, at: S.g.archThickness };
+    });
+    const barD = (a4.h2 - b4.h2) * dim.H, barT = (a4.at - b4.at) * dim.H;
+    const barFollows = Math.abs(barD) > 0.05 && Math.abs(barT - barD) < 0.01;
+    await ctx.close();
+    check("117. 아치·아치선 사선 — 산꼭대기 한 점 · 아치두께 동반 · 아치두께는 위아래만",
+      Math.abs(d1y - 30) < 4 && Math.abs(d1x - (-24)) < 4 && Math.abs(d1t - d1y) < 0.5 && tailStill
+        && Math.abs(d2x - (-26)) < 4 && Math.abs(d2y - (-18)) < 4 && Math.abs(d2t - d2y) < 0.5
+        && atMoved && atKeepsX && barFollows,
+      `아치자 사선 Δy=${d1y.toFixed(1)}(30) Δx=${d1x.toFixed(1)}(-24) 두께동반=${d1t.toFixed(1)} 꼬리그대로=${tailStill} · `
+      + `거울 아치선 사선 Δx=${d2x.toFixed(1)}(-26·반전) Δy=${d2y.toFixed(1)}(-18) 두께동반=${d2t.toFixed(1)} · `
+      + `아치두께 위아래만=${atMoved}/${atKeepsX} · 바 동반 ${barD.toFixed(2)}→${barT.toFixed(2)}=${barFollows}`);
+  }
+
   /* 114. ⚠️ v1.64.0 (원장님 지시 2026-08-23)
      ① 화살표 한 번의 이동량 — 「줌·위아래·좌우 화살표 이동이 매우 큼 → 아주 미세하게」
      ② 가이드 프롬프트 칩 — 지금 차례가 무엇을 맞추는지 한 줄
@@ -2953,33 +3039,44 @@ console.log("\n[밸런스 판정]");
       S.guideOn = false; S.guideCur = null; PBx.render();
       const tipHiddenOff = tipEl.hidden;
 
-      /* ③ 십자 안쪽 모서리 표식 — 꼬리 차례에만, 좌우 2개, 꼬리·아우터 교점에서 시작 */
+      /* ③ 십자 안쪽 모서리 표식 — **쌍 스텝(꼬리·아치)에만**, 좌우 2개, 교점에서 시작.
+         ⚠️ v1.67.0 — 팔 방향이 스텝마다 다르다: 꼬리 = 안쪽+아래 / 아치 = 안쪽+**위**
+         (원장님 지시 2026-08-24 「아치선의 굵은 색상은 아래와 안쪽이 아니라 안쪽과 위」) */
       const corners = () => [...document.getElementById("guides").querySelectorAll("path")]
         .map((q) => q.getAttribute("d"))
         .filter((d) => d && /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+$/.test(d));
-      S.guideOn = true; S.guideCur = "h2"; PBx.render();
-      const noneAtArch = corners().length === 0;
-      S.guideCur = "h3"; PBx.render();
-      const cs = corners();
       const W = S.dim.W, H = S.dim.H;
-      const hit = cs.some((d) => {
-        const n = d.match(/[\d.]+/g).map(Number);
-        return Math.abs(n[2] - S.g.v4 * W) < 2 && Math.abs(n[3] - S.g.h3 * H) < 2;
-      });
+      S.guideOn = true; S.guideCur = "archThickness"; PBx.render();
+      const noneAtPlain = corners().length === 0;      /* 쌍이 아닌 스텝엔 표식이 없다 */
+      const at = (step, vk, hk, wantUp) => {
+        S.guideCur = step; PBx.render();
+        const cs2 = corners();
+        const ok = cs2.some((d) => {
+          const n = d.match(/[\d.]+/g).map(Number);
+          const onPoint = Math.abs(n[2] - S.g[vk] * W) < 2 && Math.abs(n[3] - S.g[hk] * H) < 2;
+          const up = n[5] < n[3];
+          const inward = Math.abs(n[0] - n[2]) > 8 && Math.abs(n[1] - n[3]) < 0.5;
+          return onPoint && inward && up === wantUp;
+        });
+        return { n: cs2.length, ok };
+      };
+      const arch = at("h2", "v6", "h2", true);         /* 아치 = 안쪽 + 위 */
+      const tail = at("h3", "v4", "h3", false);        /* 꼬리 = 안쪽 + 아래 */
       return { zoomPct, dv: av.d, dh: ah.d, upIsRight, rightIsRight, tipAtInner, tipAtTail,
-               everyStep, tipHiddenOff, noneAtArch, cornerPairs: cs.length, hit };
+               everyStep, tipHiddenOff, noneAtPlain,
+               archN: arch.n, archOk: arch.ok, tailN: tail.n, tailOk: tail.ok };
     });
     await ctx.close();
-    check("114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 꼬리 십자 모서리 표식",
+    check("114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 십자 모서리(꼬리=아래 · 아치=위)",
       r.zoomPct > 0 && r.zoomPct < 0.018                /* 줌 한 칸 1.8% 미만 */
         && r.dv > 0 && r.dv < 0.003 && r.dh > 0 && r.dh < 0.003   /* v1.65.0 — 캔버스의 0.3% 미만 ≈ 1px */
         && r.upIsRight && r.rightIsRight                          /* ▶ = 위로 / 오른쪽 */
         && r.tipAtInner && r.tipAtTail && r.everyStep && r.tipHiddenOff
-        && r.noneAtArch && r.cornerPairs >= 2 && r.hit,
+        && r.noneAtPlain && r.archN >= 2 && r.archOk && r.tailN >= 2 && r.tailOk,
       `줌 한 칸 ${(r.zoomPct * 100).toFixed(2)}%(<1.8%) · 위아래 ${r.dv.toFixed(4)} / 좌우 ${r.dh.toFixed(4)}(<0.003) · `
       + `▶=위로 ${r.upIsRight} / ▶=오른쪽 ${r.rightIsRight} · `
       + `프롬프트 이너=${r.tipAtInner} 꼬리강조=${r.tipAtTail} 전스텝=${r.everyStep} 끄면숨김=${r.tipHiddenOff} · `
-      + `십자표식 아치때없음=${r.noneAtArch} 개수=${r.cornerPairs} 교점일치=${r.hit}`);
+      + `십자표식 쌍아닌스텝없음=${r.noneAtPlain} · 아치 ${r.archN}개 위+안쪽=${r.archOk} · 꼬리 ${r.tailN}개 아래+안쪽=${r.tailOk}`);
   }
 
   /* 115. ⚠️ v1.66.0 — **관자놀이 머리카락 방어** (원장님 지시 2026-08-23)

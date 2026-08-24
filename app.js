@@ -51,7 +51,7 @@ const I18N = {
     tip_v2: "이너 — 콧방울·내안각 기준선에 맞추세요",
     tip_frontThickness: "앞두께 — 앞머리 아래선에 맞추세요",
     tip_front: "앞머리 — 앞머리 윗선에 맞추세요",
-    tip_h2: "아치 — 눈썹 산의 제일 높은 곳에 맞추세요",
+    tip_h2: "아치 + 아치선 — <b>십자의 안쪽 위 모서리</b>를 눈썹 산에 얹으세요 (사선으로 끌면 둘이 함께)",
     tip_archThickness: "아치두께 — 산 아래선에 맞추세요",
     tip_h3: "꼬리 + 아우터 — <b>십자의 안쪽 모서리</b>를 꼬리 끝에 얹으세요 (사선으로 끌면 둘이 함께)",
     tip_v6: "아치선 — 산 위를 지나도록 좌우로 맞추세요",
@@ -203,7 +203,7 @@ const I18N = {
     tip_v2: "Inner — align to the nostril / inner-canthus line",
     tip_frontThickness: "Front thickness — align to the lower edge of the front",
     tip_front: "Front — align to the upper edge of the front",
-    tip_h2: "Arch — align to the highest point of the brow",
+    tip_h2: "Arch + Arch line — put the <b>inner-upper corner of the cross</b> on the brow peak (drag diagonally to move both)",
     tip_archThickness: "Arch thickness — align to the lower edge of the arch",
     tip_h3: "Tail + Outer — put the <b>inner corner of the cross</b> on the tail tip (drag diagonally to move both)",
     tip_v6: "Arch line — move left/right so it passes over the peak",
@@ -338,7 +338,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.66.0";
+const APP_VERSION = "v1.67.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -355,9 +355,21 @@ const APP_VERSION = "v1.66.0";
      그 스텝에서 위아래 바 = 꼬리, 좌우 바 = 아우터 (TAIL_PAIR 참고)
    · 아치선(v6)이 마지막 — 플로우는 여기서 끝난다 (처음으로 돌아가지 않음)
    ⛔ 아우터(v4)를 다시 독립 스텝으로 넣지 마세요 — 꼬리와 한 점입니다 (BASELINE 1-27) */
-const GUIDE_FLOW = ["v2", "frontThickness", "front", "h2", "archThickness", "h3", "v6"];
+/* ⚠️ v1.67.0 원장님 지시 2026-08-24 — **아치선도 아치와 한 스텝**
+   「아치선 세로선도 꼬리와 마찬가지로 아치 가로선을 움직일 때 함께 사방으로 움직이도록.
+     아치두께 가로선도 이에 따라 함께 따라온다. … 가이드 플로우는 아치 - 아치두께 - 꼬리로 종료」
+   · 아치(h2)와 아치선(v6)은 **한 점**이다 — 사선으로 끌면 둘이 함께 (ARCH_PAIR)
+   · 아치가 움직이면 **아치두께가 같은 만큼 따라온다** — 두께는 아치두께 차례에서만 정한다
+   · 아치선(v6)은 이제 **독립 스텝이 아니다** → 플로우는 꼬리에서 끝난다
+   ⛔ v6 를 플로우에 다시 넣지 마세요. 아우터와 같은 이유로 아치와 한 점입니다 (BASELINE 1-31) */
+const GUIDE_FLOW = ["v2", "frontThickness", "front", "h2", "archThickness", "h3"];
 /* 꼬리 스텝이 함께 잡는 세로선 — 좌우 바가 이 선을 잡는다 */
 const TAIL_PAIR = { step: "h3", lr: "v4" };
+/* 아치 스텝이 함께 잡는 세로선 + 따라오는 두께선 (v1.67.0) */
+const ARCH_PAIR = { step: "h2", lr: "v6", thick: "archThickness", up: true };
+/* 가이드 스텝 ↔ 함께 움직이는 세로선 쌍 (마커·바 배정이 이 표 하나를 본다) */
+const STEP_PAIRS = [TAIL_PAIR, ARCH_PAIR];
+const pairOfStep = (step) => STEP_PAIRS.find((q) => q.step === step) || null;
 /* v1.46.0 — 기본 회색(GREY_LINE) 폐지 (원장님: 「회색이라 내 드로잉과 겹쳐 잘 안 보인다」).
    모든 선은 **항상 자기 고유색**: 차례/선택이 아니면 연하게(투명도↓), 차례면 진하게+굵게.
    색만 봐도 어떤 선인지 알 수 있어 가이드를 모르는 사용자도 위쪽 칩 색과 바로 짝지을 수 있다. */
@@ -952,15 +964,25 @@ function renderGuides() {
      ㄱ자 팔을 그린다 — 원장님이 빨간 펜으로 그려주신 그 모양입니다.
      이 모서리를 드로잉의 꼬리 끝에 얹으면 꼬리·아우터가 한 번에 맞습니다.
      ⛔ 가이드가 꼬리 차례일 때만 그립니다 — 늘 그리면 화면이 시끄러워집니다. */
-  if (S.guideOn && S.guideCur === "h3" && g.h3Visible && g.v4Visible) {
-    const y = g.h3 * H, arm = Math.max(16, Math.min(W, H) * 0.045);
-    for (const [x, inward] of [[g.v4 * W, 1], [(2 * g.v1 - g.v4) * W, -1]]) {
-      if (x < 2 || x > workRight() * W) continue;
-      const d = `M ${x + inward * arm} ${y} L ${x} ${y} L ${x} ${y + arm}`;
-      frag.appendChild(mk("path", { d, fill: "none", stroke: "#0A0D14",
-        "stroke-width": 5.5, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-opacity": 0.55 }));
-      frag.appendChild(mk("path", { d, fill: "none", stroke: liveColor(H_SPECS.find((q) => q.key === "h3")),
-        "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round", class: "blink" }));
+  /* ⚠️ v1.67.0 — 아치 스텝에도 같은 표식. **팔 방향이 다릅니다** (원장님 지시 2026-08-24:
+     「아치선의 굵은 색상은 아래와 안쪽이 아니라 **안쪽과 위** 라인이어야 한다」)
+       · 꼬리 : 안쪽 + **아래** — 꼬리 끝 아래로 눈썹 몸통이 이어집니다
+       · 아치 : 안쪽 + **위**  — 산 바로 아래가 눈썹이라, 아래로 그으면 드로잉을 덮습니다
+     ⛔ 두 방향을 같게 만들지 마세요. */
+  {
+    const pr = S.guideOn ? pairOfStep(S.guideCur) : null;
+    const vsp = pr ? V_SPECS.find((q) => q.key === pr.lr) : null;
+    if (pr && vsp && g[specOf(pr.step).vis] && g[vsp.vis]) {
+      const y = g[pr.step] * H, arm = Math.max(16, Math.min(W, H) * 0.045);
+      const ay = pr.up ? y - arm : y + arm;
+      for (const [x, inward] of [[g[pr.lr] * W, 1], [(2 * g.v1 - g[pr.lr]) * W, -1]]) {
+        if (x < 2 || x > workRight() * W) continue;
+        const d = `M ${x + inward * arm} ${y} L ${x} ${y} L ${x} ${ay}`;
+        frag.appendChild(mk("path", { d, fill: "none", stroke: "#0A0D14",
+          "stroke-width": 5.5, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-opacity": 0.55 }));
+        frag.appendChild(mk("path", { d, fill: "none", stroke: liveColor(specOf(pr.step)),
+          "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round", class: "blink" }));
+      }
     }
   }
 
@@ -1183,6 +1205,14 @@ touch.addEventListener("pointerdown", (e) => {
         flip: key === "v4" ? mirrored : sp.x > S.g.v1 * S.dim.W,
       };
     }
+    /* v1.67.0 — 아치(h2)·아치선(v6)도 같은 규칙. 아치두께는 아치를 따라 **같은 만큼** 내려간다
+       (두께를 유지한 채 산 전체가 움직인다). ⛔ 아치두께 자체를 잡으면 위아래만 — 그대로 둡니다. */
+    if (!S.multi && (key === "h2" || key === "v6") && S.g.h2Visible && S.g.v6Visible) {
+      gDrag.archPair = {
+        h2: S.g.h2, v6: S.g.v6, at: S.g.archThickness,
+        flip: key === "v6" ? mirrored : sp.x > S.g.v1 * S.dim.W,
+      };
+    }
     render();
     const c0 = posConfig();
     /* 값 HUD 없음 (v1.44.0) — 바 라벨의 숫자로 충분합니다 */
@@ -1224,6 +1254,12 @@ touch.addEventListener("pointermove", (e) => {
       /* 꼬리·아우터 사선 (v1.61.0) — 한 손짓으로 꼬리 끝 점을 놓는다 */
       setLine("h3", gDrag.tailPair.h3 + dyN);
       setLine("v4", gDrag.tailPair.flip ? gDrag.tailPair.v4 - dxN : gDrag.tailPair.v4 + dxN);
+    } else if (gDrag.archPair) {
+      /* 아치·아치선 사선 (v1.67.0) — 산꼭대기 한 점을 한 손짓으로. 두께가 함께 따라온다 */
+      const a = gDrag.archPair;
+      setLine("h2", a.h2 + dyN);
+      setLine(ARCH_PAIR.thick, a.at + dyN);
+      setLine("v6", a.flip ? a.v6 - dxN : a.v6 + dxN);
     } else {
       dragLineBy(gDrag.key, gDrag.base, dxN, dyN, gDrag.mirrored);
     }
@@ -1293,7 +1329,10 @@ function endPointer(e) {
 function guideAdvance(key) {
   if (!S.guideOn) return;
   /* 꼬리 스텝에서 아우터를 움직였어도 **그 스텝을 끝낸 것**으로 친다 (v1.64.0) */
-  if (key === TAIL_PAIR.lr && S.guideCur === TAIL_PAIR.step) key = TAIL_PAIR.step;
+  {
+    const pr = pairOfStep(S.guideCur);
+    if (pr && key === pr.lr) key = pr.step;
+  }
   const i = GUIDE_FLOW.indexOf(key);
   if (i < 0) return;                                   // 플로우 밖의 선은 순서에 영향 없음
   const next = i + 1 < GUIDE_FLOW.length ? GUIDE_FLOW[i + 1] : null;
@@ -1415,8 +1454,9 @@ function noteSel(key) {
      잠시 내리고(null), 플로우 안 선을 다시 고르면 **그 선부터 재개**한다.
      ⚠️ 이 두 줄을 지우면 밝은 선이 두 개가 되는 문제가 그대로 돌아옵니다. */
   if (S.guideOn) S.guideCur = GUIDE_FLOW.includes(key) ? key : null;
-  /* v1.64.0 — 꼬리 스텝은 **꼬리+아우터 동시**: 위아래 바=꼬리, 좌우 바=아우터 */
-  if (S.guideOn && S.guideCur === TAIL_PAIR.step) S.selLR = TAIL_PAIR.lr;
+  /* v1.64.0 — 꼬리 스텝은 **꼬리+아우터 동시**: 위아래 바=꼬리, 좌우 바=아우터
+     v1.67.0 — 아치 스텝도 같은 방식: 위아래 바=아치, 좌우 바=아치선 */
+  if (S.guideOn) { const pr = pairOfStep(S.guideCur); if (pr) S.selLR = pr.lr; }
 }
 function setSel(key) {
   noteSel(key);
@@ -1536,7 +1576,13 @@ function applyPos(v, key) {
   v = clamp(v, 0, 1);
   if (k === "outerAngle") S.g.outerAngle = v;
   else if (k === "innerAngle") S.g.innerAngle = clamp(1 - v, 0.02, 0.98);
-  else setLine(k, c.invert ? 1 - v : v);
+  else if (k === ARCH_PAIR.step) {
+    /* v1.67.0 — 바·화살표로 아치를 올리면 **아치두께도 같은 만큼** 따라온다.
+       손으로 끄는 사선과 같은 규칙이어야 합니다 (한쪽만 고치면 두께가 어긋납니다). */
+    const nv = c.invert ? 1 - v : v, d = nv - S.g[k];
+    setLine(k, nv);
+    setLine(ARCH_PAIR.thick, S.g[ARCH_PAIR.thick] + d);
+  } else setLine(k, c.invert ? 1 - v : v);
   render();
 }
 
@@ -3403,4 +3449,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
-  GUIDE_FLOW, TAIL_PAIR, updateGuideTip, trimOutside, browBoxes };
+  GUIDE_FLOW, TAIL_PAIR, ARCH_PAIR, updateGuideTip, trimOutside, browBoxes };
