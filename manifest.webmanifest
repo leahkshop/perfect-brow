@@ -1,6 +1,6 @@
 {
-  "name": "Perfect Brow — 눈썹 밸런스 가이드",
-  "short_name": "Perfect Brow",
+  "name": "Brow Balance",
+  "short_name": "Brow Balance",
   "description": "PMU 아티스트와 눈썹 디자이너를 위한 정밀 눈썹 대칭·밸런스 가이드 도구",
   "start_url": "./index.html",
   "scope": "./",
