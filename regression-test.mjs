@@ -2890,6 +2890,10 @@ console.log("\n[밸런스 판정]");
       };
       const az = arrow("zoom"), av = arrow("vertical"), ah = arrow("horizontal");
       const zoomPct = Math.abs(az.after / az.before - 1);       /* 줌은 배율 변화율로 */
+      /* ⚠️ v1.65.0 방향 (원장님 지시): 위아래 모드는 **▶ = 사진이 위로** (oy 가 줄어든다).
+         좌우 모드는 ▶ = 오른쪽 (ox 가 는다). ⛔ 부호를 되돌리지 마세요. */
+      const upIsRight = av.after < av.before;
+      const rightIsRight = ah.after > ah.before;
 
       /* ② 가이드 프롬프트 — 스텝마다 문구가 있고, 가이드를 끄면 숨는다 */
       S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 };
@@ -2918,16 +2922,18 @@ console.log("\n[밸런스 판정]");
         const n = d.match(/[\d.]+/g).map(Number);
         return Math.abs(n[2] - S.g.v4 * W) < 2 && Math.abs(n[3] - S.g.h3 * H) < 2;
       });
-      return { zoomPct, dv: av.d, dh: ah.d, tipAtInner, tipAtTail, everyStep, tipHiddenOff,
-               noneAtArch, cornerPairs: cs.length, hit };
+      return { zoomPct, dv: av.d, dh: ah.d, upIsRight, rightIsRight, tipAtInner, tipAtTail,
+               everyStep, tipHiddenOff, noneAtArch, cornerPairs: cs.length, hit };
     });
     await ctx.close();
-    check("114. 화살표 미세 이동 · 가이드 프롬프트 · 꼬리 십자 모서리 표식",
+    check("114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 꼬리 십자 모서리 표식",
       r.zoomPct > 0 && r.zoomPct < 0.018                /* 줌 한 칸 1.8% 미만 */
-        && r.dv > 0 && r.dv < 0.005 && r.dh > 0 && r.dh < 0.005   /* 캔버스의 0.5% 미만 = 약 2px */
+        && r.dv > 0 && r.dv < 0.003 && r.dh > 0 && r.dh < 0.003   /* v1.65.0 — 캔버스의 0.3% 미만 ≈ 1px */
+        && r.upIsRight && r.rightIsRight                          /* ▶ = 위로 / 오른쪽 */
         && r.tipAtInner && r.tipAtTail && r.everyStep && r.tipHiddenOff
         && r.noneAtArch && r.cornerPairs >= 2 && r.hit,
-      `줌 한 칸 ${(r.zoomPct * 100).toFixed(2)}%(<1.8%) · 위아래 ${r.dv.toFixed(4)} / 좌우 ${r.dh.toFixed(4)}(<0.005) · `
+      `줌 한 칸 ${(r.zoomPct * 100).toFixed(2)}%(<1.8%) · 위아래 ${r.dv.toFixed(4)} / 좌우 ${r.dh.toFixed(4)}(<0.003) · `
+      + `▶=위로 ${r.upIsRight} / ▶=오른쪽 ${r.rightIsRight} · `
       + `프롬프트 이너=${r.tipAtInner} 꼬리강조=${r.tipAtTail} 전스텝=${r.everyStep} 끄면숨김=${r.tipHiddenOff} · `
       + `십자표식 아치때없음=${r.noneAtArch} 개수=${r.cornerPairs} 교점일치=${r.hit}`);
   }

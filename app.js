@@ -338,7 +338,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.64.0";
+const APP_VERSION = "v1.65.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1544,16 +1544,23 @@ function applyPos(v, key) {
 function photoConfig() {
   const p = S.p, lim = panLimit();
   switch (S.photoMode) {
-    /* ⚠️ v1.64.0 — 화살표 한 번의 이동량 (원장님 지시 2026-08-23: 「화살표 눌렀을 때의
-       이동이 매우 큼 — 아주 미세하게」). 줌 0.03→0.004 · 위아래/좌우 0.012→0.002 (한 번에 1~2px).
-       바를 끌면 여전히 크게 움직이니, 화살표는 **마무리 미세조정** 전용입니다.
-       ⛔ 다시 키우지 마세요 — 시술 중 한 번 눌러 튀면 처음부터 다시 맞춰야 합니다. */
+    /* ⚠️ v1.65.0 — 화살표 한 번의 이동량 (원장님 지시 2026-08-23)
+       v1.64.0 「이동이 매우 큼 — 아주 미세하게」 → v1.65.0 「좌우·위아래 더 예민하게」
+         줌       0.03  → 0.004   (≈1.5%/회)
+         위아래·좌우 0.012 → 0.0012  (**≈1px/회** — 손끝 한 픽셀 단위 마무리)
+       바를 끌면 여전히 크게 움직입니다 — 화살표는 **마무리 미세조정** 전용입니다.
+       ⛔ 다시 키우지 마세요 — 시술 중 한 번 눌러 튀면 처음부터 다시 맞춰야 합니다.
+
+       ⚠️ v1.65.0 **위아래 모드의 방향** (원장님 지시): 「오른쪽 화살표가 아래로 움직이는데
+       위로 올라가도록」 → 위아래 모드는 **▶ = 사진이 위로**, ◀ = 아래로. 부호를 뒤집어 둡니다.
+       바를 끄는 방향도 같이 뒤집혀 오른쪽 = 위 로 일치합니다.
+       ⛔ 부호를 되돌리지 마세요 — 원장님 손이 그렇게 기억합니다. */
     case "zoom":
       return { name: t("editor_zoom"), v: Math.log(p.zoom / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN), disp: p.zoom.toFixed(2) + "×", step: 0.004 };
     case "vertical":
-      return { name: t("editor_vertical"), v: clamp(p.oy / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.oy * 100), step: 0.002 };
+      return { name: t("editor_vertical"), v: clamp(-p.oy / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.oy * 100), step: 0.0012 };
     case "horizontal":
-      return { name: t("editor_horizontal"), v: clamp(p.ox / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.ox * 100), step: 0.002 };
+      return { name: t("editor_horizontal"), v: clamp(p.ox / (2 * lim) + 0.5, 0, 1), disp: Math.round(p.ox * 100), step: 0.0012 };
     case "balance":
       return { name: t("editor_balance"), v: p.rot / (2 * ROT_MAX) + 0.5, disp: p.rot.toFixed(1) + "°", step: 0.008 };
   }
@@ -1563,7 +1570,7 @@ function applyPhoto(v) {
   v = clamp(v, 0, 1);
   const p = S.p, lim = panLimit();
   if (S.photoMode === "zoom") p.zoom = ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, v);
-  else if (S.photoMode === "vertical") p.oy = (v - 0.5) * 2 * lim;
+  else if (S.photoMode === "vertical") p.oy = -(v - 0.5) * 2 * lim;   /* ▶ = 위로 (v1.65.0) */
   else if (S.photoMode === "horizontal") p.ox = (v - 0.5) * 2 * lim;
   else if (S.photoMode === "balance") p.rot = (v - 0.5) * 2 * ROT_MAX;
   render();
