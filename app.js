@@ -338,7 +338,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.65.0";
+const APP_VERSION = "v1.66.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2248,21 +2248,42 @@ function browBoxes() {
       x0: Math.min(...xs) - DRAW_PAD_X * wd, x1: Math.max(...xs) + DRAW_PAD_X * wd,
       y0: yU - DRAW_PAD_UP * h, y1: Math.max(y1, yL + 0.15 * h),
       cy: (yU + yL) / 2, h,          // h = 랜드마크 눈썹 높이 — 두께 상식 검사에 쓴다
+      /* v1.66.0 — **랜드마크 원본 범위**(여유 없음). 머리카락·그림자를 걸러내는 자입니다.
+         읽어낸 판독이 이 범위에서 크게 벗어나면 눈썹이 아닌 것을 읽은 것입니다. */
+      lx0: Math.min(...xs), lx1: Math.max(...xs), wd,
     };
   };
   const a = box(BROW_UP_A, BROW_LO_A), b = box(BROW_UP_B, BROW_LO_B);
   return a.x0 <= b.x0 ? { left: a, right: b } : { left: b, right: a };
 }
 
-/* 랜드마크가 없을 때 — 기준 쪽 절반의 위쪽을 통째로 훑는다.
-   실제 앱에서는 얼굴 인식이 끝난 뒤에만 부르므로 거의 쓰이지 않지만,
-   인식이 실패한 사진에서도 그린 선을 잡을 수 있게 남겨 둡니다. */
+/* ⚠️ v1.66.0 — 랜드마크가 없을 때의 탐색 상자 (원장님 지시 2026-08-23)
+   예전엔 **기준 쪽 화면 절반을 통째로** 훑었습니다. 그래서 얼굴 인식이 실패한 사진에서
+   화면 가장자리의 **머리카락**이 그대로 눈썹 잉크가 되어, 아우터·아치선이 관자놀이 밖으로
+   밀리고 꼬리 자가 이마로 올라갔습니다.
+   이제 **지금 선이 있는 자리**를 사전 정보로 씁니다 — 이너~아우터 사이 ±22%, 위아래는
+   아치~앞두께 밴드의 앞뒤로 한 배쯤. 눈 기준선 위로는 넘어가지 않습니다.
+   ⛔ 다시 화면 절반으로 되돌리지 마세요. 머리카락이 들어온 사진에서 그대로 재발합니다. */
 function fallbackBox(side) {
-  const { W, H } = S.dim;
-  const cx = S.g.v1 * W, wr = workRight() * W;
+  const { W, H } = S.dim, g = S.g;
+  const cx = g.v1 * W, wr = workRight() * W;
+  const inner = Math.abs(g.v2 - g.v1) * W;      // 센터 → 이너
+  const outer = Math.abs(g.v4 - g.v1) * W;      // 센터 → 아우터
+  const wd = Math.max(outer - inner, 20);
+  /* 안쪽(코 쪽)은 넉넉히 — 앞머리 위치는 사람마다 크게 다릅니다.
+     바깥(관자놀이)은 좁게 — 그쪽에 머리카락이 있습니다. */
+  const padIn = 0.55 * wd, padOut = 0.30 * wd;
+  const yTop = Math.min(g.h2, g.front) * H;
+  const yBot = Math.max(g.frontThickness, g.archThickness) * H;
+  const h = Math.max(yBot - yTop, 10);
+  const y0 = Math.max(0, yTop - 1.3 * h);
+  const y1 = Math.max(y0 + 8, Math.min(g.h1 * H - 0.20 * h, yBot + 1.7 * h));
+  const Lx0 = cx - outer, Lx1 = cx - inner;
   return side === "L"
-    ? { x0: 0, x1: cx - 4, y0: 0, y1: S.g.h1 * H, cy: null, h: null }
-    : { x0: cx + 4, x1: wr, y0: 0, y1: S.g.h1 * H, cy: null, h: null };
+    ? { x0: Math.max(0, Lx0 - padOut), x1: Math.min(cx - 4, Lx1 + padIn), y0, y1,
+        cy: (yTop + yBot) / 2, h, lx0: Lx0 - padOut * 0.5, lx1: Lx1 + padIn * 0.5, wd }
+    : { x0: Math.max(cx + 4, 2 * cx - Lx1 - padIn), x1: Math.min(wr, 2 * cx - Lx0 + padOut), y0, y1,
+        cy: (yTop + yBot) / 2, h, lx0: 2 * cx - Lx1 - padIn * 0.5, lx1: 2 * cx - Lx0 + padOut * 0.5, wd };
 }
 
 /* 한 열에서 "그린 선" 한 덩어리를 찾는다.
@@ -2345,7 +2366,82 @@ function keepBand(pts) {
     const s = [keep[Math.max(0, i - 1)][key], keep[i][key], keep[Math.min(keep.length - 1, i + 1)][key]].sort((a, b) => a - b);
     return s[1];
   };
-  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot") }));
+  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot"), ink: p.ink, edge: p.edge }));
+}
+
+/* ⚠️ v1.66.0 — **머리카락·그림자 방어** (원장님 지시 2026-08-23)
+   원장님 사진에서 화면 양 끝의 **머리카락**이 눈썹 잉크로 읽혀, 아우터·아치선이 관자놀이
+   바깥으로 밀리고 꼬리 자가 이마 위로 올라갔습니다 (스크린샷 픽셀로 확인 — 아치선 280px,
+   아우터 100px, 꼬리 340px 벗어남). 원인은 두 가지였습니다:
+     ① 탐색 상자 가장자리 열에는 **눈썹이 아예 없어서** 거기서 제일 어두운 것(머리카락·
+        눈꺼풀 그림자)이 그대로 표본이 된다
+     ② `seq[0]`·`seq[n-1]`(이너·아우터)와 아치 봉우리가 **그 극값 열 하나**로 정해진다
+   해결: 판독 뒤 **양 끝을 다듬는다**.
+     · 잉크가 중앙값의 `TRIM_INK` 미만인 바깥 열을 끝에서부터 버린다 (눈썹이 없는 열)
+     · 랜드마크 눈썹 범위 밖 `TRIM_OUT` 을 넘는 열은 버린다 (머리카락은 늘 이 밖에 있다)
+     · 남은 폭이 랜드마크 눈썹의 `TRIM_MIN_SPAN` 미만이면 **판독 실패로 돌린다**
+       — 「애매하면 아무것도 보여주지 않는다」(원장님 기준). 틀린 자리에 확신 있게
+       선을 놓는 것이 안 놓는 것보다 나쁩니다.
+   ⛔ 이 함수를 건너뛰지 마세요. 건너뛰면 머리카락이 들어온 사진에서 그대로 재발합니다. */
+const TRIM_INK = 0.38;        // 중앙값 잉크의 이 비율 미만인 바깥 열은 눈썹이 아니다
+const TRIM_OUT = 0.14;        // 랜드마크 눈썹 폭의 이 비율까지만 바깥을 허용
+const TRIM_MIN_SPAN = 0.5;    // 다듬고 남은 폭이 랜드마크 눈썹의 이 비율 미만이면 실패
+const TRIM_GAP = 2.5;         // 열 간격의 이 배를 넘게 벌어지면 다른 덩어리로 본다
+const TRIM_PIECE = 0.25;      // 전체 열의 이 비율 미만인 바깥 덩어리는 눈썹이 아니다
+function trimOutside(band, b) {
+  if (!band || !band.length) return null;
+  /* ⓐ 랜드마크 범위 밖 열 버리기 — 머리카락은 언제나 눈썹 바깥에 있다 */
+  if (b && b.lx0 !== undefined) {
+    const pad = TRIM_OUT * b.wd;
+    band = band.filter((p) => p.x >= b.lx0 - pad && p.x <= b.lx1 + pad);
+    if (band.length < DRAW_MIN_HITS) return null;
+  }
+  /* ⓑ 잉크가 옅은 바깥 열을 끝에서부터 버리기 — 눈썹이 없는 열 */
+  const inks = band.map((p) => p.ink || 0).slice().sort((x, y) => x - y);
+  const med = inks[Math.floor(inks.length / 2)] || 0;
+  if (med > 0) {
+    let a = 0, z = band.length - 1;
+    while (a < z && (band[a].ink || 0) < med * TRIM_INK) a++;
+    while (z > a && (band[z].ink || 0) < med * TRIM_INK) z--;
+    band = band.slice(a, z + 1);
+    if (band.length < DRAW_MIN_HITS) return null;
+  }
+  /* ⓒ **탐색창 천장에 닿은** 바깥 열을 끝에서부터 버리기 — 머리카락은 세로로 서서 창 위로
+     그냥 빠져나갑니다. 잉크·두께로는 못 거릅니다 — 머리카락이 눈썹보다 **더 짙고**, 창에
+     걸친 만큼만 보여서 두께도 눈썹과 비슷하게 나옵니다 (원장님 사진: 눈썹 잉크 2039 vs
+     머리카락 5160, 두께 11 vs 35). */
+  {
+    let a = 0, z = band.length - 1;
+    while (a < z && band[a].edge) a++;
+    while (z > a && band[z].edge) z--;
+    band = band.slice(a, z + 1);
+    if (band.length < DRAW_MIN_HITS) return null;
+  }
+  /* ⓓ **끊어진 바깥 조각** 버리기 — 눈썹은 한 덩어리입니다. 열 간격보다 훨씬 크게 벌어져
+     떨어져 나온 작은 조각(머리카락 몇 열, 그림자 한 점)은 눈썹이 아닙니다.
+     가운데가 끊긴 것은 그대로 둡니다 — 성근 털 사진에서 눈썹 절반을 잃지 않으려는 것. */
+  if (band.length > 2) {
+    const dxs = [];
+    for (let i = 1; i < band.length; i++) dxs.push(band[i].x - band[i - 1].x);
+    const step = dxs.slice().sort((x, y) => x - y)[Math.floor(dxs.length / 2)] || 1;
+    const cl = [[band[0]]];
+    for (let i = 1; i < band.length; i++) {
+      if (band[i].x - band[i - 1].x > TRIM_GAP * step) cl.push([]);
+      cl[cl.length - 1].push(band[i]);
+    }
+    if (cl.length > 1) {
+      while (cl.length > 1 && cl[0].length < TRIM_PIECE * band.length) cl.shift();
+      while (cl.length > 1 && cl[cl.length - 1].length < TRIM_PIECE * band.length) cl.pop();
+      band = cl.flat();
+      if (band.length < DRAW_MIN_HITS) return null;
+    }
+  }
+  /* ⓔ 남은 폭이 너무 짧으면 판독 실패 — 조용히 실패하는 편이 낫다 */
+  if (b && b.wd) {
+    const span = band[band.length - 1].x - band[0].x;
+    if (span < TRIM_MIN_SPAN * b.wd) return null;
+  }
+  return band;
 }
 
 /* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
@@ -2376,10 +2472,14 @@ function readDrawing(img, contrast, side) {
   const pts = cols.map((c) => {
     const r = outline && c.pair ? c.pair : c.runs[c.si];
     inkSum += c.runs[c.si].ink;                    // 이 쪽 드로잉이 얼마나 짙은가 (좌우 비교용)
-    return { x: c.x, top: r.top, bot: r.bot };
+    /* v1.66.0 — 탐색창 **천장에 닿은** 열 표시. 눈썹 위로는 늘 여유를 두고 창을 잡으므로,
+       창 위로 그냥 빠져나가는 것은 눈썹이 아니라 머리카락입니다. `trimOutside` 가 씁니다.
+       ⚠️ 바닥은 세지 마세요 — 창 아래는 **눈꺼풀 방어선**이라 눈썹 앞머리가 닿습니다. */
+    return { x: c.x, top: r.top, bot: r.bot, ink: c.runs[c.si].ink, edge: r.top <= y0 + 1 };
   });
   pts.sort((p, q) => p.x - q.x);
-  const band = keepBand(pts);
+  let band = keepBand(pts);
+  band = trimOutside(band, b);      /* v1.66.0 — 머리카락·그림자 방어 (아래 참고) */
   if (band) { band.refH = b.h; band.ink = inkSum; }   // refH: 두께 상식 검사 · ink: 좌우 비교
   return band;
 }
@@ -2442,9 +2542,19 @@ function autoFromDrawing() {
     return v[clamp(Math.round(q * (v.length - 1)), 0, v.length - 1)];
   };
 
-  /* 아치 = 드로잉에서 **제일 높은 곳**. 위치를 미리 정하지 않고 사진에서 찾는다. */
-  let pk = 0;
-  for (let i = 1; i < n; i++) if (seq[i].top < seq[pk].top) pk = i;
+  /* 아치 = 드로잉에서 **제일 높은 곳**. 위치를 미리 정하지 않고 사진에서 찾는다.
+     ⚠️ v1.66.0 — 예전엔 `top` 최솟값 **열 하나**로 정해서, 머리카락·그림자 한 조각이
+     높게 잡히면 아치선이 통째로 그리로 끌려갔습니다 (원장님 사진에서 280px 벗어남).
+     이제 ① 이웃 3열 평균으로 **완만하게** 보고 ② 눈썹 양 끝 15% 는 후보에서 뺀다
+     (아치는 앞머리나 꼬리 끝에 있을 수 없습니다).
+     ⛔ 다시 단일 극값으로 되돌리지 마세요. */
+  const smoothTop = (i) => {
+    const a = seq[Math.max(0, i - 1)].top, b2 = seq[i].top, c2 = seq[Math.min(n - 1, i + 1)].top;
+    return (a + b2 + c2) / 3;
+  };
+  const lo = Math.max(1, Math.round(n * 0.15)), hi = Math.min(n - 2, Math.round(n * 0.85));
+  let pk = lo;
+  for (let i = lo; i <= hi; i++) if (smoothTop(i) < smoothTop(pk)) pk = i;
   const win = Math.max(1, Math.round(n * 0.08));
   const pa = clamp(pk - win, 0, n - 1) / (n - 1), pb = clamp(pk + win, 0, n - 1) / (n - 1);
 
@@ -3293,4 +3403,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
-  GUIDE_FLOW, TAIL_PAIR, updateGuideTip };
+  GUIDE_FLOW, TAIL_PAIR, updateGuideTip, trimOutside, browBoxes };

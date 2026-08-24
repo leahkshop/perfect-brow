@@ -70,7 +70,44 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((r) => server.listen(PORT, r));
 
+/* ⚠️ v1.66.0 — **머리카락이 화면에 들어온 사진** (원장님 실제 사진의 실패 상황 재현)
+   관자놀이 쪽으로 머리카락이 눈썹 꼬리 바로 옆까지 내려온 얼굴. 이 사진에서 드로잉 맞춤이
+   머리카락을 눈썹으로 읽으면 아우터·아치선이 바깥으로 밀리고 꼬리 자가 이마로 올라갑니다. */
+function makeHairFace() {
+  const W = 900, H = 1200, cx = 450, cy = 470, ang = (6 * Math.PI) / 180;
+  const eye = (x, y) => `
+    <ellipse cx="${x}" cy="${y}" rx="72" ry="30" fill="#fcfaf7"/>
+    <circle cx="${x}" cy="${y}" r="26" fill="#4e3628"/>
+    <circle cx="${x}" cy="${y}" r="11" fill="#14100e"/>`;
+  const brow = (x, y) => `<path d="M ${x - 80} ${y - 62} Q ${x} ${y - 108} ${x + 80} ${y - 62}"
+      stroke="#423028" stroke-width="15" fill="none" stroke-linecap="round"/>`;
+  /* 머리카락 — 눈썹 끝에서 바깥으로 살짝 겹치며 아래로 흘러내린다 (실제 사진과 같은 배치) */
+  const hair = (x, dir) => `
+    <path d="M ${x} ${cy - 190} C ${x + dir * 26} ${cy - 90}, ${x + dir * 10} ${cy - 10}, ${x + dir * 30} ${cy + 90}"
+      stroke="#2b1f1a" stroke-width="34" fill="none" stroke-linecap="round"/>
+    <path d="M ${x + dir * 26} ${cy - 175} C ${x + dir * 54} ${cy - 80}, ${x + dir * 40} ${cy}, ${x + dir * 58} ${cy + 80}"
+      stroke="#241a16" stroke-width="30" fill="none" stroke-linecap="round"/>`;
+  const L = { x: cx - 125 * Math.cos(ang), y: cy - 125 * Math.sin(ang) };
+  const R = { x: cx + 125 * Math.cos(ang), y: cy + 125 * Math.sin(ang) };
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <rect width="${W}" height="${H}" fill="#e8e2dc"/>
+    <rect x="${cx - 90}" y="700" width="180" height="${H - 700}" fill="#e2beA6"/>
+    <ellipse cx="${cx}" cy="490" rx="235" ry="340" fill="#eecbb2"/>
+    <ellipse cx="${cx}" cy="260" rx="255" ry="170" fill="#3c2c26"/>
+    <ellipse cx="${cx}" cy="368" rx="215" ry="152" fill="#eecbb2"/>
+    ${eye(L.x, L.y)}${eye(R.x, R.y)}${brow(L.x, L.y)}${brow(R.x, R.y)}
+    ${hair(L.x - 104, -1)}${hair(R.x + 104, 1)}
+    <path d="M ${cx} 500 L ${cx - 14} 610" stroke="#cea68e" stroke-width="6" fill="none"/>
+    <ellipse cx="${cx}" cy="694" rx="62" ry="22" fill="#c46e68"/>
+  </svg>`;
+  const p = path.join(ROOT, ".test-hair.svg");
+  fs.writeFileSync(p, svg);
+  return { file: p, pupilL: L, pupilR: R, iw: W, ih: H,
+           browHalf: 80, browApexDy: -108, browEndDy: -62 };
+}
+
 const face = makeTestFace();
+const hairFace = makeHairFace();
 const URL_BASE = `http://127.0.0.1:${PORT}/index.html`;
 
 console.log("\n━━━ Perfect Brow 회귀 테스트 ━━━\n");
@@ -1901,9 +1938,16 @@ console.log("\n[밸런스 판정]");
        눈썹보다 옅지만 또렷해서, 이걸 눈썹에 붙여 읽으면 앞두께가 피부까지 내려갑니다. */
     const crease = tag === "c"
       ? `<line x1="120" y1="205" x2="340" y2="205" stroke="#6a5040" stroke-width="5"/>` : "";
+    /* ⚠️ tag "h" → **관자놀이 머리카락** (원장님 사진의 실제 상황 · v1.66.0).
+       눈썹 꼬리(x=120) 바깥에 눈썹과 같은 높이로 진한 머리카락이 내려온다.
+       예전 코드는 이것을 눈썹으로 읽어 아우터·아치선을 관자놀이 밖으로 밀어냈습니다. */
+    const hair = tag === "h"
+      ? `<path d="M 96 60 C 104 120, 84 150, 96 235" stroke="#241a16" stroke-width="30" fill="none" stroke-linecap="round"/>`
+      + `<path d="M 58 70 C 70 130, 50 160, 62 245" stroke="#1d1512" stroke-width="26" fill="none" stroke-linecap="round"/>`
+      + `<path d="M 118 96 C 100 104, 78 100, 60 108" stroke="#241a16" stroke-width="9" fill="none" stroke-linecap="round"/>` : "";
     fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
       + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
-      + `<polygon points="${poly}" ${paint}/>${crease}</svg>`);
+      + `<polygon points="${poly}" ${paint}/>${crease}${hair}</svg>`);
     return f;
   };
 
@@ -1926,7 +1970,7 @@ console.log("\n[밸런스 판정]");
 
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
         fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
-        fn = drawFace(SHAPE_A, false, "n");
+        fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h");
   const runDraw = async (useLandmarks, file, tr, sh) => {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -2937,6 +2981,19 @@ console.log("\n[밸런스 판정]");
       + `프롬프트 이너=${r.tipAtInner} 꼬리강조=${r.tipAtTail} 전스텝=${r.everyStep} 끄면숨김=${r.tipHiddenOff} · `
       + `십자표식 아치때없음=${r.noneAtArch} 개수=${r.cornerPairs} 교점일치=${r.hit}`);
   }
+
+  /* 115. ⚠️ v1.66.0 — **관자놀이 머리카락 방어** (원장님 지시 2026-08-23)
+     원장님 사진에서 드로잉 맞춤이 머리카락을 눈썹으로 읽어, 아치선 280px · 아우터 100px ·
+     꼬리 자 340px 이 벗어났습니다. 87~94 와 **같은 눈썹**에 머리카락만 더한 사진으로,
+     기대값도 87~94 와 같은 자를 씁니다 (judge/say).
+     ⛔ `trimOutside` 를 건너뛰거나, 예비 상자를 다시 「화면 절반」으로 넓히거나,
+        아치 봉우리를 단일 극값으로 되돌리면 여기서 잡힙니다. */
+  const o115a = await runDraw(true, fh, null, SHAPE_A);    /* 얼굴 인식 성공 경로 */
+  const o115b = await runDraw(false, fh, null, SHAPE_A);   /* 인식 실패(예비) 경로 */
+  check("115. 드로잉 맞춤 — 관자놀이 머리카락을 눈썹으로 읽지 않는다 (인식 성공)",
+    judge(o115a), say(o115a));
+  check("116. 드로잉 맞춤 — 머리카락이 있어도 예비 경로가 눈썹을 찾는다",
+    judge(o115b), say(o115b));
 
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
      「반영이 안 됐다」와 「판독이 실패했다」를 구분할 방법이 이것뿐입니다.
