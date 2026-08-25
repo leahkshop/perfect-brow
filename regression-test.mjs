@@ -1915,6 +1915,17 @@ console.log("\n[밸런스 판정]");
          [270, 120, 146], [300, 130, 166], [340, 130, 166]],
     front: [320, 130, 166], arch: [260, 120, 146], tail: [130, 158], inner: 340, outer: 120,
   };
+  /* ⚠️ v1.69.0 — 모양 C = **얼굴을 크게 확대한 사진** (원장님 실제 사진의 상황).
+     눈썹이 **지금 선보다 훨씬 위**(y 80~122)에 있고 두께도 선 간격보다 훨씬 두껍다.
+     v1.66~1.68 의 예비 경로는 위아래 창을 「지금 선 ±몇 배」로 잡아서, 이런 사진에서 창이
+     눈썹 몸통을 가로질렀고 **앞머리·아치·꼬리가 전부 창 천장 값 하나로** 나왔습니다
+     (원장님 스크린샷: 자들이 눈썹 위 여백에 뭉쳐 있었습니다).
+     ⛔ 이 모양을 지우지 마세요 — 그 증상을 재현하는 유일한 검사입니다. */
+  const SHAPE_C = {
+    cp: [[120, 110, 120], [150, 108, 120], [185, 84, 118], [215, 80, 116],
+         [260, 90, 118], [300, 100, 122], [340, 102, 122]],
+    front: [320, 102, 122], arch: [215, 80, 116], tail: [130, 109], inner: 340, outer: 120,
+  };
   const edgeAt = (cp, x, i) => {
     for (let k = 0; k < cp.length - 1; k++) {
       const a = cp[k], b = cp[k + 1];
@@ -1970,7 +1981,8 @@ console.log("\n[밸런스 판정]");
 
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
         fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
-        fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h");
+        fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h"),
+        fhi = drawFace(SHAPE_C, false, "hi");
   const runDraw = async (useLandmarks, file, tr, sh) => {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -1993,11 +2005,15 @@ console.log("\n[밸런스 판정]");
                     inner: cv(sh.inner, 160).x, outer: cv(sh.outer, 160).x,
                     archV: cv(sh.arch[0], sh.arch[1]).x };
       const ok = window.PB.autoFromDrawing();
-      const g = S.g;
+      const g = S.g, D = window.PB.DEFAULT_GUIDE;
+      /* ⚠️ v1.69.0 — 드로잉 맞춤이 놓는 것은 **앞두께·아치 둘뿐**. 나머지는 그대로여야 한다 */
+      const OTHERS = ["front", "archThickness", "h3", "v2", "v4", "v6"];
       return { ok, W, H, exp,
         frontPx: g.front * H, ftPx: g.frontThickness * H,
         archPx: g.h2 * H, atPx: g.archThickness * H, tailPx: g.h3 * H,
         innerPx: g.v2 * W, outerPx: g.v4 * W, archVPx: g.v6 * W,
+        othersUntouched: OTHERS.every((k) => Math.abs(g[k] - D[k]) < 1e-9),
+        moved: OTHERS.filter((k) => Math.abs(g[k] - D[k]) >= 1e-9),
         mirrorOk: Math.abs(g.v7 - (2 * g.v1 - g.v6)) < 1e-9,
         pivotUntouched: Math.abs(g.innerAngle - window.PB.DEFAULT_GUIDE.innerAngle) < 1e-9,
         vBase: g.baseStructureVisible };
@@ -2045,6 +2061,70 @@ console.log("\n[밸런스 판정]");
      「전혀 프로페셔널하지 못한」 위치였습니다. 2차 저대비 패스가 털을 읽어야 합니다. */
   const o94 = await runDraw(true, fn, null, SHAPE_A);
   check("94. 맨 눈썹 — 드로잉이 없어도 저대비 2차 패스가 털을 읽어 배치한다", judge(o94), say(o94));
+  /* 120. ⚠️ v1.69.0 — **얼굴을 크게 확대한 사진**에서도 나머지 선을 찾는다 (원장님 지시 2026-08-24:
+     「맞은 라인은 앞두께와 아치 라인만 맞았다고 — 나머지 안 맞은 것 교정」)
+     증상: 앞머리·아치·꼬리가 **전부 같은 값**(탐색창 천장)으로 나와 자들이 눈썹 위 여백에 뭉쳤다.
+     원인: 예비 경로의 탐색창 **위아래**를 「지금 선 ±몇 배」로 잡아, 눈썹이 선보다 위에 있으면
+           창이 눈썹 몸통을 가로질렀다 + 「지금 선 간격」 기준 두께 검사가 제대로 읽은 판독을 버렸다.
+     고침: 위아래는 **눈 기준선 위 45%** 를 본다 · 예비 경로에서는 선 간격 기준 두께 검사를 쓰지 않는다.
+     ⛔ 되돌리지 마세요. 좌우(x) 범위는 그대로 지금 선 기준입니다 — 머리카락 방어(115·116). */
+  const o120 = await runDraw(false, fhi, null, SHAPE_C);
+  check("120. 드로잉 맞춤 — 눈썹이 지금 선보다 훨씬 위에 있어도 (크게 확대한 사진) 찾아낸다",
+    judge(o120), say(o120));
+  /* 세 가로선이 **같은 값으로 뭉치지 않는지** 따로 본다 — 창에 갇히면 전부 창 천장 값이 된다 */
+  const spread120 = Math.abs(o120.frontPx - o120.archPx) > 3 && Math.abs(o120.archPx - o120.tailPx) > 3;
+  check("120b. 드로잉 맞춤 — 앞머리·아치·꼬리가 한 값으로 뭉치지 않는다 (탐색창에 갇힘 방지)",
+    spread120,
+    `앞머리 ${o120.frontPx.toFixed(0)} / 아치 ${o120.archPx.toFixed(0)} / 꼬리 ${o120.tailPx.toFixed(0)} (서로 3px 이상 달라야 함)`);
+  fs.unlinkSync(fhi);
+
+  /* 119. ⚠️ v1.69.0 — 드로잉 맞춤 뒤의 **교정 안내** (원장님 지시 2026-08-24)
+     「드로잉 맞춤시 맞아지는 라인은 오직 앞두께 아치만 — **나머지 교정 프롬프트 다시 써라**」
+     · 맞춘 뒤 가이드는 **① 이너부터** 다시 돈다 (나머지를 손으로 놓는 순서가 곧 다음 할 일)
+     · 프롬프트는 ①~⑥ 번호가 붙어 순서가 화면에서 읽힌다
+     · 자동으로 놓인 두 줄(앞두께·아치)은 「사진에서 맞췄습니다」로 **확인만** 하라고 알린다
+     ⛔ 번호를 떼거나 두 줄로 늘리지 마세요 — 시술 화면을 가립니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1300);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      S.landmarks = null; S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.g = { ...PBx.DEFAULT_GUIDE }; S.refSide = "L";
+      S.guideOn = true; S.guideCur = "h3";          /* 일부러 마지막 스텝에 있는 상태에서 누른다 */
+      document.getElementById("btnSnap").click();
+      const restarted = S.guideCur === PBx.GUIDE_FLOW[0];
+      const tip = document.getElementById("guideTip");
+      const nums = PBx.GUIDE_FLOW.map((k) => {
+        S.guideCur = k; PBx.updateGuideTip();
+        return tip.textContent.trim().slice(0, 1);
+      });
+      const tipOf = (k) => { S.guideCur = k; PBx.updateGuideTip(); return tip.textContent; };
+      return { restarted, nums };
+    });
+    /* ⚠️ 좁은 폰(667×375)에서도 **잘리지 않아야** 한다 — 칩은 nowrap + ellipsis 라
+       길면 문구 끝이 조용히 사라집니다 (화면에서는 티가 안 납니다). */
+    await p.setViewportSize({ width: 667, height: 375 });
+    await p.waitForTimeout(200);
+    const fits = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      const c = document.querySelector("#guideTip .chip") || document.getElementById("guideTip");
+      return PBx.GUIDE_FLOW.map((k) => { S.guideCur = k; PBx.updateGuideTip();
+        return { k, cut: c.scrollWidth > c.clientWidth + 1 }; });
+    });
+    await ctx.close();
+    const noCut = fits.every((q) => !q.cut);
+    const numsOk = r.nums.join("") === "①②③④⑤⑥";
+    check("119. 드로잉 맞춤 뒤 교정 안내 — ① 이너부터 다시 · 프롬프트 ①~⑥ · 좁은 폰에서도 안 잘림",
+      r.restarted && numsOk && noCut,
+      `맞춘 뒤 ①로 복귀=${r.restarted} · 번호 ${r.nums.join("")} · 좁은폰에서 안잘림=${noCut}`
+      + (noCut ? "" : ` [잘림: ${fits.filter((q) => q.cut).map((q) => q.k).join(",")}]`));
+  }
+
   fs.unlinkSync(fd); fs.unlinkSync(fo); fs.unlinkSync(fb); fs.unlinkSync(fc); fs.unlinkSync(fn);
 
 

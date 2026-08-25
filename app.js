@@ -48,13 +48,15 @@ const I18N = {
     set_dragc: "잡은 선 심", set_drage: "잡은 선 테두리", set_back: "이전 설정으로",
     set_cycle: "선 색", set_c_mine: "내 세트",
     /* v1.64.0 가이드 스텝 프롬프트 — 지금 무엇을 맞추는지 한 줄로 */
-    tip_v2: "이너 — 콧방울·내안각 기준선에 맞추세요",
-    tip_frontThickness: "앞두께 — 앞머리 아래선에 맞추세요",
-    tip_front: "앞머리 — 앞머리 윗선에 맞추세요",
-    tip_h2: "아치 + 아치선 — <b>십자의 안쪽 위 모서리</b>를 눈썹 산에 얹으세요 (사선으로 끌면 둘이 함께)",
-    tip_archThickness: "아치두께 — 산 아래선에 맞추세요",
-    tip_h3: "꼬리 + 아우터 — <b>십자의 안쪽 모서리</b>를 꼬리 끝에 얹으세요 (사선으로 끌면 둘이 함께)",
-    tip_v6: "아치선 — 산 위를 지나도록 좌우로 맞추세요",
+    /* ⚠️ v1.69.0 — 「드로잉 맞춤시 맞아지는 라인은 오직 앞두께·아치만. 나머지 교정 프롬프트
+       다시 써라」(원장님 지시 2026-08-24). 자동으로 맞는 두 줄은 **확인**, 나머지는 **손으로 교정**.
+       ⛔ 한 줄을 넘기지 마세요 — 시술 화면을 가립니다. */
+    tip_v2: "① 이너 — 콧방울·내안각 선에 세로선을 맞추세요 (좌우 바)",
+    tip_frontThickness: "② 앞두께 — 앞머리 <b>아랫선</b>에 맞추세요 (위아래 바)",
+    tip_front: "③ 앞머리 — 앞머리 <b>윗선</b>에 얹으세요 (위아래 바)",
+    tip_h2: "④ 아치 — <b>십자 안쪽 위 모서리</b>를 산꼭대기에 얹으세요 (사선 · 아치선 함께)",
+    tip_archThickness: "⑤ 아치두께 — 산 <b>아랫선</b>에 얹으세요 (위아래만)",
+    tip_h3: "⑥ 꼬리+아우터 — <b>십자 안쪽 위 모서리</b>를 꼬리 끝에 얹으세요 (사선으로 둘이 함께)",
     set_tab_base: "기본 선 · 차례", set_tab_grab: "잡은 선 · 움직일 때",
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
@@ -109,7 +111,7 @@ const I18N = {
     preset_builtin: "기본",
     ai_loading: "AI 얼굴 인식 중…",
     ai_ok: "AI 자동 정렬 완료",
-    ai_drawn: "그린 선에 맞춰 배치했습니다",
+    ai_drawn: "그린 선에 맞춰 배치했습니다 — 가이드 ①~⑥ 으로 확인하세요",
     ai_redraw: "드로잉 맞춤",
     ai_redraw_fail: "그린 선을 못 찾았습니다",
     ai_fail: "AI 얼굴 인식 실패 · 사진을 손으로 맞춰 주세요",
@@ -200,13 +202,12 @@ const I18N = {
     set_title: "Settings — Line look", set_badge: "Set",
     set_dragc: "Grab core", set_drage: "Grab outline", set_back: "Undo changes",
     set_cycle: "Colors", set_c_mine: "My set",
-    tip_v2: "Inner — align to the nostril / inner-canthus line",
-    tip_frontThickness: "Front thickness — align to the lower edge of the front",
-    tip_front: "Front — align to the upper edge of the front",
-    tip_h2: "Arch + Arch line — put the <b>inner-upper corner of the cross</b> on the brow peak (drag diagonally to move both)",
-    tip_archThickness: "Arch thickness — align to the lower edge of the arch",
-    tip_h3: "Tail + Outer — put the <b>inner corner of the cross</b> on the tail tip (drag diagonally to move both)",
-    tip_v6: "Arch line — move left/right so it passes over the peak",
+    tip_v2: "① Inner — align the vertical to the nostril / inner-canthus line",
+    tip_frontThickness: "② Front thickness — put it on the <b>lower</b> edge of the front",
+    tip_front: "③ Front — put it on the <b>upper</b> edge of the front",
+    tip_h2: "④ Arch — put the <b>inner-upper corner</b> on the peak (diagonal · arch line follows)",
+    tip_archThickness: "⑤ Arch thickness — put it on the <b>lower</b> edge of the arch (up/down only)",
+    tip_h3: "⑥ Tail+Outer — put the <b>inner-upper corner</b> on the tail tip (drag diagonally)",
     set_tab_base: "Base lines", set_tab_grab: "Grabbed line",
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
@@ -261,7 +262,7 @@ const I18N = {
     preset_builtin: "Built-in",
     ai_loading: "Detecting face…",
     ai_ok: "Auto-aligned",
-    ai_drawn: "Snapped to your drawing",
+    ai_drawn: "Snapped to your drawing — check with guide ①~⑥",
     ai_redraw: "Snap to drawing",
     ai_redraw_fail: "No drawing found",
     ai_fail: "Face detection failed · adjust the photo by hand",
@@ -338,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.68.0";
+const APP_VERSION = "v1.69.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2319,6 +2320,7 @@ function browBoxes() {
    이제 **지금 선이 있는 자리**를 사전 정보로 씁니다 — 이너~아우터 사이 ±22%, 위아래는
    아치~앞두께 밴드의 앞뒤로 한 배쯤. 눈 기준선 위로는 넘어가지 않습니다.
    ⛔ 다시 화면 절반으로 되돌리지 마세요. 머리카락이 들어온 사진에서 그대로 재발합니다. */
+const FB_UP = 0.45, FB_DOWN = 0.03;   // 눈 기준선 위 45% ~ 위 3%
 function fallbackBox(side) {
   const { W, H } = S.dim, g = S.g;
   const cx = g.v1 * W, wr = workRight() * W;
@@ -2331,8 +2333,16 @@ function fallbackBox(side) {
   const yTop = Math.min(g.h2, g.front) * H;
   const yBot = Math.max(g.frontThickness, g.archThickness) * H;
   const h = Math.max(yBot - yTop, 10);
-  const y0 = Math.max(0, yTop - 1.3 * h);
-  const y1 = Math.max(y0 + 8, Math.min(g.h1 * H - 0.20 * h, yBot + 1.7 * h));
+  /* ⚠️ v1.69.0 — **위아래는 눈 기준선에서 잰다** (원장님 지시 2026-08-24: 「나머지 안 맞은 것 교정」)
+     v1.66~1.68 은 위아래도 **지금 선이 있는 자리** 기준(±1.3h/1.7h)이었습니다. 그런데 원장님
+     사진처럼 얼굴이 크게 확대돼 **눈썹이 지금 선보다 훨씬 위에** 있으면, 그 창이 눈썹 몸통을
+     가로질러 **모든 열의 윗선이 창 천장에 붙었습니다** — 앞머리·아치·꼬리가 전부 같은 값(112px)
+     으로 나오던 실제 증상입니다 (스크린샷에서 자들이 눈썹 위 여백에 뭉쳐 있었습니다).
+     눈썹은 언제나 **눈 기준선 위 45% 안**에 있으므로 그 범위를 봅니다.
+     ⛔ 위아래를 다시 「지금 선 ±몇 배」로 되돌리지 마세요 — 선이 눈썹에서 멀면 영영 못 찾습니다.
+     ⚠️ 좌우(x)는 그대로 **지금 선 기준**입니다 — 관자놀이 머리카락을 막는 자입니다 (1-31). */
+  const y0 = Math.max(0, g.h1 * H - FB_UP * H);
+  const y1 = Math.max(y0 + 8, g.h1 * H - FB_DOWN * H);
   const Lx0 = cx - outer, Lx1 = cx - inner;
   return side === "L"
     ? { x0: Math.max(0, Lx0 - padOut), x1: Math.min(cx - 4, Lx1 + padIn), y0, y1,
@@ -2535,7 +2545,11 @@ function readDrawing(img, contrast, side) {
   pts.sort((p, q) => p.x - q.x);
   let band = keepBand(pts);
   band = trimOutside(band, b);      /* v1.66.0 — 머리카락·그림자 방어 (아래 참고) */
-  if (band) { band.refH = b.h; band.ink = inkSum; }   // refH: 두께 상식 검사 · ink: 좌우 비교
+  /* ⚠️ v1.69.0 — **두께 상식 검사는 랜드마크가 있을 때만.** `b.h`(예비 경로에서는 지금 선 간격)는
+     실제 눈썹 두께의 대리값이 못 됩니다 — 원장님 사진에서 선 간격 15px vs 실제 눈썹 50px 이라
+     제대로 읽은 판독이 「두껍다」는 이유로 버려졌습니다. 예비 경로의 방어는 머리카락 규칙
+     (창 천장·끊긴 조각·잉크 · 1-31)이 맡습니다. */
+  if (band) { band.refH = boxes ? b.h : null; band.ink = inkSum; }   // refH: 두께 상식 검사 · ink: 좌우 비교
   return band;
 }
 
@@ -3194,8 +3208,11 @@ function setRefSide(side) {
 $("btnSnap").onclick = () => {
   let ok = false;
   step(() => { ok = autoFromDrawing(); });
-  render();
-  showHud(ok ? t("ai_drawn") : t("ai_redraw_fail"), 1600);
+  /* v1.69.0 — 맞춘 뒤에는 **가이드를 처음(① 이너)부터** 다시 돕니다.
+     드로잉 맞춤이 놓는 것은 앞두께·아치 둘뿐이므로, 나머지를 손으로 놓는 순서가 곧 다음 할 일입니다. */
+  if (ok && S.guideOn) { S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
+  render(); updateButtons();
+  showHud(ok ? t("ai_drawn") : t("ai_redraw_fail"), 2200);
 };
 /* 가이드 켜고 끄기 — 끄면 플로우 즉시 종료. 켠 직후엔 아무 선도 켜지 않는다:
    **처음 움직이는 선**이 플로우의 시작이다 (원장님 지시 2026-08-21) */
