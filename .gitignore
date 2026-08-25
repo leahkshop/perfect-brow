@@ -1,0 +1,4 @@
+
+# 테스트 중 생성되는 임시 SVG
+.draw-*.svg
+.test-*.svg

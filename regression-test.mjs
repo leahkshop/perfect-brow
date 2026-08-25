@@ -2023,6 +2023,50 @@ console.log("\n[밸런스 판정]");
       + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/></svg>`);
     return f;
   };
+  /* ⭐ v1.74.0 — **앞머리 쪽이 얇게 시작하는 눈썹** (원장님 지시 2026-08-25:
+     「이너 라인은 앞 라인이 맞아 색이 시작하는 선이잖아 … 왼쪽 드로잉 시작점이 이너 시작 라인이야」)
+     몸통(x 120~300)은 두껍고, 안쪽(x 300~344)으로 갈수록 **얇아지지만 색은 그대로** 입니다.
+     잉크량(두께 × 진하기)으로 바깥 열을 자르면 색이 남아 있는 안쪽 끝까지 함께 잘립니다
+     — 원장님 사진에서 실제 시작 319px 를 앱이 306px 로 13px 짧게 잡던 바로 그 버그입니다.
+     이너는 **색이 시작하는 곳(≈344)** 에 서야 합니다. */
+  const SHAPE_HEAD = {
+    cp: [[120, 150, 178], [160, 132, 174], [220, 122, 168], [280, 126, 166],
+         [310, 132, 158], [330, 140, 150], [344, 144, 149]],
+    front: [320, 132, 158], arch: [220, 122, 168], tail: [130, 150], inner: 344, outer: 120,
+    tailMid: 164, archV: 181,
+  };
+  const makeHeadFace = () => {
+    const f = path.join(ROOT, ".draw-head.svg");
+    const up = [], dn = [];
+    for (let x = 120; x <= 344; x += 2) { up.push(`${x},${edgeAt(SHAPE_HEAD.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_HEAD.cp, x, 2).toFixed(1)}`); }
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/></svg>`);
+    return f;
+  };
+  /* ⭐ v1.74.0 — **꼬리가 얇아지지만 색은 그대로인 눈썹** (원장님 지시 2026-08-25)
+     원장님이 사진에 세 자리를 짚어 주셨습니다 — ① 얇은 헤어 ② 그때의 판독 ③ **맞는 드로잉 끝선**.
+     ② 는 잉크(두께 × 진하기) 기준이 얇아진 꼬리를 먼저 잘라서 생긴 자리이고, 정답 ③ 은
+     **색이 끝나는 곳**입니다. 이 사진은 몸통(x 170~340)이 두껍고 꼬리(x 120~170)가 얇아지지만
+     **같은 색**이며, 그 바깥(x 96~120)에는 진하기가 1/5 밖에 안 되는 **잔털**이 있습니다.
+     아우터는 ③(≈120)에 서야 하고, ①(96)까지 가면 안 됩니다. */
+  const TIP = { tipX: 120, hairX: 96, inkStopX: 150 };
+  const SHAPE_TIP = {
+    cp: [[120, 146, 152], [140, 140, 158], [170, 132, 166], [220, 122, 168],
+         [280, 126, 166], [310, 132, 164], [340, 136, 164]],
+    front: [320, 132, 164], arch: [220, 122, 168], tail: [126, 149], inner: 340, outer: 120,
+    tailMid: 152, archV: 181,
+  };
+  const makeTipFace = () => {
+    const f = path.join(ROOT, ".draw-tip.svg");
+    const up = [], dn = [];
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_TIP.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_TIP.cp, x, 2).toFixed(1)}`); }
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<rect x="96" y="144" width="26" height="8" fill="#c9b3a0"/>`      /* 잔털 — 진하기 1/5 */
+      + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/></svg>`);
+    return f;
+  };
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
         fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
         fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h"),
@@ -2043,7 +2087,8 @@ console.log("\n[밸런스 판정]");
       window.PB.render();
       /* 사진을 확대·이동해도 같은 자리에 붙어야 한다 — 기대값을 지금 변환으로 환산한다 */
       const cv = (ix, iy) => window.PB.imgToCanvas(ix, iy, S.p);
-      const exp = { front: cv(sh.front[0], sh.front[1]).y, ft: cv(sh.front[0], sh.front[2]).y,
+      /* ⚠️ v1.73.0 — 원장님 확정: **앞두께 = 윗선 · 앞머리 = 아랫선** (그 전에는 거꾸로였습니다) */
+      const exp = { ft: cv(sh.front[0], sh.front[1]).y, front: cv(sh.front[0], sh.front[2]).y,
                     arch: cv(sh.arch[0], sh.arch[1]).y, at: cv(sh.arch[0], sh.arch[2]).y,
                     /* v1.70.0 — 꼬리는 **끝의 아랫선**, 아치선은 **꺾임점 x** */
                     tail: cv(sh.tail[0], sh.tailMid).y,
@@ -2100,7 +2145,7 @@ console.log("\n[밸런스 판정]");
      이제 "잉크가 비슷한 두 줄"만 테두리로 보므로, 옅은 주름은 붙지 않습니다.
      이 검사를 지우면 그 버그가 조용히 돌아옵니다. */
   const o92 = await runDraw(true, fc, null, SHAPE_A);
-  check("92. 드로잉 자동 맞춤 — 눈썹 아래 쌍꺼풀 선에 앞두께가 끌려가지 않는다", judge(o92), say(o92));
+  check("92. 드로잉 자동 맞춤 — 눈썹 아래 쌍꺼풀 선에 앞머리(아랫선)가 끌려가지 않는다", judge(o92), say(o92));
   /* 94. ⚠️ **맨 눈썹(드로잉 없음)** — 원장님 스크린샷(2026-08-20)의 실제 상황.
      자연 눈썹은 대비가 약해 1차 패스가 포기하고 랜드마크 배치로 남았고, 그 배치가
      「전혀 프로페셔널하지 못한」 위치였습니다. 2차 저대비 패스가 털을 읽어야 합니다. */
@@ -2120,6 +2165,51 @@ console.log("\n[밸런스 판정]");
     check("122. 얇은 털 추적 금지 — 아우터는 진한 눈썹의 끝에 선다 (잔털까지 따라가지 않는다)",
       o122.ok && atBody && notChased,
       `아우터 ${o122.outerPx.toFixed(0)} (진한 눈썹 끝 ${SHAPE_TAPER.bandEndX} 에 섬=${atBody} · 잔털 끝 ${SHAPE_TAPER.tipX} 까지 안 감=${notChased})`);
+  }
+
+  /* 124. ⚠️⚠️ v1.73.0 — **앞두께는 앞머리보다 위** (원장님이 화면에 번호를 찍어 확정 2026-08-25)
+       ② 앞두께 = 눈썹 앞부분의 **윗선**
+       ① 앞머리 = 눈썹 앞부분의 **아랫선**
+     v1.72.0 까지 거꾸로 놓고 있었습니다. 원장님 표시를 캔버스 좌표로 환산하니 「앞두께」가
+     그때 앱이 **앞머리**라고 놓던 자리와 정확히 겹쳤습니다.
+     ⛔ 두 선을 다시 뒤집지 마세요. */
+  {
+    const gap = o87.frontPx - o87.ftPx;      /* y 는 아래로 갈수록 큽니다 */
+    check("124. 앞머리·앞두께 — 앞두께가 **위**, 앞머리가 **아래** (원장님 확정)",
+      gap > 10 && Math.abs(o87.ftPx - o87.exp.ft) < 6 && Math.abs(o87.frontPx - o87.exp.front) < 6,
+      `앞두께 ${o87.ftPx.toFixed(0)}(위) · 앞머리 ${o87.frontPx.toFixed(0)}(아래) · 사이 ${gap.toFixed(0)}px`);
+  }
+
+  /* 125. ⭐ v1.74.0 — **이너는 「색이 시작하는 선」** (원장님 지시 2026-08-25)
+     눈썹 앞머리는 끝으로 갈수록 얇아지므로 **잉크(두께 × 진하기)** 가 먼저 떨어집니다.
+     `trimOutside` ⓑ 가 그 열을 잘라 이너가 안쪽으로 덜 들어갔습니다 (원장님 사진 13px 짧음,
+     분홍 펜 표시로 확인). `innerStart` 가 **색이 남아 있는 동안** 안쪽 끝만 다시 이어 붙입니다.
+     ⛔ 바깥(꼬리) 끝에는 절대 같은 규칙을 쓰지 마세요 — 검사 122·123 이 잡습니다. */
+  {
+    const fhd = makeHeadFace();
+    const o125 = await runDraw(false, fhd, null, SHAPE_HEAD);
+    fs.unlinkSync(fhd);
+    const atStart = Math.abs(o125.innerPx - o125.exp.inner) < 10;
+    check("125. 이너 = 색이 시작하는 선 — 앞머리가 얇아져도 끝까지 따라간다",
+      o125.ok && atStart,
+      `이너 ${o125.innerPx.toFixed(0)} (색 시작 ${o125.exp.inner.toFixed(0)} 에 섬=${atStart})`);
+  }
+
+  /* 126. ⭐ v1.74.0 — **꼬리도 「색이 끝나는 곳」까지 간다** (원장님 지시 2026-08-25)
+     원장님 표시: ① 얇은 헤어 ② 그때 판독 ③ 맞는 드로잉 끝선. ② 는 잉크 기준이 얇아진
+     꼬리를 먼저 자른 자리였습니다 (원장님 사진 104 ↔ 정답 93, 11px 안쪽).
+     `growEnd` 가 색이 남아 있는 열(진하기 ≥ 0.5 × 중앙값)만 이어 붙입니다.
+     ⛔ 바깥 문턱(OUTER_DARK)을 0.4 아래로 내리면 이 검사와 122·123 이 함께 깨집니다. */
+  {
+    const ftip = makeTipFace();
+    const o126 = await runDraw(false, ftip, null, SHAPE_TIP);
+    fs.unlinkSync(ftip);
+    const atTip = Math.abs(o126.outerPx - TIP.tipX) < 10;          /* 색이 끝나는 곳에 선다 */
+    const notHair = o126.outerPx > TIP.hairX + 12;                 /* 잔털까지 가지 않았다 */
+    const grew = o126.outerPx < TIP.inkStopX - 10;                 /* 잉크 기준에서 실제로 더 나갔다 */
+    check("126. 꼬리 = 색이 끝나는 곳 — 얇아진 꼬리를 끝까지 · 잔털은 제외",
+      o126.ok && atTip && notHair && grew,
+      `아우터 ${o126.outerPx.toFixed(0)} (드로잉 끝 ${TIP.tipX} 에 섬=${atTip} · 잔털 ${TIP.hairX} 까지 안 감=${notHair} · 잉크 기준보다 더 나감=${grew})`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)

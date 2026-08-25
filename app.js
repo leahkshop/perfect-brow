@@ -52,8 +52,8 @@ const I18N = {
        다시 써라」(원장님 지시 2026-08-24). 자동으로 맞는 두 줄은 **확인**, 나머지는 **손으로 교정**.
        ⛔ 한 줄을 넘기지 마세요 — 시술 화면을 가립니다. */
     tip_v2: "① 이너 — 콧방울·내안각 선에 세로선을 맞추세요 (좌우 바)",
-    tip_frontThickness: "② 앞두께 — 앞머리 <b>아랫선</b>에 맞추세요 (위아래 바)",
-    tip_front: "③ 앞머리 — 앞머리 <b>윗선</b>에 얹으세요 (위아래 바)",
+    tip_frontThickness: "② 앞두께 — 눈썹 앞부분 <b>윗선</b>에 맞추세요 (위아래 바)",
+    tip_front: "③ 앞머리 — 앞부분 <b>아랫선</b>에 얹으세요 (위아래 바)",
     tip_h2: "④ 아치 — <b>십자 안쪽 위 모서리</b>를 산꼭대기에 얹으세요 (사선 · 아치선 함께)",
     tip_archThickness: "⑤ 아치두께 — 산 <b>아랫선</b>에 얹으세요 (위아래만)",
     tip_h3: "⑥ 꼬리+아우터 — <b>십자 안쪽 위 모서리</b>를 꼬리 끝에 얹으세요 (사선으로 둘이 함께)",
@@ -203,8 +203,8 @@ const I18N = {
     set_dragc: "Grab core", set_drage: "Grab outline", set_back: "Undo changes",
     set_cycle: "Colors", set_c_mine: "My set",
     tip_v2: "① Inner — align the vertical to the nostril / inner-canthus line",
-    tip_frontThickness: "② Front thickness — put it on the <b>lower</b> edge of the front",
-    tip_front: "③ Front — put it on the <b>upper</b> edge of the front",
+    tip_frontThickness: "② Front thickness — put it on the <b>upper</b> edge of the front",
+    tip_front: "③ Front — put it on the <b>lower</b> edge of the front",
     tip_h2: "④ Arch — put the <b>inner-upper corner</b> on the peak (diagonal · arch line follows)",
     tip_archThickness: "⑤ Arch thickness — put it on the <b>lower</b> edge of the arch (up/down only)",
     tip_h3: "⑥ Tail+Outer — put the <b>inner-upper corner</b> on the tail tip (drag diagonally)",
@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.72.0";
+const APP_VERSION = "v1.74.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2320,7 +2320,7 @@ function browBoxes() {
    이제 **지금 선이 있는 자리**를 사전 정보로 씁니다 — 이너~아우터 사이 ±22%, 위아래는
    아치~앞두께 밴드의 앞뒤로 한 배쯤. 눈 기준선 위로는 넘어가지 않습니다.
    ⛔ 다시 화면 절반으로 되돌리지 마세요. 머리카락이 들어온 사진에서 그대로 재발합니다. */
-const TAIL_INK = 0.55;    // **평균 진하기**가 중앙값의 이 비율 이상이어야 「검은 드로잉」 (v1.72.0)
+const TAIL_INK = 0.45;    // **평균 진하기**가 중앙값의 이 비율 이상이어야 「검은 드로잉」 (v1.72.0)
 const KINK_DROP = 0.15;   // 산꼭대기~꼬리 낙차의 이 비율만큼 내려앉으면 「꺾였다」 (v1.70.0)
 /* ⚠️ v1.70.0 — 아래 경계 (원장님 지시 2026-08-24: 「빨간 X 부분 **해석 불필요**」)
    원장님이 눈 기준선 바로 위(≈7%)에 X 를 찍어 「여기는 읽지 마라」고 하셨습니다 — 눈꺼풀·
@@ -2516,6 +2516,57 @@ function trimOutside(band, b) {
 }
 
 
+/* ⚠️⚠️ v1.74.0 — **자는 「색이 있는 곳」까지 간다** (원장님 지시 2026-08-25)
+   `trimOutside` ⓑ 는 **잉크(두께 × 진하기)** 로 양 끝을 자릅니다. 눈썹은 앞머리도 꼬리도
+   끝으로 갈수록 **얇아지므로** 잉크가 먼저 떨어집니다 — 색은 아직 남아 있는데 잘렸습니다.
+   그래서 다듬기가 끝난 뒤 **양 끝을 각각** 다시 이어 붙입니다. 조건은 넷:
+     ① 이어져 있다 (중심이 두께의 55% 안 · 두께 1.6배 이내)
+     ② 색이 남아 있다 (평균 진하기 ≥ 문턱 × 중앙값)
+     ③ 창 천장에 닿지 않았다 (`edge` = 머리카락)
+     ④ 안쪽은 센터를 넘지 않는다
+   **문턱은 양쪽이 다릅니다** — 안쪽(코 방향)에는 머리카락이 없지만, 바깥(관자놀이)에는
+   머리카락·번짐·잔털이 있습니다:
+     · 이너 0.25 — 원장님 표시 318.6 ↔ 앱 316
+     · 아우터 0.5 — 원장님이 ①얇은헤어(81) ②지금 판독(104) ③맞는 끝(93) 으로 짚어 주셨습니다.
+       0.5 면 93 에 서고, 얇은 헤어(81)·번짐은 문턱을 못 넘습니다. 회귀 122·123 이 지킵니다.
+   ⛔ 바깥 문턱을 0.4 아래로 내리지 마세요 — 「얇은털 따라가는것 금지」(2026-08-24)가 깨집니다. */
+const INNER_DARK = 0.25;   // 안쪽(앞머리) — 이 비율 이상이면 아직 「색이 있다」
+const OUTER_DARK = 0.5;    // 바깥(꼬리) — 머리카락·번짐이 있으므로 엄격하게
+const GROW_STEP = 0.55;    // 중심이 두께의 이 비율 넘게 어긋나면 이어진 것이 아니다
+const GROW_MAX = 0.18;     // 판독 폭의 이 비율까지만 이어 붙인다 (폭주 방지)
+/* 한쪽 끝을 이어 붙인다. `toInner` 면 안쪽(코 방향), 아니면 바깥(꼬리 방향).
+   돌려주는 것은 **이어 붙인 열들** — 끝에서 먼 순서(바깥으로 갈수록 뒤). */
+function growEnd(band, kept, toInner) {
+  if (!band || !band.length || !kept || !kept.length) return [];
+  const cx = S.g.v1 * S.dim.W;
+  const first = band[0], last = band[band.length - 1];
+  const innerRight = Math.abs(last.x - cx) < Math.abs(first.x - cx);   // 안쪽이 x 큰 쪽인가
+  const goRight = toInner ? innerRight : !innerRight;                  // 이어 붙일 방향
+  const edge = goRight ? last : first;
+  const mid = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)] || 0; };
+  const medDark = mid(band.map((p) => p.dark || 0));
+  const th = mid(band.map((p) => p.bot - p.top)) || 1;
+  const limX = GROW_MAX * (Math.abs(last.x - first.x) || 1);
+  const darkMin = (toInner ? INNER_DARK : OUTER_DARK) * medDark;
+  const pool = goRight
+    ? kept.filter((p) => p.x > edge.x).sort((a, b2) => a.x - b2.x)
+    : kept.filter((p) => p.x < edge.x).sort((a, b2) => b2.x - a.x);
+  const add = [];
+  let prev = edge;
+  for (const p of pool) {
+    if (Math.abs(p.x - edge.x) > limX) break;
+    if (toInner && (innerRight ? p.x >= cx : p.x <= cx)) break;   // 센터를 넘지 않는다
+    if (p.edge) break;                                            // 창 천장에 닿은 열 = 머리카락
+    if ((p.dark || 0) < darkMin) break;                           // 색이 끝났다
+    if (p.bot - p.top > th * 1.6) break;                          // 갑자기 두꺼워지면 다른 것
+    const c0 = (prev.top + prev.bot) / 2, c1 = (p.top + p.bot) / 2;
+    if (Math.abs(c1 - c0) > Math.max(GROW_STEP * th, 6)) break;
+    add.push(p); prev = p;
+  }
+  return add;
+}
+
+
 /* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
    반환: x 오름차순 [{x, top, bot}] — top/bot 은 캔버스 px */
 function readDrawing(img, contrast, side) {
@@ -2554,12 +2605,22 @@ function readDrawing(img, contrast, side) {
              dark: sd0.ink / Math.max(1, sd0.len), edge: r.top <= y0 + 1 };
   });
   pts.sort((p, q) => p.x - q.x);
-  let band = keepBand(pts);
-  band = trimOutside(band, b);      /* v1.66.0 — 머리카락·그림자 방어 (아래 참고) */
+  const kept = keepBand(pts);
+  let band = trimOutside(kept, b);  /* v1.66.0 — 머리카락·그림자 방어 (아래 참고) */
   /* ⚠️ v1.69.0 — **두께 상식 검사는 랜드마크가 있을 때만.** `b.h`(예비 경로에서는 지금 선 간격)는
      실제 눈썹 두께의 대리값이 못 됩니다 — 원장님 사진에서 선 간격 15px vs 실제 눈썹 50px 이라
      제대로 읽은 판독이 「두껍다」는 이유로 버려졌습니다. 예비 경로의 방어는 머리카락 규칙
      (창 천장·끊긴 조각·잉크 · 1-31)이 맡습니다. */
+  /* v1.74.0 — 이너(세로선)만 **색이 시작하는 곳**까지 늘려 잡는다. 밴드 자체는 건드리지
+     않습니다 — 앞두께·앞머리는 「앞부분」의 윗선·아랫선이라 성근 시작 털까지 평균에
+     넣으면 자가 아래로 끌려갑니다 (원장님 표시 87.7 → 89 이 92 로 밀렸습니다). */
+  if (band) {
+    const gi = growEnd(band, kept, true), go = growEnd(band, kept, false);
+    band.innerX = gi.length ? gi[gi.length - 1].x : band[0].x;   // 방향은 autoFromDrawing 이 정리
+    if (gi.length) band.innerX = gi[gi.length - 1].x;
+    else { const cx0 = S.g.v1 * W; band.innerX = Math.abs(band[band.length - 1].x - cx0) < Math.abs(band[0].x - cx0) ? band[band.length - 1].x : band[0].x; }
+    band.tailAdd = go;                                           // 꼬리 쪽으로 이어 붙인 열들
+  }
   if (band) { band.refH = boxes ? b.h : null; band.ink = inkSum; }   // refH: 두께 상식 검사 · ink: 좌우 비교
   return band;
 }
@@ -2652,8 +2713,20 @@ function autoFromDrawing() {
                  으로 가둔다.
      ⛔ 이 세 기준을 「구간 분위수」로 되돌리지 마세요 — 회귀 87~94·121 이 잡습니다. */
   const END = 0.08;                    // 끝점으로 볼 구간 (양 끝 8%)
-  setY("front", at(0, END, "top"));              // 앞머리   = **안쪽 끝**의 윗선
-  setY("frontThickness", at(0, 0.18, "bot", 0.7)); // 앞두께 = 앞부분 아랫선 (기존 유지)
+  /* ⚠️⚠️ v1.73.0 — **앞머리와 앞두께는 이렇게 나뉩니다** (원장님이 화면에 번호를 찍어 확정,
+     2026-08-25). v1.72.0 까지 **거꾸로** 놓고 있었습니다.
+         앞두께 = 눈썹 앞부분의 **윗선**   ← 위
+         앞머리 = 눈썹 앞부분의 **아랫선** ← 아래
+     원장님 표시를 캔버스 좌표로 환산하니 「② 앞두께」가 그때까지 앱이 **앞머리**라고 놓던
+     자리(y 88)와 정확히 겹쳤고, 「① 앞머리」는 그보다 한참 아래(y 137)였습니다.
+     ⛔ 다시 뒤집지 마세요. 회귀 87~94·124 가 잡습니다. */
+  /* ⚠️ 계산식은 v1.72.0 까지 쓰던 **그대로**입니다 — 원장님: 「드로잉 판독은 정확하게 하고
+     있음에도 선의 **명칭과 위치**를 잘못 제공하고 있다」. 실제로 원장님 표시와 재보니
+     예전 `앞머리` 값(안쪽 18% 윗선 30%분위)이 **앞두께** 자리(4.6px), 예전 `앞두께` 값
+     (아랫선 70%분위)이 **앞머리** 자리(4.3px)였습니다. 이름만 바꿔 답니다.
+     ⛔ 구간을 8% 로 좁히지 마세요 — 안쪽 끝만 보면 앞두께가 40px 아래로 처집니다. */
+  setY("frontThickness", at(0, 0.18, "top", 0.3));  // 앞두께 = 앞부분 **윗선**
+  setY("front", at(0, 0.18, "bot", 0.7));           // 앞머리 = 앞부분 **아랫선**
   setY("h2", at(pa, pb, "top"));                 // 아치     = 제일 높은 곳 윗선
   setY("archThickness", at(pa, pb, "bot"));      // 아치두께 = 그 자리 아랫선
   /* ⚠️ v1.70.0 — **꼬리 = 뾰족한 끝의 아랫선** (원장님 지시 2026-08-24 · 빨간 십자)
@@ -2673,24 +2746,36 @@ function autoFromDrawing() {
         이제 **잉크가 중앙값의 `TAIL_INK` 이상인 열**만 「검은 드로잉」으로 보고, 바깥에서
         안쪽으로 훑어 처음 만나는 그 열을 꼬리 끝으로 삼습니다.
      ⛔ 문턱을 낮춰 옅은 쪽으로 다시 늘리지 마세요. 회귀 122·123 이 잡습니다. */
-  let tailIdx = n - 1;
+  /* ⭐ v1.74.0 — 꼬리 판정은 **이어 붙인 끝까지** 본다 (원장님 지시 2026-08-25,
+     사진에 ①얇은헤어 ②지금 판독 ③맞는 끝 세 자리를 짚어 주셨습니다).
+     다듬기가 잉크로 자른 탓에 ② 가 ③ 보다 11px 안쪽에 서 있었습니다. `growEnd` 가
+     색이 남아 있는 열(진하기 ≥ 0.5 × 중앙값)만 이어 붙이므로 ①(얇은 헤어)에는 못 갑니다.
+     ⚠️ 앞머리·아치·아치두께는 **원래 밴드(seq)** 로 계산합니다 — 성근 끝 털을 구간
+     평균에 넣으면 자가 끌려갑니다 (1-36). 꼬리·아우터만 `seqT` 를 씁니다. */
+  const seqT = pts.tailAdd && pts.tailAdd.length ? seq.concat(pts.tailAdd) : seq;
+  const nT = seqT.length;
+  let tailIdx = nT - 1;
   {
-    const darks = seq.map((p) => p.dark || 0).slice().sort((a, b) => a - b);
+    const darks = seqT.map((p) => p.dark || 0).slice().sort((a, b) => a - b);
     const medDark = darks[Math.floor(darks.length / 2)] || 0;
     if (medDark > 0) {
-      for (let i = n - 1; i >= Math.floor(n * 0.45); i--) {
-        if ((seq[i].dark || 0) >= TAIL_INK * medDark) { tailIdx = i; break; }
+      for (let i = nT - 1; i >= Math.floor(nT * 0.45); i--) {
+        if ((seqT[i].dark || 0) >= TAIL_INK * medDark) { tailIdx = i; break; }
       }
     }
-    const t0 = Math.max(0, tailIdx - Math.round(END * (n - 1)));
-    const bots = seq.slice(t0, tailIdx + 1).map((p) => p.bot).sort((x, y) => x - y);
-    setY("h3", bots.length ? bots[Math.floor(bots.length / 2)] : null);
+    const t0 = Math.max(0, tailIdx - Math.round(END * (nT - 1)));
+    const bots = seqT.slice(t0, tailIdx + 1).map((p) => p.bot).sort((x, y) => x - y);
+    /* 앞머리와 같은 잣대 — 아랫선은 **70% 분위**. 성근 털에서 중앙값은 위로 뜹니다 */
+    setY("h3", bots.length ? bots[clamp(Math.round(0.7 * (bots.length - 1)), 0, bots.length - 1)] : null);
   }
 
   /* 이너·아우터 = 드로잉이 실제로 있는 x 양 끝 (setLine 이 반대쪽을 대칭으로 맞춘다).
      아우터는 **검은 드로잉이 끝나는 열**입니다 (v1.72.0 · 얇은 털 추적 금지 v1.71.0). */
-  setLine("v2", clamp(S.g.v1 - Math.abs(seq[0].x - cx) / W, 0.02, 0.98));
-  setLine("v4", clamp(S.g.v1 - Math.abs(seq[tailIdx].x - cx) / W, 0.02, 0.98));
+  /* v1.74.0 — 이너 = **드로잉 색이 시작하는 선** (원장님 2026-08-25). 밴드의 안쪽 끝이
+     아니라 `growEnd` 가 이어 붙인 끝입니다 — 위 `growEnd` 주석 참고. */
+  const innerX = pts.innerX !== undefined && pts.innerX !== null ? pts.innerX : seq[0].x;
+  setLine("v2", clamp(S.g.v1 - Math.abs(innerX - cx) / W, 0.02, 0.98));
+  setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
      그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
      뒤로 뺐을 때 각도가 생기는 꼭지점」). 못 찾으면 산꼭대기를 그대로 씁니다. */
