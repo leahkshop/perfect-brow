@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.70.0";
+const APP_VERSION = "v1.71.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2515,48 +2515,6 @@ function trimOutside(band, b) {
 }
 
 
-/* ⚠️ v1.70.0 — **꼬리 끝 추적** (원장님 지시 2026-08-25: 「꼬리 위치만 초고도화 —
-   끝선 아직도 뾰족한 곳에 위치하지 않는다」)
-   눈썹 꼬리는 **연하게 사라집니다.** 본 판독은 진한 몸통에서 끊기므로, 마지막 열을 그대로
-   쓰면 십자가 늘 실제 끝보다 안쪽에 섭니다. 그래서 끊긴 자리에서부터 **문턱을 낮춰
-   한 걸음씩 바깥으로 따라갑니다** — 이전 열과 세로로 이어지고, 갑자기 두꺼워지지 않고,
-   중심이 크게 튀지 않는 덩어리만 이어 붙입니다. 두께가 2px 이하로 닫히거나 더 이을 것이
-   없으면 거기가 **뾰족한 끝**입니다.
-   ⛔ 이 추적을 지우면 꼬리 자가 다시 안쪽으로 15~25px 물러납니다 (회귀 122). */
-const CHASE_CONTRAST = 6;    // 추적용 문턱 — 본 판독(18)보다 훨씬 낮다
-const CHASE_STEP = 3;        // 한 걸음(px)
-const CHASE_MAX = 40;        // 최대 걸음 수
-function chaseTail(img, band, b) {
-  if (!band || band.length < DRAW_MIN_HITS) return null;
-  const { W, H } = S.dim;
-  const y0 = Math.max(0, Math.round(b.y0)), y1 = Math.min(H - 1, Math.round(b.y1));
-  const cx = S.g.v1 * W;
-  const leftSide = (band[0].x + band[band.length - 1].x) / 2 < cx;
-  const start = leftSide ? band[0] : band[band.length - 1];   // band 는 x 오름차순
-  const dir = leftSide ? -1 : 1;                              // 바깥(관자놀이) 방향
-  let cur = { x: start.x, top: start.top, bot: start.bot }, out = null;
-  for (let i = 0; i < CHASE_MAX; i++) {
-    const x = Math.round(cur.x + dir * CHASE_STEP);
-    if (x < 1 || x >= W - 1 || x < b.x0 - 40 || x > b.x1 + 40) break;
-    const cy = (cur.top + cur.bot) / 2, th = Math.max(cur.bot - cur.top, 2);
-    const c = columnRuns(img, x, y0, y1, cy, CHASE_CONTRAST);
-    if (!c) break;
-    let best = null, bestD = 1e9;
-    for (const r of c.runs) {
-      if (Math.min(r.bot, cur.bot) - Math.max(r.top, cur.top) < -1) continue;  // 이어지지 않음
-      if (r.bot - r.top > th * 1.7 + 3) continue;                              // 갑자기 두꺼움
-      const d = Math.abs((r.top + r.bot) / 2 - cy);
-      if (d > th * 1.2 + 4) continue;                                          // 중심이 튐
-      if (d < bestD) { bestD = d; best = r; }
-    }
-    if (!best) break;
-    cur = { x, top: best.top, bot: best.bot };
-    out = cur;
-    if (best.bot - best.top <= 2) break;                                       // 다 닫혔다
-  }
-  return out ? { x: out.x, y: (out.top + out.bot) / 2 } : null;
-}
-
 /* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
    반환: x 오름차순 [{x, top, bot}] — top/bot 은 캔버스 px */
 function readDrawing(img, contrast, side) {
@@ -2597,10 +2555,7 @@ function readDrawing(img, contrast, side) {
      실제 눈썹 두께의 대리값이 못 됩니다 — 원장님 사진에서 선 간격 15px vs 실제 눈썹 50px 이라
      제대로 읽은 판독이 「두껍다」는 이유로 버려졌습니다. 예비 경로의 방어는 머리카락 규칙
      (창 천장·끊긴 조각·잉크 · 1-31)이 맡습니다. */
-  if (band) {
-    band.refH = boxes ? b.h : null; band.ink = inkSum;
-    band.tip = chaseTail(img, band, b);      /* v1.70.0 — 연한 꼬리 끝까지 따라간다 */
-  }   // refH: 두께 상식 검사 · ink: 좌우 비교
+  if (band) { band.refH = boxes ? b.h : null; band.ink = inkSum; }   // refH: 두께 상식 검사 · ink: 좌우 비교
   return band;
 }
 
@@ -2706,24 +2661,20 @@ function autoFromDrawing() {
         곡선이라 25px 이상 빗나가 **버렸습니다**. 더 정확히 하려면 판독이 연한 꼬리 털까지
         따라가야 합니다 (다음 과제).
      ⛔ 윗선이나 가운데로 되돌리지 마세요 — 회귀 121 이 잡습니다. */
-  const outerX0 = seq[n - 1].x, span0 = Math.abs(seq[0].x - outerX0) || 1;
-  const outward = outerX0 < seq[0].x ? -1 : 1;
-  const tip = pts.tip;
-  /* 추적이 **실제로 나아갔을 때만** 그 끝점을 씁니다 — 두 걸음(6px) 미만이면 꼬리가 뚝 잘린
-     드로잉이라는 뜻이므로, 예전대로 끝 구간의 아랫선을 씁니다. 폭의 30% 를 넘게 뻗어도 안 믿습니다. */
-  const tipOk = tip && outward * (tip.x - outerX0) >= CHASE_STEP * 2
-                    && Math.abs(tip.x - outerX0) <= 0.30 * span0;
-  if (tipOk) setY("h3", tip.y);
-  else {
+  /* ⛔ v1.71.0 — **얇은 털을 따라가지 않습니다** (원장님 지시 2026-08-25: 「얇은털 따라가는것 금지」)
+     v1.70.0 은 판독이 끊긴 자리에서 문턱을 낮춰 연한 잔털을 한 걸음씩 따라갔습니다. 금지되었습니다.
+     꼬리는 **본 판독이 실제로 읽은 진한 눈썹**의 끝 구간 아랫선입니다 — 잔털은 눈썹 디자인의
+     끝이 아닙니다. ⛔ 추적(chaseTail)·문턱 낮추기를 다시 넣지 마세요. 회귀 122 가 잡습니다. */
+  {
     const i0 = clamp(Math.floor((1 - END) * (n - 1)), 0, n - 1);
     const bots = seq.slice(i0).map((p) => p.bot).sort((x, y) => x - y);
     setY("h3", bots.length ? bots[Math.floor(bots.length / 2)] : null);
   }
 
   /* 이너·아우터 = 드로잉이 실제로 있는 x 양 끝 (setLine 이 반대쪽을 대칭으로 맞춘다).
-     아우터는 판독이 끊긴 x 그대로입니다 — 연장은 곡선 꼬리에서 폭주해 쓰지 않습니다. */
+     아우터는 **본 판독이 읽은 진한 눈썹의 끝** 그대로입니다 (얇은 털 추적 금지 · v1.71.0). */
   setLine("v2", clamp(S.g.v1 - Math.abs(seq[0].x - cx) / W, 0.02, 0.98));
-  setLine("v4", clamp(S.g.v1 - Math.abs((tipOk ? tip.x : seq[n - 1].x) - cx) / W, 0.02, 0.98));
+  setLine("v4", clamp(S.g.v1 - Math.abs(seq[n - 1].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
      그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
      뒤로 뺐을 때 각도가 생기는 꼭지점」). 못 찾으면 산꼭대기를 그대로 씁니다. */

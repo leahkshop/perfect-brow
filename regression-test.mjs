@@ -1986,13 +1986,13 @@ console.log("\n[밸런스 판정]");
     return L;
   })();
 
-  /* ⚠️ v1.70.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 실제 사진 · 2026-08-25 「초고도화」)
+  /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)
      몸통(x 170~340)은 진하고, 꼬리(x 145~172)는 피부와 겨우 14 차이라 **본 판독이 못 봅니다.**
-     그래서 판독 열은 x=170 에서 끊깁니다. 문턱을 낮춰 한 걸음씩 따라가야 진짜 끝(≈146)에 닿습니다. */
+     그래서 판독 열은 x≈172 에서 끊깁니다 — **거기가 꼬리 자리입니다.** 잔털을 따라가면 안 됩니다. */
   const SHAPE_TAPER = {
     cp: [[146, 150, 152], [172, 144, 168], [210, 138, 174], [260, 130, 170],
          [300, 138, 176], [340, 142, 180]],
-    tipX: 148, tipY: 151, bandEndX: 172,
+    tipX: 148, tipY: 151, bandEndX: 172,   /* tipX = 잔털 끝(가면 안 되는 곳) · bandEndX = 진한 눈썹 끝 */
   };
   const makeTaperFace = () => {
     const f = path.join(ROOT, ".draw-taper.svg");
@@ -2090,22 +2090,20 @@ console.log("\n[밸런스 판정]");
      「전혀 프로페셔널하지 못한」 위치였습니다. 2차 저대비 패스가 털을 읽어야 합니다. */
   const o94 = await runDraw(true, fn, null, SHAPE_A);
   check("94. 맨 눈썹 — 드로잉이 없어도 저대비 2차 패스가 털을 읽어 배치한다", judge(o94), say(o94));
-  /* 122. ⚠️ v1.70.0 — **꼬리 끝 추적** (원장님 지시 2026-08-25:
-     「꼬리 위치만 초고도화 — 끝선 아직도 뾰족한 곳에 위치하지 않는다」)
-     눈썹 꼬리는 연하게 사라지므로 본 판독이 몸통에서 끊깁니다. 끊긴 자리에서 문턱을 낮춰
-     한 걸음씩 바깥으로 따라가야 **뾰족한 끝**에 닿습니다.
-     ⛔ 추적을 지우면 아우터가 25px 안쪽(판독이 끊긴 자리)으로 물러납니다. */
+  /* 122. ⛔ v1.71.0 — **얇은 털을 따라가지 않는다** (원장님 지시 2026-08-25: 「얇은털 따라가는것 금지」)
+     v1.70.0 은 판독이 끊긴 자리에서 문턱을 낮춰 연한 잔털을 한 걸음씩 따라갔습니다 — 금지되었습니다.
+     이 사진은 몸통(x 172~340)이 진하고 꼬리(x 146~174)는 피부와 겨우 14 차이입니다.
+     아우터는 **본 판독이 읽은 진한 눈썹의 끝(≈172)** 에 서야 하고, 잔털 끝(146)까지 가면 안 됩니다.
+     ⛔ 추적을 다시 넣으면 이 검사가 바로 실패합니다. */
   {
     const ftp = makeTaperFace();
     const o122 = await runDraw(false, ftp, null, SHAPE_A);
     fs.unlinkSync(ftp);
-    const dx = Math.abs(o122.outerPx - SHAPE_TAPER.tipX);
-    const dy = Math.abs(o122.tailPx - SHAPE_TAPER.tipY);
-    const chased = Math.abs(o122.outerPx - SHAPE_TAPER.bandEndX) > 8;   /* 실제로 따라갔는가 */
-    check("122. 꼬리 끝 추적 — 연하게 사라지는 꼬리도 끝까지 따라가 뾰족한 곳에 선다",
-      o122.ok && chased && dx < 10 && dy < 8,
-      `아우터 ${o122.outerPx.toFixed(0)} (끝점 ${SHAPE_TAPER.tipX} · 본 판독은 ${SHAPE_TAPER.bandEndX} 에서 끊김 · 따라감=${chased}) · `
-      + `꼬리 ${o122.tailPx.toFixed(0)} (끝점 ${SHAPE_TAPER.tipY})`);
+    const atBody = Math.abs(o122.outerPx - SHAPE_TAPER.bandEndX) < 10;   /* 진한 눈썹 끝에 선다 */
+    const notChased = o122.outerPx > SHAPE_TAPER.tipX + 12;              /* 잔털까지 가지 않았다 */
+    check("122. 얇은 털 추적 금지 — 아우터는 진한 눈썹의 끝에 선다 (잔털까지 따라가지 않는다)",
+      o122.ok && atBody && notChased,
+      `아우터 ${o122.outerPx.toFixed(0)} (진한 눈썹 끝 ${SHAPE_TAPER.bandEndX} 에 섬=${atBody} · 잔털 끝 ${SHAPE_TAPER.tipX} 까지 안 감=${notChased})`);
   }
 
   /* 121. ⚠️ v1.70.0 — **원장님이 정해 주신 판정 기준** (2026-08-24, 사진 3장 + 확인 답변)
