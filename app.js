@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.79.0";
+const APP_VERSION = "v1.80.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -782,7 +782,20 @@ function renderGuides() {
   /* v1.47.0 — 가이드가 기본 상시 ON이 되면서, 가이드 중에도 **선택한 선은 켜진다**
      (안 그러면 아우터·아치선처럼 플로우 밖 선을 골라도 아무 표시가 없다 — 회귀 51).
      플로우 진행 중엔 움직인 선이 곧 선택이라 실제로는 하나만 켜진 것처럼 보인다. */
-  const emph = (sp) => (S.guideOn && S.guideCur === sp.key) || isSelected(sp.key);
+  /* ⭐ v1.80.0 — **가이드를 끄면 모든 선이 기본 색상** (원장님 지시 2026-08-25:
+       「가이드를 끄면 모든 선 기본 색상 보이도록, 잡을 때 잡는 색상 삽입,
+        가이드가 켜졌을 때만 선 하나씩 플로우 적용해라」)
+     · 가이드 OFF → 전부 고유색 (한눈에 다 보고 시술한다)
+     · 가이드 ON  → **지금 차례 하나만** 고유색, 나머지는 조용한 회색 (플로우)
+     · 어느 쪽이든 **잡고 있는 선만** 「잡은 선」 색으로 바뀐다 (아래 `grabbed`)
+     ⛔ 가이드 OFF 에서 회색으로 되돌리지 마세요 — 회귀 132 가 잡습니다. */
+  const emph = (sp) => !S.guideOn || S.guideCur === sp.key || isSelected(sp.key);
+  /* 지금 손가락(또는 조절 바)이 붙잡고 있는 선인가 — 이 선만 「잡은 선」 색으로 그린다.
+     예전에는 `sel && S.dragOn` 이라, 가이드를 끄면 **모든 선이 한꺼번에** 잡은 색이 됩니다. */
+  const grabbed = (sp) => !!S.dragOn
+    && (gDrag && gDrag.keys && gDrag.keys.length ? gDrag.keys.includes(sp.key) : isSelected(sp.key));
+  /* 깜빡임(지시등)은 **플로우 차례 선**에만 — 가이드를 끄면 아무것도 깜빡이지 않는다 */
+  const blinkOf = (sp) => (S.guideOn && S.guideCur === sp.key ? "blink" : null);
   /* v1.56.0 — 고유색은 **설정에서 고른 묶음 색**이 먼저. 설정에 없는 선(눈·센터)만 스펙 색 */
   const liveColor = (sp) => groupColor(sp.key) || sp.color;
   /* ⚠️ v1.48.0 — 연한 상태를 **알파로 만들지 않는다** (원장님 지시 2026-08-22).
@@ -857,8 +870,8 @@ function renderGuides() {
         }
         /* ⚠️ v1.55.0 — 세 상태 (위 상수 주석 참고). 자를 색/회색으로 쪼개지 않는다 */
         if (bad) { drawLine(frag, xa, y, xb, y, BAL_RED, sp.w + 2.2, 1); return; }
-        if (sel && S.dragOn) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
-        if (sel) { drawLive(frag, xa, y, xb, y, liveColor(sp), (sp.w + 1.8) * S.look.weight, "blink"); return; }
+        if (grabbed(sp)) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
+        if (sel) { drawLive(frag, xa, y, xb, y, liveColor(sp), (sp.w + 1.8) * S.look.weight, blinkOf(sp)); return; }
         drawLine(frag, xa, y, xb, y, HALF_GREY, HALF_W, HALF_OP);
       });
     }
@@ -880,8 +893,8 @@ function renderGuides() {
       const lc = lineColor(sp, sel);
       const draw = (x) => {
         if (full) {
-          if (sel && S.dragOn) { drawGrab(frag, x, 0, x, H, w); return; }
-          if (sel) { drawLive(frag, x, 0, x, H, lc, w * S.look.weight, "blink"); return; }
+          if (grabbed(sp)) { drawGrab(frag, x, 0, x, H, w); return; }
+          if (sel) { drawLive(frag, x, 0, x, H, lc, w * S.look.weight, blinkOf(sp)); return; }
           drawLine(frag, x, 0, x, H, lc, w, op); return;
         }
         frag.appendChild(mk("line", {                       // 라벨 ↔ 선 연결 (헤일로 없음)
@@ -890,8 +903,8 @@ function renderGuides() {
         }));
         /* v1.52.0 — 잡은(강조) 세로선은 **전체 길이 고유색**: "세로줄 = 좌우 이동" 신호.
            조용할 땐 **전체가 회색 한 줄** — 색과 토막이 없어 자의 색 토막과 헷갈리지 않는다 */
-        if (sel && S.dragOn) { drawGrab(frag, x, by0, x, by1, w); return; }
-        if (sel) { drawLive(frag, x, by0, x, by1, lc, w * S.look.weight, "blink"); return; }
+        if (grabbed(sp)) { drawGrab(frag, x, by0, x, by1, w); return; }
+        if (sel) { drawLive(frag, x, by0, x, by1, lc, w * S.look.weight, blinkOf(sp)); return; }
         drawLine(frag, x, by0, x, by1, HALF_GREY, VGREY_W, VGREY_OP);
       };
       const x = g[sp.key] * W;

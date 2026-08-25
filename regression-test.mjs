@@ -2408,6 +2408,73 @@ console.log("\n[밸런스 판정]");
       bad.length ? `못박힘: ${bad.join(" · ")}` : `9장 모두 통과 (윗선<아랫선 · 앞머리≠아치두께 · 다섯 값 모두 다름)`);
   }
 
+  /* 132. ⭐ v1.80.0 — **가이드 OFF = 전부 고유색 · 가이드 ON = 한 줄씩 플로우 · 잡은 선만 잡은 색**
+     원장님 지시 2026-08-25: 「가이드를 끄면 모든 선 기본 색상 보이도록, 잡을 때 잡는 색상 삽입,
+     가이드가 켜졌을 때만 선 하나씩 플로우 적용해라」
+     ⛔ 가이드를 끈 상태에서 회색으로 되돌리지 마세요. 또한 잡을 때 **모든 선**이 잡은 색이
+     되면 안 됩니다 (예전 `sel && dragOn` 이 그랬습니다). */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1200);
+    const o132 = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H;
+      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };
+      S.multi = false; S.selSet = []; S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
+      const lines = () => [...document.getElementById("guides").querySelectorAll("line")].map((l) => ({
+        x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
+        y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+        c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+        o: +(l.getAttribute("stroke-opacity") || 1), cls: l.getAttribute("class") || "",
+      }));
+      /* 그 가로선 자리에 실제로 그려진 **굵은** 토막의 색 */
+      const hcol = (key) => {
+        const y = S.g[key] * H;
+        const q = lines().filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
+          && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3 && l.w > 1.2);
+        return q.length ? q[0].c : null;
+      };
+      const vcol = (key) => {
+        const x = S.g[key] * W;
+        const q = lines().filter((l) => Math.abs(l.x1 - l.x2) < 0.5 && Math.abs(l.x1 - x) < 1
+          && l.o > 0.3 && l.w > 1.2);
+        return q.length ? q[0].c : null;
+      };
+      const blinks = () => lines().filter((l) => l.cls.includes("blink")).length;
+      /* ① 가이드 OFF — 전부 고유색 · 깜빡임 없음 */
+      S.guideOn = false; S.guideCur = null; S.dragOn = false; PBx.render();
+      const off = { front: hcol("front"), arch: hcol("h2"), tail: hcol("h3"),
+                    inner: vcol("v2"), outer: vcol("v4"), blink: blinks() };
+      /* ② 가이드 ON — 지금 차례(앞머리) 하나만 고유색, 아치·꼬리는 회색 */
+      S.guideOn = true; S.guideCur = "front"; PBx.render();
+      const on = { front: hcol("front"), arch: hcol("h2"), tail: hcol("h3"), blink: blinks() };
+      /* ③ 잡는 중 — 잡은 선만 잡은 색, 나머지는 그대로 고유색 (가이드 OFF 에서) */
+      S.guideOn = false; S.guideCur = null; S.sel = "front"; S.dragOn = true; PBx.render();
+      const drag = { front: hcol("front"), arch: hcol("h2"), tail: hcol("h3") };
+      S.dragOn = false;
+      return { off, on, drag, grabCore: S.look.dragCore };
+    });
+    await ctx.close();
+    const offAll = o132.off.front === "#5EEAD4" && o132.off.arch === "#2E8BFF"
+      && o132.off.tail === "#A855F7" && o132.off.inner === "#5EEAD4" && o132.off.outer === "#A855F7";
+    const offNoBlink = o132.off.blink === 0;
+    /* 조용한 선은 **얇은 회색**이라 굵은 토막 검색에서는 아예 안 잡힙니다 (null) — 둘 다 조용으로 봅니다 */
+    const quiet = (c) => c === null || c === "#14161B";
+    const onFlow = o132.on.front === "#5EEAD4" && quiet(o132.on.arch) && quiet(o132.on.tail);
+    const onBlink = o132.on.blink > 0;
+    const grabOne = o132.drag.front === o132.grabCore
+      && o132.drag.arch === "#2E8BFF" && o132.drag.tail === "#A855F7";
+    check("132. 가이드 OFF=전부 고유색 · ON=한 줄씩 플로우 · 잡은 선만 잡은 색",
+      offAll && offNoBlink && onFlow && onBlink && grabOne,
+      `끔: 앞머리 ${o132.off.front}/아치 ${o132.off.arch}/꼬리 ${o132.off.tail}/이너 ${o132.off.inner}/아우터 ${o132.off.outer} 깜빡임 ${o132.off.blink} · `
+      + `켬: 앞머리 ${o132.on.front}/아치 ${o132.on.arch}/꼬리 ${o132.on.tail} 깜빡임 ${o132.on.blink} · `
+      + `잡는중: 앞머리 ${o132.drag.front}(잡은색 ${o132.grabCore})/아치 ${o132.drag.arch}/꼬리 ${o132.drag.tail}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.
@@ -2712,7 +2779,7 @@ console.log("\n[밸런스 판정]");
       };
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
       S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };   /* v1.60.0 중립값 (회귀 112 참고) */
-      S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = [];
+      S.guideOn = true; S.guideCur = null; S.multi = false; S.selSet = [];   /* v1.80.0 — 「조용=회색」은 **가이드 ON** 일 때의 규칙 (가이드를 끄면 전부 고유색 · 회귀 132) */
       S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
       PBx.render();
       const dimFront = seg("front"), dimInner = seg("v2"), dimTail = seg("h3");
@@ -2821,7 +2888,7 @@ console.log("\n[밸런스 판정]");
         const thick = ls.slice().sort((a, b) => +b.getAttribute("stroke-width") - +a.getAttribute("stroke-width"))[0];
         return { c: thick.getAttribute("stroke"), op: +(thick.getAttribute("stroke-opacity") || 1) };
       };
-      S.g = { ...PBx.DEFAULT_GUIDE }; S.guideOn = false; S.guideCur = null;
+      S.g = { ...PBx.DEFAULT_GUIDE }; S.guideOn = true; S.guideCur = null;   /* v1.80.0 — 「조용=회색」은 **가이드 ON** 일 때의 규칙 (가이드를 끄면 전부 고유색 · 회귀 132) */
       S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };   /* v1.60.0 중립값 */
       S.multi = false; S.selSet = []; S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
       PBx.render();
@@ -2935,7 +3002,7 @@ console.log("\n[밸런스 판정]");
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
-      S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = []; S.sel = "h1";
+      S.guideOn = true; S.guideCur = null; S.multi = false; S.selSet = []; S.sel = "h1";   /* v1.80.0 — 「조용=회색」은 **가이드 ON** 일 때의 규칙 (가이드를 끄면 전부 고유색 · 회귀 132) */
       PBx.render();
       const all = [...document.getElementById("guides").querySelectorAll("line")].map((l) => ({
         x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
@@ -3674,7 +3741,7 @@ console.log("\n[밸런스 판정]");
     const vl = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, H = S.dim.H;
       S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = [];
-      S.guideOn = false; S.guideCur = null;   /* v1.52.0 — 조용한 상태를 재야 하므로 가이드를 끈다 */
+      S.guideOn = true; S.guideCur = null;   /* v1.52.0 — 조용한 상태를 재야 한다. v1.80.0 부터는 **가이드를 켜야** 조용해진다 */
       PBx.render();
       const g = S.g, eyeY = g.h1 * H;
       const lows = { front: g.front, frontThickness: g.frontThickness, h2: g.h2, archThickness: g.archThickness, h3: g.h3 };
