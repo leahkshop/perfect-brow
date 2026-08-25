@@ -2995,6 +2995,72 @@ console.log("\n[밸런스 판정]");
       + `아치두께 위아래만=${atMoved}/${atKeepsX} · 바 동반 ${barD.toFixed(2)}→${barT.toFixed(2)}=${barFollows}`);
   }
 
+  /* 118. ⚠️ v1.68.0 — 가로 길이 슬라이더 · 표식 테두리 없음 (원장님 지시 2026-08-24)
+     「가로 길이 아주 짧게도 가능하도록 슬라이드로 처리. 슬라이드 이동 시 **미리보기에서 길이가
+       짧아졌다 길어지는 것이 보이는 상호작용** 보이도록」
+     「꼬리와 아우터에 **회색 테두리가 자동으로 생겼다. 내가 의도하지 않음** — 테두리 없게」
+       → 표식(십자 모서리)의 테두리는 설정의 「테두리」를 그대로 따른다. 기본(없음)이면 없다.
+     ⛔ 3단 세그먼트로 되돌리지 마세요 — 아주 짧은 자를 만들 수 없습니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB;
+      S.g = { ...PBx.DEFAULT_GUIDE }; S.look = { ...PBx.LOOK_DEF };
+      S.multi = false; S.selSet = []; S.guideOn = false; S.guideCur = null;
+      PBx.buildLookUI(); PBx.render();
+      const rng = document.getElementById("rngLen");
+      const hasSeg = !!document.getElementById("segLen");
+      /* 미리보기 자 한 줄의 길이(px) */
+      const prevLen = () => {
+        const ls = [...document.getElementById("lookPrev").querySelectorAll("line")]
+          .filter((l) => Math.abs(+l.getAttribute("y1") - 18) < 0.6);
+        return ls.length ? Math.abs(+ls[0].getAttribute("x2") - +ls[0].getAttribute("x1")) : 0;
+      };
+      /* 실제 화면의 앞머리 자 길이(px) */
+      const realLen = () => {
+        const q = PBx.segPx(PBx.H_SPECS.find((x) => x.key === "front"))[0];
+        return q[1] - q[0];
+      };
+      const move = (v) => {
+        rng.value = String(v);
+        rng.dispatchEvent(new Event("input", { bubbles: true }));
+        return { hlen: S.look.hlen, prev: prevLen(), real: realLen(),
+                 label: document.getElementById("lenVal").textContent };
+      };
+      const mn = move(+rng.min), mid = move(28), mx = move(+rng.max);
+      /* 슬라이더를 다시 짧게 → 미리보기가 **줄어든다**(왕복 상호작용) */
+      const back = move(+rng.min);
+      /* 표식 테두리 — 기본(테두리 없음)이면 모서리 path 는 코너당 1개(좌우 2개) */
+      S.look = { ...PBx.LOOK_DEF }; S.guideOn = true; S.guideCur = "h3"; PBx.render();
+      const paths = () => [...document.getElementById("guides").querySelectorAll("path")]
+        .filter((q) => /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+$/.test(q.getAttribute("d") || ""));
+      const noEdge = paths();
+      const noEdgeDark = noEdge.some((q) => q.getAttribute("stroke") === "#0A0D14");
+      S.look = { ...PBx.LOOK_DEF, edge: 70 }; PBx.render();
+      const withEdge = paths();
+      return { hasSeg, hasRng: !!rng, min: rng.min, max: rng.max,
+               mn, mid, mx, back,
+               noEdgeN: noEdge.length, noEdgeDark, withEdgeN: withEdge.length };
+    });
+    await ctx.close();
+    const shrinks = r.mn.prev < r.mid.prev && r.mid.prev < r.mx.prev;      /* 미리보기가 따라 변한다 */
+    const realShrinks = r.mn.real < r.mid.real && r.mid.real < r.mx.real;  /* 실제 화면도 함께 */
+    const veryShort = r.mn.hlen <= 0.05 && r.mn.real < r.mid.real * 0.45;  /* 아주 짧게 가능 */
+    const roundTrip = Math.abs(r.back.prev - r.mn.prev) < 0.5;
+    check("118. 가로 길이 슬라이더 — 아주 짧게까지 · 끌면 미리보기가 같이 줄었다 늘어난다 · 표식 테두리 없음",
+      r.hasRng && !r.hasSeg && shrinks && realShrinks && veryShort && roundTrip
+        && r.noEdgeN === 2 && !r.noEdgeDark && r.withEdgeN === 4,
+      `슬라이더 ${r.min}~${r.max}% (3단 제거=${!r.hasSeg}) · 길이 ${r.mn.hlen}/${r.mid.hlen}/${r.mx.hlen} · `
+      + `미리보기 ${r.mn.prev.toFixed(0)}→${r.mid.prev.toFixed(0)}→${r.mx.prev.toFixed(0)}px(줄었다늘어남=${shrinks}, 되돌림=${roundTrip}) · `
+      + `실제 자 ${r.mn.real.toFixed(0)}→${r.mid.real.toFixed(0)}→${r.mx.real.toFixed(0)}px · 라벨 ${r.mx.label} · `
+      + `표식 테두리없음 ${r.noEdgeN}개(짙은테두리=${r.noEdgeDark}) / 테두리70% ${r.withEdgeN}개`);
+  }
+
   /* 114. ⚠️ v1.64.0 (원장님 지시 2026-08-23)
      ① 화살표 한 번의 이동량 — 「줌·위아래·좌우 화살표 이동이 매우 큼 → 아주 미세하게」
      ② 가이드 프롬프트 칩 — 지금 차례가 무엇을 맞추는지 한 줄
@@ -3060,14 +3126,16 @@ console.log("\n[밸런스 판정]");
         });
         return { n: cs2.length, ok };
       };
+      /* ⚠️ v1.68.0 — **꼬리도 안쪽 + 위** (원장님 지시 2026-08-24 · 민트 펜)
+         「플로우 적용 시 꼬리와 아우터 지점은 내부쪽과 위다」 */
       const arch = at("h2", "v6", "h2", true);         /* 아치 = 안쪽 + 위 */
-      const tail = at("h3", "v4", "h3", false);        /* 꼬리 = 안쪽 + 아래 */
+      const tail = at("h3", "v4", "h3", true);         /* 꼬리 = 안쪽 + 위 */
       return { zoomPct, dv: av.d, dh: ah.d, upIsRight, rightIsRight, tipAtInner, tipAtTail,
                everyStep, tipHiddenOff, noneAtPlain,
                archN: arch.n, archOk: arch.ok, tailN: tail.n, tailOk: tail.ok };
     });
     await ctx.close();
-    check("114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 십자 모서리(꼬리=아래 · 아치=위)",
+    check("114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 십자 모서리(꼬리·아치 모두 안쪽+위)",
       r.zoomPct > 0 && r.zoomPct < 0.018                /* 줌 한 칸 1.8% 미만 */
         && r.dv > 0 && r.dv < 0.003 && r.dh > 0 && r.dh < 0.003   /* v1.65.0 — 캔버스의 0.3% 미만 ≈ 1px */
         && r.upIsRight && r.rightIsRight                          /* ▶ = 위로 / 오른쪽 */
@@ -3076,7 +3144,7 @@ console.log("\n[밸런스 판정]");
       `줌 한 칸 ${(r.zoomPct * 100).toFixed(2)}%(<1.8%) · 위아래 ${r.dv.toFixed(4)} / 좌우 ${r.dh.toFixed(4)}(<0.003) · `
       + `▶=위로 ${r.upIsRight} / ▶=오른쪽 ${r.rightIsRight} · `
       + `프롬프트 이너=${r.tipAtInner} 꼬리강조=${r.tipAtTail} 전스텝=${r.everyStep} 끄면숨김=${r.tipHiddenOff} · `
-      + `십자표식 쌍아닌스텝없음=${r.noneAtPlain} · 아치 ${r.archN}개 위+안쪽=${r.archOk} · 꼬리 ${r.tailN}개 아래+안쪽=${r.tailOk}`);
+      + `십자표식 쌍아닌스텝없음=${r.noneAtPlain} · 아치 ${r.archN}개 위+안쪽=${r.archOk} · 꼬리 ${r.tailN}개 위+안쪽=${r.tailOk}`);
   }
 
   /* 115. ⚠️ v1.66.0 — **관자놀이 머리카락 방어** (원장님 지시 2026-08-23)

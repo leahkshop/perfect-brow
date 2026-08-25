@@ -781,9 +781,13 @@ body:not(.land) #railLang{display:none}
           <div class="setrow"><span class="lb" data-i18n="set_tail">꼬리 묶음</span><span class="pal" id="swTail"></span>
             <button id="lookAll" data-i18n="set_all">모두 이 색</button></div>
           <div class="setrow"><span class="lb" data-i18n="set_edge">테두리</span><span class="seg" id="segEdge"></span><span class="seg" id="segEdgeC"></span></div>
-          <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span><span class="seg" id="segW"></span>
-            <span class="lb" style="width:auto;margin-left:4px" data-i18n="set_hlen">가로 길이</span><span class="seg" id="segLen"></span></div>
-          <div class="setrow"><span class="lb" data-i18n="set_alpha">투명도</span>
+          <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span><span class="seg" id="segW"></span></div>
+          <!-- v1.68.0 — 「가로 길이」는 슬라이더 (아주 짧은 자까지 · 끄는 동안 미리보기가 같이 변한다).
+               투명도와 한 줄에 둔다 — 설정 시트가 더 길어지면 스크롤해야 해서 손이 더 갑니다. -->
+          <div class="setrow"><span class="lb" data-i18n="set_hlen">가로 길이</span>
+            <input type="range" class="slim" id="rngLen" min="8" max="60" step="2" value="28">
+            <span id="lenVal" class="rngval">28%</span>
+            <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_alpha">투명도</span>
             <input type="range" class="slim" id="rngAlpha" min="50" max="100" step="5" value="100">
             <span id="alphaVal" class="rngval">100%</span></div>
         </div>

@@ -338,7 +338,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.67.0";
+const APP_VERSION = "v1.68.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -364,7 +364,10 @@ const APP_VERSION = "v1.67.0";
    ⛔ v6 를 플로우에 다시 넣지 마세요. 아우터와 같은 이유로 아치와 한 점입니다 (BASELINE 1-31) */
 const GUIDE_FLOW = ["v2", "frontThickness", "front", "h2", "archThickness", "h3"];
 /* 꼬리 스텝이 함께 잡는 세로선 — 좌우 바가 이 선을 잡는다 */
-const TAIL_PAIR = { step: "h3", lr: "v4" };
+/* ⚠️ v1.68.0 원장님 지시 2026-08-24 — 「플로우 적용 시 **꼬리와 아우터 지점은 내부쪽과 위**다」
+   (민트 펜으로 위·안쪽 두 팔을 그려 주셨습니다.) 아치와 같은 방향이 됐습니다.
+   ⛔ 아래쪽으로 되돌리지 마세요 — 꼬리 아래는 눈썹이 이어지는 자리라 표식이 드로잉을 덮습니다. */
+const TAIL_PAIR = { step: "h3", lr: "v4", up: true };
 /* 아치 스텝이 함께 잡는 세로선 + 따라오는 두께선 (v1.67.0) */
 const ARCH_PAIR = { step: "h2", lr: "v6", thick: "archThickness", up: true };
 /* 가이드 스텝 ↔ 함께 움직이는 세로선 쌍 (마커·바 배정이 이 표 하나를 본다) */
@@ -978,9 +981,15 @@ function renderGuides() {
       for (const [x, inward] of [[g[pr.lr] * W, 1], [(2 * g.v1 - g[pr.lr]) * W, -1]]) {
         if (x < 2 || x > workRight() * W) continue;
         const d = `M ${x + inward * arm} ${y} L ${x} ${y} L ${x} ${ay}`;
-        frag.appendChild(mk("path", { d, fill: "none", stroke: "#0A0D14",
-          "stroke-width": 5.5, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-opacity": 0.55 }));
-        frag.appendChild(mk("path", { d, fill: "none", stroke: liveColor(specOf(pr.step)),
+        const hex = liveColor(specOf(pr.step));
+        /* ⚠️ v1.68.0 — 표식의 테두리는 **설정의 「테두리」를 그대로 따른다** (원장님 지시 2026-08-24:
+           「꼬리와 아우터에 회색 테두리가 자동으로 생겼다. 내가 의도하지 않음 — 테두리 없게」).
+           v1.64~1.67 은 여기에 짙은 테두리를 **박아** 두어, 설정이 「없음」인데도 회색 테두리가 났습니다.
+           ⛔ 다시 박지 마세요. 선과 표식은 같은 규칙을 씁니다 (drawLive 와 동일). */
+        if (S.look.edge > 0) frag.appendChild(mk("path", { d, fill: "none", stroke: edgeColorFor(hex),
+          "stroke-width": 3 * (1 + 2 * S.look.edge / 100), "stroke-linecap": "round",
+          "stroke-linejoin": "round", "stroke-opacity": S.look.alpha * 0.9 }));
+        frag.appendChild(mk("path", { d, fill: "none", stroke: hex, "stroke-opacity": S.look.alpha,
           "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round", class: "blink" }));
       }
     }
@@ -2778,9 +2787,10 @@ function buildLookUI() {
   const sw = $("segW"); sw.innerHTML = "";
   [[0.8, t("set_thin")], [1, t("set_mid")], [1.35, t("set_thick")]]
     .forEach(([v, lb]) => sw.appendChild(segBtn(lb, L.weight === v, () => lookSet({ weight: v }))));
-  const sl = $("segLen"); sl.innerHTML = "";
-  [[0.14, t("set_short")], [0.19, t("set_mid")], [0.25, t("set_long")]]
-    .forEach(([v, lb]) => sl.appendChild(segBtn(lb, L.hlen === v, () => lookSet({ hlen: v }))));
+  /* v1.68.0 — 「가로 길이」는 **슬라이더**. 3단(짧게·중간·길게)으로는 원장님이 원하시는
+     **아주 짧은** 자를 만들 수 없었습니다. 값 = 자 전체 길이 ÷ 눈썹 폭 (%) */
+  $("rngLen").value = Math.round(L.hlen * 200);
+  $("lenVal").textContent = Math.round(L.hlen * 200) + "%";
   $("rngAlpha").value = Math.round(L.alpha * 100);
   $("alphaVal").textContent = Math.round(L.alpha * 100) + "%";
   /* v1.59.0 — 잡은 선 전용 굵기·투명도 (기본 선과 완전 분리) */
@@ -2794,6 +2804,10 @@ function buildLookUI() {
   }
   lookPreview();
 }
+/* 미리보기 자의 반폭(px) — **슬라이더를 끌면 길이가 눈앞에서 줄었다 늘었다** 해야 합니다
+   (원장님 지시 2026-08-24). 설정 범위(HLEN_MIN~HLEN_MAX)가 미리보기 폭에 그대로 대응합니다. */
+const HLEN_MIN = 0.04, HLEN_MAX = 0.30;
+const prevHalf = (L) => clamp(L.hlen / HLEN_MAX, 0.08, 1) * 170;
 /* 미리보기 — 왼쪽 밝은 피부 / 오른쪽 어두운 눈썹. 세 묶음 색을 실제 규칙 그대로 그린다 */
 function lookPreview() {
   const svgP = $("lookPrev"); if (!svgP) return;
@@ -2810,14 +2824,14 @@ function lookPreview() {
       f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: hex,
         "stroke-width": w, "stroke-opacity": L.alpha, "stroke-linecap": "round" }));
     };
-    const half = 300 * (L.hlen / 0.19) / 2;        /* 길이 설정이 눈에 보이도록 같은 비율로 */
+    const half = prevHalf(L);
     put(180 - half, 180 + half);
     put(540 - half, 540 + half);
   });
   /* 맨 아래 줄 = **잡은 선** — drawGrab 과 같은 규칙 (v1.59.0: 굵기·투명도·없음 분리) */
   {
     const y = 84, w = 3.0 * (L.dragW || 1), op = L.dragOp != null ? L.dragOp : 1;
-    const half = 300 * (L.hlen / 0.19) / 2, e = L.dragEdge || "#FFC9A3";
+    const half = prevHalf(L), e = L.dragEdge || "#FFC9A3";
     const put = (x1, x2) => {
       if (e !== "none") f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: e,
         "stroke-width": w + 4, "stroke-opacity": 0.95 * op, "stroke-linecap": "round" }));
@@ -2867,6 +2881,13 @@ $("lookAll").onclick = () => lookSet({ arch: S.look.inner, tail: S.look.inner })
 $("lookReset").onclick = () => lookSet({ ...LOOK_DEF });
 /* 조작하다 별로면 **시트를 연 순간의 값**으로 한 번에 복귀 (원장님 지시 2026-08-23) */
 $("lookBack").onclick = () => { if (S.lookSnap) { lookSet({ ...S.lookSnap }); showHud(t("set_backed"), 1400); } };
+/* v1.68.0 — 가로 길이 슬라이더. 끄는 동안 **미리보기와 실제 화면이 같이** 줄었다 늘어난다 */
+$("rngLen").addEventListener("input", (e) => {
+  S.look.hlen = clamp(+e.target.value / 200, HLEN_MIN, HLEN_MAX);
+  $("lenVal").textContent = e.target.value + "%";
+  lookPreview(); render();
+});
+$("rngLen").addEventListener("change", () => { saveLook(); buildLookUI(); });
 $("rngAlpha").addEventListener("input", (e) => {
   S.look.alpha = +e.target.value / 100;
   $("alphaVal").textContent = e.target.value + "%";
