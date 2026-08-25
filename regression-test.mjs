@@ -2007,6 +2007,22 @@ console.log("\n[밸런스 판정]");
       + `<polygon points="${seg(146, 174)}" fill="#dccab6"/></svg>`);  /* 꼬리 — 피부와 14 차이 */
     return f;
   };
+  /* ⚠️ v1.72.0 — **꼬리 쪽이 옅게 번진 눈썹** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
+     몸통(x 178~340)은 진하고, 그 바깥(x 118~182)에는 **넓고 옅은 번짐**이 있습니다.
+     번짐은 판독 문턱(18)을 넘어 읽히고 두께가 커서 잉크량도 충분하지만, **진하기가 몸통의 1/3**
+     밖에 안 됩니다. 아우터는 **검은 드로잉이 끝나는 곳(≈180)** 에 서야 하고, 번짐 끝(118)까지
+     가면 십자가 눈썹 없는 피부 위에 섭니다 (원장님 표시: 보라=그때 자리 · 파랑=있어야 할 자리). */
+  const SMUDGE = { bodyEndX: 180, smudgeEndX: 118 };
+  const makeSmudgeFace = () => {
+    const f = path.join(ROOT, ".draw-smudge.svg");
+    const up = [], dn = [];
+    for (let x = 178; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<rect x="118" y="132" width="64" height="40" fill="#af9b91"/>`          /* 넓고 옅은 번짐 */
+      + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/></svg>`);
+    return f;
+  };
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
         fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
         fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h"),
@@ -2104,6 +2120,21 @@ console.log("\n[밸런스 판정]");
     check("122. 얇은 털 추적 금지 — 아우터는 진한 눈썹의 끝에 선다 (잔털까지 따라가지 않는다)",
       o122.ok && atBody && notChased,
       `아우터 ${o122.outerPx.toFixed(0)} (진한 눈썹 끝 ${SHAPE_TAPER.bandEndX} 에 섬=${atBody} · 잔털 끝 ${SHAPE_TAPER.tipX} 까지 안 감=${notChased})`);
+  }
+
+  /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
+     꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
+     재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.
+     ⛔ 진하기 기준을 잉크량으로 되돌리지 마세요. */
+  {
+    const fsm = makeSmudgeFace();
+    const o123 = await runDraw(false, fsm, null, SHAPE_A);
+    fs.unlinkSync(fsm);
+    const atBody = Math.abs(o123.outerPx - SMUDGE.bodyEndX) < 14;
+    const notSmudge = o123.outerPx > SMUDGE.smudgeEndX + 30;
+    check("123. 검은 드로잉 — 아우터는 진한 곳이 끝나는 자리에 선다 (옅은 번짐은 눈썹이 아니다)",
+      o123.ok && atBody && notSmudge,
+      `아우터 ${o123.outerPx.toFixed(0)} (검은 드로잉 끝 ${SMUDGE.bodyEndX} 에 섬=${atBody} · 번짐 끝 ${SMUDGE.smudgeEndX} 까지 안 감=${notSmudge})`);
   }
 
   /* 121. ⚠️ v1.70.0 — **원장님이 정해 주신 판정 기준** (2026-08-24, 사진 3장 + 확인 답변)

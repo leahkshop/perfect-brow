@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.71.0";
+const APP_VERSION = "v1.72.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2320,6 +2320,7 @@ function browBoxes() {
    이제 **지금 선이 있는 자리**를 사전 정보로 씁니다 — 이너~아우터 사이 ±22%, 위아래는
    아치~앞두께 밴드의 앞뒤로 한 배쯤. 눈 기준선 위로는 넘어가지 않습니다.
    ⛔ 다시 화면 절반으로 되돌리지 마세요. 머리카락이 들어온 사진에서 그대로 재발합니다. */
+const TAIL_INK = 0.55;    // **평균 진하기**가 중앙값의 이 비율 이상이어야 「검은 드로잉」 (v1.72.0)
 const KINK_DROP = 0.15;   // 산꼭대기~꼬리 낙차의 이 비율만큼 내려앉으면 「꺾였다」 (v1.70.0)
 /* ⚠️ v1.70.0 — 아래 경계 (원장님 지시 2026-08-24: 「빨간 X 부분 **해석 불필요**」)
    원장님이 눈 기준선 바로 위(≈7%)에 X 를 찍어 「여기는 읽지 마라」고 하셨습니다 — 눈꺼풀·
@@ -2436,7 +2437,7 @@ function keepBand(pts) {
     const s = [keep[Math.max(0, i - 1)][key], keep[i][key], keep[Math.min(keep.length - 1, i + 1)][key]].sort((a, b) => a - b);
     return s[1];
   };
-  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot"), ink: p.ink, edge: p.edge }));
+  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot"), ink: p.ink, dark: p.dark, edge: p.edge }));
 }
 
 /* ⚠️ v1.66.0 — **머리카락·그림자 방어** (원장님 지시 2026-08-23)
@@ -2546,7 +2547,11 @@ function readDrawing(img, contrast, side) {
     /* v1.66.0 — 탐색창 **천장에 닿은** 열 표시. 눈썹 위로는 늘 여유를 두고 창을 잡으므로,
        창 위로 그냥 빠져나가는 것은 눈썹이 아니라 머리카락입니다. `trimOutside` 가 씁니다.
        ⚠️ 바닥은 세지 마세요 — 창 아래는 **눈꺼풀 방어선**이라 눈썹 앞머리가 닿습니다. */
-    return { x: c.x, top: r.top, bot: r.bot, ink: c.runs[c.si].ink, edge: r.top <= y0 + 1 };
+    /* v1.72.0 — `ink` 는 **두께 × 진하기** 라 얇은 꼬리에서 자연히 작아집니다. 꼬리 끝 판정에는
+       두께와 무관한 **평균 진하기(dark)** 를 씁니다 — 「검은 드로잉」의 잣대는 진하기입니다. */
+    const sd0 = c.runs[c.si];
+    return { x: c.x, top: r.top, bot: r.bot, ink: sd0.ink,
+             dark: sd0.ink / Math.max(1, sd0.len), edge: r.top <= y0 + 1 };
   });
   pts.sort((p, q) => p.x - q.x);
   let band = keepBand(pts);
@@ -2662,19 +2667,30 @@ function autoFromDrawing() {
         따라가야 합니다 (다음 과제).
      ⛔ 윗선이나 가운데로 되돌리지 마세요 — 회귀 121 이 잡습니다. */
   /* ⛔ v1.71.0 — **얇은 털을 따라가지 않습니다** (원장님 지시 2026-08-25: 「얇은털 따라가는것 금지」)
-     v1.70.0 은 판독이 끊긴 자리에서 문턱을 낮춰 연한 잔털을 한 걸음씩 따라갔습니다. 금지되었습니다.
-     꼬리는 **본 판독이 실제로 읽은 진한 눈썹**의 끝 구간 아랫선입니다 — 잔털은 눈썹 디자인의
-     끝이 아닙니다. ⛔ 추적(chaseTail)·문턱 낮추기를 다시 넣지 마세요. 회귀 122 가 잡습니다. */
+     ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳을 찾습니다** (원장님 지시 2026-08-25: 「검은 드로잉
+        고도화로 찾기」). 판독은 눈썹 가장자리의 **옅게 번진 열**까지 읽습니다. 그 열까지 꼬리로
+        치면 십자가 눈썹이 없는 피부 위에 섭니다 (원장님 표시: 보라=그때 자리 · 파랑=있어야 할 자리).
+        이제 **잉크가 중앙값의 `TAIL_INK` 이상인 열**만 「검은 드로잉」으로 보고, 바깥에서
+        안쪽으로 훑어 처음 만나는 그 열을 꼬리 끝으로 삼습니다.
+     ⛔ 문턱을 낮춰 옅은 쪽으로 다시 늘리지 마세요. 회귀 122·123 이 잡습니다. */
+  let tailIdx = n - 1;
   {
-    const i0 = clamp(Math.floor((1 - END) * (n - 1)), 0, n - 1);
-    const bots = seq.slice(i0).map((p) => p.bot).sort((x, y) => x - y);
+    const darks = seq.map((p) => p.dark || 0).slice().sort((a, b) => a - b);
+    const medDark = darks[Math.floor(darks.length / 2)] || 0;
+    if (medDark > 0) {
+      for (let i = n - 1; i >= Math.floor(n * 0.45); i--) {
+        if ((seq[i].dark || 0) >= TAIL_INK * medDark) { tailIdx = i; break; }
+      }
+    }
+    const t0 = Math.max(0, tailIdx - Math.round(END * (n - 1)));
+    const bots = seq.slice(t0, tailIdx + 1).map((p) => p.bot).sort((x, y) => x - y);
     setY("h3", bots.length ? bots[Math.floor(bots.length / 2)] : null);
   }
 
   /* 이너·아우터 = 드로잉이 실제로 있는 x 양 끝 (setLine 이 반대쪽을 대칭으로 맞춘다).
-     아우터는 **본 판독이 읽은 진한 눈썹의 끝** 그대로입니다 (얇은 털 추적 금지 · v1.71.0). */
+     아우터는 **검은 드로잉이 끝나는 열**입니다 (v1.72.0 · 얇은 털 추적 금지 v1.71.0). */
   setLine("v2", clamp(S.g.v1 - Math.abs(seq[0].x - cx) / W, 0.02, 0.98));
-  setLine("v4", clamp(S.g.v1 - Math.abs(seq[n - 1].x - cx) / W, 0.02, 0.98));
+  setLine("v4", clamp(S.g.v1 - Math.abs(seq[tailIdx].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
      그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
      뒤로 뺐을 때 각도가 생기는 꼭지점」). 못 찾으면 산꼭대기를 그대로 씁니다. */
