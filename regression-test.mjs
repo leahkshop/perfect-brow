@@ -2366,6 +2366,48 @@ console.log("\n[밸런스 판정]");
       + `아치두께자 가운데맞춤=${archCentered} · 거울 ${fMirror}/${tMirror}`);
   }
 
+  /* 131. ⭐⭐ v1.79.0 — **못박음 검사 (일률 검사)** — 원장님 지시 2026-08-25:
+       「왜 어떤 사진은 잘 잡고 어떤 사진은 에러가 나는지 확인하고 일률적으로 눈썹 포인트를
+        잘 잡도록 해결. 이런 에러 사항이 생기지 않도록 룰 저장」
+     이 세션에서 나온 실패는 전부 **한 가지 모양**이었습니다 — 판독이 사진이 아니라
+     **탐색창 경계나 그늘 끝에 못박혀서**, 서로 달라야 할 자 둘이 **같은 값**이 되는 것.
+       · 앞머리 212 = 아치두께 212 (창 바닥)
+       · 앞머리 199 = 아치두께 199 (그늘 끝)
+     그래서 **모든 까다로운 사진에 대해 한꺼번에** 다음 네 가지를 봅니다:
+       ① 앞두께 < 앞머리      (윗선이 아랫선보다 위)
+       ② 아치 < 아치두께      (같은 규칙)
+       ③ |앞머리 − 아치두께| > 2   (둘이 같으면 못박힌 것)
+       ④ 가로선 다섯 개가 모두 서로 다르다
+     ⛔ 새 사진 규칙을 넣을 때 이 검사를 먼저 돌리세요. 개별 검사는 통과해도 여기서 걸립니다. */
+  {
+    const cases = [];
+    const push = (name, f, sh, lm) => cases.push({ name, f, sh, lm });
+    const fSh = makeShadeFace(), fSh2 = makeShade2Face(), fHl = makeHaloFace(),
+          fTp = makeTipFace(), fHd = makeHeadFace(), fTa = makeTaperFace(), fSm = makeSmudgeFace();
+    push("그늘(창바닥)", fSh, SHAPE_A, true);
+    push("그늘(창바닥 위)", fSh2, SHAPE_A, true);
+    push("위 번짐", fHl, SHAPE_A, true);
+    push("얇아지는 꼬리", fTp, SHAPE_TIP, false);
+    push("얇아지는 앞머리", fHd, SHAPE_HEAD, false);
+    push("잔털 꼬리", fTa, SHAPE_A, false);
+    push("옅은 번짐", fSm, SHAPE_A, false);
+    push("모양 A", fd, SHAPE_A, true);
+    push("모양 B", fb, SHAPE_B, true);
+    const bad = [];
+    for (const c of cases) {
+      const o = await runDraw(c.lm, c.f, null, c.sh);
+      const ys = [o.ftPx, o.frontPx, o.archPx, o.atPx, o.tailPx];
+      const uniq = new Set(ys.map((v) => Math.round(v))).size === ys.length;
+      const ok = o.ok && o.ftPx < o.frontPx && o.archPx < o.atPx
+        && Math.abs(o.frontPx - o.atPx) > 2 && uniq;
+      if (!ok) bad.push(`${c.name}(앞두께 ${o.ftPx.toFixed(0)}/앞머리 ${o.frontPx.toFixed(0)}/아치 ${o.archPx.toFixed(0)}/아치두께 ${o.atPx.toFixed(0)}/꼬리 ${o.tailPx.toFixed(0)})`);
+    }
+    [fSh, fSh2, fHl, fTp, fHd, fTa, fSm].forEach((f) => { try { fs.unlinkSync(f); } catch {} });
+    check("131. 못박음 검사 — 까다로운 사진 9장에서 자가 창 경계·그늘에 못박히지 않는다",
+      bad.length === 0,
+      bad.length ? `못박힘: ${bad.join(" · ")}` : `9장 모두 통과 (윗선<아랫선 · 앞머리≠아치두께 · 다섯 값 모두 다름)`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.
