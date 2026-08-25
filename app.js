@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.69.0";
+const APP_VERSION = "v1.70.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2320,7 +2320,12 @@ function browBoxes() {
    이제 **지금 선이 있는 자리**를 사전 정보로 씁니다 — 이너~아우터 사이 ±22%, 위아래는
    아치~앞두께 밴드의 앞뒤로 한 배쯤. 눈 기준선 위로는 넘어가지 않습니다.
    ⛔ 다시 화면 절반으로 되돌리지 마세요. 머리카락이 들어온 사진에서 그대로 재발합니다. */
-const FB_UP = 0.45, FB_DOWN = 0.03;   // 눈 기준선 위 45% ~ 위 3%
+const KINK_DROP = 0.15;   // 산꼭대기~꼬리 낙차의 이 비율만큼 내려앉으면 「꺾였다」 (v1.70.0)
+/* ⚠️ v1.70.0 — 아래 경계 (원장님 지시 2026-08-24: 「빨간 X 부분 **해석 불필요**」)
+   원장님이 눈 기준선 바로 위(≈7%)에 X 를 찍어 「여기는 읽지 마라」고 하셨습니다 — 눈꺼풀·
+   쌍꺼풀 주름 자리입니다. 아래 경계를 눈 기준선 위 **8%** 로 올려 그 띠를 아예 보지 않습니다.
+   ⛔ 3% 로 되돌리지 마세요 — 눈꺼풀이 판독에 섞입니다. */
+const FB_UP = 0.45, FB_DOWN = 0.08;   // 눈 기준선 위 45% ~ 위 8%
 function fallbackBox(side) {
   const { W, H } = S.dim, g = S.g;
   const cx = g.v1 * W, wr = workRight() * W;
@@ -2509,6 +2514,49 @@ function trimOutside(band, b) {
   return band;
 }
 
+
+/* ⚠️ v1.70.0 — **꼬리 끝 추적** (원장님 지시 2026-08-25: 「꼬리 위치만 초고도화 —
+   끝선 아직도 뾰족한 곳에 위치하지 않는다」)
+   눈썹 꼬리는 **연하게 사라집니다.** 본 판독은 진한 몸통에서 끊기므로, 마지막 열을 그대로
+   쓰면 십자가 늘 실제 끝보다 안쪽에 섭니다. 그래서 끊긴 자리에서부터 **문턱을 낮춰
+   한 걸음씩 바깥으로 따라갑니다** — 이전 열과 세로로 이어지고, 갑자기 두꺼워지지 않고,
+   중심이 크게 튀지 않는 덩어리만 이어 붙입니다. 두께가 2px 이하로 닫히거나 더 이을 것이
+   없으면 거기가 **뾰족한 끝**입니다.
+   ⛔ 이 추적을 지우면 꼬리 자가 다시 안쪽으로 15~25px 물러납니다 (회귀 122). */
+const CHASE_CONTRAST = 6;    // 추적용 문턱 — 본 판독(18)보다 훨씬 낮다
+const CHASE_STEP = 3;        // 한 걸음(px)
+const CHASE_MAX = 40;        // 최대 걸음 수
+function chaseTail(img, band, b) {
+  if (!band || band.length < DRAW_MIN_HITS) return null;
+  const { W, H } = S.dim;
+  const y0 = Math.max(0, Math.round(b.y0)), y1 = Math.min(H - 1, Math.round(b.y1));
+  const cx = S.g.v1 * W;
+  const leftSide = (band[0].x + band[band.length - 1].x) / 2 < cx;
+  const start = leftSide ? band[0] : band[band.length - 1];   // band 는 x 오름차순
+  const dir = leftSide ? -1 : 1;                              // 바깥(관자놀이) 방향
+  let cur = { x: start.x, top: start.top, bot: start.bot }, out = null;
+  for (let i = 0; i < CHASE_MAX; i++) {
+    const x = Math.round(cur.x + dir * CHASE_STEP);
+    if (x < 1 || x >= W - 1 || x < b.x0 - 40 || x > b.x1 + 40) break;
+    const cy = (cur.top + cur.bot) / 2, th = Math.max(cur.bot - cur.top, 2);
+    const c = columnRuns(img, x, y0, y1, cy, CHASE_CONTRAST);
+    if (!c) break;
+    let best = null, bestD = 1e9;
+    for (const r of c.runs) {
+      if (Math.min(r.bot, cur.bot) - Math.max(r.top, cur.top) < -1) continue;  // 이어지지 않음
+      if (r.bot - r.top > th * 1.7 + 3) continue;                              // 갑자기 두꺼움
+      const d = Math.abs((r.top + r.bot) / 2 - cy);
+      if (d > th * 1.2 + 4) continue;                                          // 중심이 튐
+      if (d < bestD) { bestD = d; best = r; }
+    }
+    if (!best) break;
+    cur = { x, top: best.top, bot: best.bot };
+    out = cur;
+    if (best.bot - best.top <= 2) break;                                       // 다 닫혔다
+  }
+  return out ? { x: out.x, y: (out.top + out.bot) / 2 } : null;
+}
+
 /* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
    반환: x 오름차순 [{x, top, bot}] — top/bot 은 캔버스 px */
 function readDrawing(img, contrast, side) {
@@ -2549,9 +2597,13 @@ function readDrawing(img, contrast, side) {
      실제 눈썹 두께의 대리값이 못 됩니다 — 원장님 사진에서 선 간격 15px vs 실제 눈썹 50px 이라
      제대로 읽은 판독이 「두껍다」는 이유로 버려졌습니다. 예비 경로의 방어는 머리카락 규칙
      (창 천장·끊긴 조각·잉크 · 1-31)이 맡습니다. */
-  if (band) { band.refH = boxes ? b.h : null; band.ink = inkSum; }   // refH: 두께 상식 검사 · ink: 좌우 비교
+  if (band) {
+    band.refH = boxes ? b.h : null; band.ink = inkSum;
+    band.tip = chaseTail(img, band, b);      /* v1.70.0 — 연한 꼬리 끝까지 따라간다 */
+  }   // refH: 두께 상식 검사 · ink: 좌우 비교
   return band;
 }
+
 
 /* 사진에 그려진 드로잉 위로 모든 선을 올린다. 올렸으면 true.
    센터(v1)는 얼굴 축이라 건드리지 않습니다 (내안각 중점 · BASELINE 1-15).
@@ -2628,20 +2680,100 @@ function autoFromDrawing() {
   const pa = clamp(pk - win, 0, n - 1) / (n - 1), pb = clamp(pk + win, 0, n - 1) / (n - 1);
 
   const setY = (key, py) => { if (py !== null && isFinite(py)) setLine(key, clamp(py / H, 0.02, 0.98)); };
-  /* 앞머리 구간만 분위수(위 30% · 아래 70%) — 머리는 털이 성글어 중앙값이 빗나간다.
-     아치·꼬리는 표본이 적어 분위수가 오히려 흔들리므로 중앙값 유지 (회귀 89가 잡음) */
-  setY("front", at(0, 0.18, "top", 0.3));        // 앞머리   = 머리 쪽 윗선
-  setY("frontThickness", at(0, 0.18, "bot", 0.7)); // 앞두께 = 같은 자리 아랫선
+  /* ⚠️ v1.70.0 — **원장님이 정해 주신 판정 기준** (2026-08-24, 사진 3장 + 확인 답변)
+       ① 앞머리 : 이너(세로) × 앞머리(가로)가 이루는 **90° 꼭지점에 눈썹 앞부분이 닿는다**
+                 → 구간 평균이 아니라 **안쪽 끝 근처**만 본다. v1.69 까지는 안쪽 18% 를
+                   분위수로 평균 내서, 앞머리 자가 실제보다 **아래**로 내려갔습니다
+                   (원장님 표시: 아래 빨간 ㄴ = 지금 자리 · 위 빨간 ㄴ = 있어야 할 자리).
+       ② 꼬리   : 십자 꼭지점에 **꼬리의 뾰족한 끝점**이 닿는다 → 윗선이 아니라 **끝의 한가운데**.
+                 v1.69 까지는 윗선(top)이라 꼬리 자가 실제보다 위에 있었습니다.
+       ③ 아치선 : 산꼭대기가 아니라, **아치 가로선에서 눈썹이 아래로 빠지기 시작하는 꺾임점**.
+                 랜드마크가 있으면 그 x 를 **눈동자 바깥 끝 ~ 눈꼬리 바깥**(원장님의 1·2·3 자리)
+                 으로 가둔다.
+     ⛔ 이 세 기준을 「구간 분위수」로 되돌리지 마세요 — 회귀 87~94·121 이 잡습니다. */
+  const END = 0.08;                    // 끝점으로 볼 구간 (양 끝 8%)
+  setY("front", at(0, END, "top"));              // 앞머리   = **안쪽 끝**의 윗선
+  setY("frontThickness", at(0, 0.18, "bot", 0.7)); // 앞두께 = 앞부분 아랫선 (기존 유지)
   setY("h2", at(pa, pb, "top"));                 // 아치     = 제일 높은 곳 윗선
   setY("archThickness", at(pa, pb, "bot"));      // 아치두께 = 그 자리 아랫선
-  setY("h3", at(0.86, 1, "top"));                // 꼬리     = 바깥쪽 끝 윗선
+  /* ⚠️ v1.70.0 — **꼬리 = 뾰족한 끝의 아랫선** (원장님 지시 2026-08-24 · 빨간 십자)
+     원장님이 십자를 눈썹 꼬리의 **아래·바깥**에 그려 주셨습니다. 판독 열은 꼬리의 연한 털
+     앞에서 끊기므로, 마지막 구간의 **아랫선(bot)** 이 실제 끝점에 가장 가깝습니다.
+       · v1.69 까지 : 윗선(top)  → 십자가 실제 끝보다 **위**에 섰습니다
+       · v1.70 잠깐 : 가운데    → 여전히 위였습니다 (원장님: 「꼬리 아직도 잘못 해석했다」)
+       · v1.70 확정 : **아랫선** → 뾰족하게 닫히는 자리에 가장 가깝습니다
+     ⚠️ 윗선·아랫선을 직선으로 연장해 만나는 점을 구하는 방법도 시도했지만, 실제 눈썹 꼬리는
+        곡선이라 25px 이상 빗나가 **버렸습니다**. 더 정확히 하려면 판독이 연한 꼬리 털까지
+        따라가야 합니다 (다음 과제).
+     ⛔ 윗선이나 가운데로 되돌리지 마세요 — 회귀 121 이 잡습니다. */
+  const outerX0 = seq[n - 1].x, span0 = Math.abs(seq[0].x - outerX0) || 1;
+  const outward = outerX0 < seq[0].x ? -1 : 1;
+  const tip = pts.tip;
+  /* 추적이 **실제로 나아갔을 때만** 그 끝점을 씁니다 — 두 걸음(6px) 미만이면 꼬리가 뚝 잘린
+     드로잉이라는 뜻이므로, 예전대로 끝 구간의 아랫선을 씁니다. 폭의 30% 를 넘게 뻗어도 안 믿습니다. */
+  const tipOk = tip && outward * (tip.x - outerX0) >= CHASE_STEP * 2
+                    && Math.abs(tip.x - outerX0) <= 0.30 * span0;
+  if (tipOk) setY("h3", tip.y);
+  else {
+    const i0 = clamp(Math.floor((1 - END) * (n - 1)), 0, n - 1);
+    const bots = seq.slice(i0).map((p) => p.bot).sort((x, y) => x - y);
+    setY("h3", bots.length ? bots[Math.floor(bots.length / 2)] : null);
+  }
 
-  /* 이너·아우터 = 드로잉이 실제로 있는 x 양 끝 (setLine 이 반대쪽을 대칭으로 맞춘다) */
+  /* 이너·아우터 = 드로잉이 실제로 있는 x 양 끝 (setLine 이 반대쪽을 대칭으로 맞춘다).
+     아우터는 판독이 끊긴 x 그대로입니다 — 연장은 곡선 꼬리에서 폭주해 쓰지 않습니다. */
   setLine("v2", clamp(S.g.v1 - Math.abs(seq[0].x - cx) / W, 0.02, 0.98));
-  setLine("v4", clamp(S.g.v1 - Math.abs(seq[n - 1].x - cx) / W, 0.02, 0.98));
-  /* 아치선 = **제일 높은 곳의 x**. 아치 자가 진짜 산 위에 올라가게 하려는 것입니다 (v1.32.0) */
-  setLine("v6", clamp(S.g.v1 - Math.abs(seq[pk].x - cx) / W, 0.02, 0.98));
+  setLine("v4", clamp(S.g.v1 - Math.abs((tipOk ? tip.x : seq[n - 1].x) - cx) / W, 0.02, 0.98));
+  /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
+     그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
+     뒤로 뺐을 때 각도가 생기는 꼭지점」). 못 찾으면 산꼭대기를 그대로 씁니다. */
+  /* 임계는 **산꼭대기에서 꼬리 끝까지의 낙차**로 잽니다 — 두께로 재면 눈썹 모양에 따라
+     꺾임점이 크게 흔들립니다 (모양 B 에서 30px 이상 밀렸습니다). */
+  const peakTop = smoothTop(pk);
+  const fall = Math.max((at(1 - END, 1, "top") || peakTop) - peakTop, 4);
+  let kink = -1;
+  for (let i = pk; i <= n - 1; i++) {          // seq[n-1] = 바깥(꼬리) 방향
+    if (smoothTop(i) - peakTop >= KINK_DROP * fall) { kink = i; break; }
+  }
+  /* ⚠️ 원장님 판단 기준은 **두 개**이고 순서가 있습니다 (2026-08-24):
+       ① 꺾임점 — 아치 가로선에서 눈썹이 아래로 빠지는 자리. **이것이 우선입니다.**
+       ② 자리(1·2·3) — 눈동자 바깥 끝 / 눈꼬리 / 꼬리 섀도우. 꺾임을 **못 찾았을 때**의 자리입니다.
+     ⛔ ②로 ①을 가두지 마세요 — 아치가 안쪽에 있는 눈썹에서 아치선이 30px 넘게 밀립니다
+        (회귀 91 이 그 모양입니다). */
+  let kx;
+  if (kink >= 0) kx = seq[kink].x;
+  else {
+    const eyeR = eyeArchRange(seq[0].x < cx ? "L" : "R");   /* 판독에 실제로 쓰인 쪽 */
+    kx = eyeR ? (eyeR.a + eyeR.b) / 2 : seq[pk].x;          // ② 눈꼬리 근처
+  }
+  setLine("v6", clamp(S.g.v1 - Math.abs(kx - cx) / W, 0.02, 0.98));
   return true;
+}
+
+/* ⚠️ v1.70.0 — 아치선이 놓일 수 있는 **눈 기준 구간** (원장님 지시 2026-08-24)
+   「보통 1·2·3 에 위치한다 — ① 검은 눈동자 바깥 끝과 눈꼬리 사이 ② 눈꼬리
+     ③ 눈꼬리에서 나온 꼬리 섀도우」
+   랜드마크가 없으면 null (가두지 않는다). 눈 바깥으로 조금(EYE_TAIL) 더 허용합니다. */
+const EYE_TAIL = 0.35;      // 눈꼬리 바깥으로 눈 너비의 이 비율까지 (③ 꼬리 섀도우)
+function eyeArchRange(side) {
+  const lm = S.landmarks; if (!lm) return null;
+  try {
+    const P = (i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p);
+    const corners = [33, 133, 362, 263].map(P).sort((a, b) => a.x - b.x);
+    const outerL = corners[0], innerL = corners[1], innerR = corners[2], outerR = corners[3];
+    /* lmAvg 는 **이미지 픽셀**을 돌려줍니다 (S.iw/S.ih 를 이미 곱한 값) — 다시 곱하지 마세요.
+       왼쪽/오른쪽은 인덱스 규약이 아니라 **화면 x** 로 고릅니다 (사진이 뒤집혀도 안전). */
+    const i1 = imgToCanvas(lmAvg(lm, IRIS_L).x, lmAvg(lm, IRIS_L).y, S.p);
+    const i2 = imgToCanvas(lmAvg(lm, IRIS_R).x, lmAvg(lm, IRIS_R).y, S.p);
+    const useL = side === "L";
+    const ip = (i1.x <= i2.x) === useL ? i1 : i2;
+    const outer = useL ? outerL : outerR, inner = useL ? innerL : innerR;
+    const wide = Math.abs(outer.x - inner.x);
+    if (!(wide > 8)) return null;      // 눈 코너를 못 받았으면 가두지 않는다 (엉뚱한 범위 방지)
+    const irisEdge = ip.x + (useL ? -1 : 1) * wide * 0.18;      // ① 눈동자 바깥 끝
+    const tailShadow = outer.x + (useL ? -1 : 1) * wide * EYE_TAIL; // ③ 꼬리 섀도우
+    return { a: irisEdge, b: tailShadow };
+  } catch (e) { return null; }
 }
 
 /* ═══════════ 9. export ═══════════ */

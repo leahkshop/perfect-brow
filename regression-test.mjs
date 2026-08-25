@@ -1906,6 +1906,8 @@ console.log("\n[밸런스 판정]");
     cp: [[120, 152, 164], [150, 152, 164], [185, 122, 142], [215, 120, 140],
          [260, 132, 158], [300, 148, 178], [340, 148, 178]],
     front: [320, 148, 178], arch: [215, 120, 140], tail: [130, 152], inner: 340, outer: 120,
+    /* v1.70.0 원장님 기준 — 꼬리 = 바깥 끝의 **아랫선**(뾰족한 끝) · 아치선 = **꺾임점** */
+    tailMid: 164, archV: 181,   /* 꼬리 = 바깥 끝 **아랫선** · 아치선 = 꺾임점 */
   };
   /* 모양 B — 아치가 **안쪽 가까이**(x 260) 있고 두께도 다른 눈썹.
      ⚠️ 이 모양이 있어야 「아치를 사진에서 찾는다」가 진짜로 검증됩니다.
@@ -1914,6 +1916,7 @@ console.log("\n[밸런스 판정]");
     cp: [[120, 158, 168], [160, 154, 166], [210, 138, 162], [250, 120, 146],
          [270, 120, 146], [300, 130, 166], [340, 130, 166]],
     front: [320, 130, 166], arch: [260, 120, 146], tail: [130, 158], inner: 340, outer: 120,
+    tailMid: 167, archV: 234,
   };
   /* ⚠️ v1.69.0 — 모양 C = **얼굴을 크게 확대한 사진** (원장님 실제 사진의 상황).
      눈썹이 **지금 선보다 훨씬 위**(y 80~122)에 있고 두께도 선 간격보다 훨씬 두껍다.
@@ -1925,6 +1928,7 @@ console.log("\n[밸런스 판정]");
     cp: [[120, 110, 120], [150, 108, 120], [185, 84, 118], [215, 80, 116],
          [260, 90, 118], [300, 100, 122], [340, 102, 122]],
     front: [320, 102, 122], arch: [215, 80, 116], tail: [130, 109], inner: 340, outer: 120,
+    tailMid: 120, archV: 176,
   };
   const edgeAt = (cp, x, i) => {
     for (let k = 0; k < cp.length - 1; k++) {
@@ -1976,9 +1980,33 @@ console.log("\n[밸런스 판정]");
      [276, 46], [283, 53], [282, 52], [295, 65], [285, 55]].forEach(([a, b]) => mir(a, b));
     for (let i = 468; i <= 472; i++) put(i, 230, 250);
     for (let i = 473; i <= 477; i++) put(i, 552, 250);
+    /* ⚠️ v1.70.0 — 눈꼬리·내안각. 아치선이 놓일 수 있는 구간(원장님의 1·2·3)을 정합니다.
+       빠뜨리면 눈 폭이 0 으로 잡혀 아치선이 엉뚱한 곳에 갇힙니다. */
+    put(33, 150, 250); put(133, 300, 250); put(362, 482, 250); put(263, 632, 250);
     return L;
   })();
 
+  /* ⚠️ v1.70.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 실제 사진 · 2026-08-25 「초고도화」)
+     몸통(x 170~340)은 진하고, 꼬리(x 145~172)는 피부와 겨우 14 차이라 **본 판독이 못 봅니다.**
+     그래서 판독 열은 x=170 에서 끊깁니다. 문턱을 낮춰 한 걸음씩 따라가야 진짜 끝(≈146)에 닿습니다. */
+  const SHAPE_TAPER = {
+    cp: [[146, 150, 152], [172, 144, 168], [210, 138, 174], [260, 130, 170],
+         [300, 138, 176], [340, 142, 180]],
+    tipX: 148, tipY: 151, bandEndX: 172,
+  };
+  const makeTaperFace = () => {
+    const f = path.join(ROOT, ".draw-taper.svg");
+    const seg = (x0, x1) => {
+      const up = [], dn = [];
+      for (let x = x0; x <= x1; x += 2) { up.push(`${x},${edgeAt(SHAPE_TAPER.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_TAPER.cp, x, 2).toFixed(1)}`); }
+      return up.concat(dn.reverse()).join(" ");
+    };
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<polygon points="${seg(172, 340)}" fill="#2a1c14"/>`          /* 몸통 — 진하다 */
+      + `<polygon points="${seg(146, 174)}" fill="#dccab6"/></svg>`);  /* 꼬리 — 피부와 14 차이 */
+    return f;
+  };
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
         fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
         fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h"),
@@ -2001,9 +2029,10 @@ console.log("\n[밸런스 판정]");
       const cv = (ix, iy) => window.PB.imgToCanvas(ix, iy, S.p);
       const exp = { front: cv(sh.front[0], sh.front[1]).y, ft: cv(sh.front[0], sh.front[2]).y,
                     arch: cv(sh.arch[0], sh.arch[1]).y, at: cv(sh.arch[0], sh.arch[2]).y,
-                    tail: cv(sh.tail[0], sh.tail[1]).y,
+                    /* v1.70.0 — 꼬리는 **끝의 아랫선**, 아치선은 **꺾임점 x** */
+                    tail: cv(sh.tail[0], sh.tailMid).y,
                     inner: cv(sh.inner, 160).x, outer: cv(sh.outer, 160).x,
-                    archV: cv(sh.arch[0], sh.arch[1]).x };
+                    archV: cv(sh.archV, 160).x };
       const ok = window.PB.autoFromDrawing();
       const g = S.g, D = window.PB.DEFAULT_GUIDE;
       /* ⚠️ v1.69.0 — 드로잉 맞춤이 놓는 것은 **앞두께·아치 둘뿐**. 나머지는 그대로여야 한다 */
@@ -2061,6 +2090,47 @@ console.log("\n[밸런스 판정]");
      「전혀 프로페셔널하지 못한」 위치였습니다. 2차 저대비 패스가 털을 읽어야 합니다. */
   const o94 = await runDraw(true, fn, null, SHAPE_A);
   check("94. 맨 눈썹 — 드로잉이 없어도 저대비 2차 패스가 털을 읽어 배치한다", judge(o94), say(o94));
+  /* 122. ⚠️ v1.70.0 — **꼬리 끝 추적** (원장님 지시 2026-08-25:
+     「꼬리 위치만 초고도화 — 끝선 아직도 뾰족한 곳에 위치하지 않는다」)
+     눈썹 꼬리는 연하게 사라지므로 본 판독이 몸통에서 끊깁니다. 끊긴 자리에서 문턱을 낮춰
+     한 걸음씩 바깥으로 따라가야 **뾰족한 끝**에 닿습니다.
+     ⛔ 추적을 지우면 아우터가 25px 안쪽(판독이 끊긴 자리)으로 물러납니다. */
+  {
+    const ftp = makeTaperFace();
+    const o122 = await runDraw(false, ftp, null, SHAPE_A);
+    fs.unlinkSync(ftp);
+    const dx = Math.abs(o122.outerPx - SHAPE_TAPER.tipX);
+    const dy = Math.abs(o122.tailPx - SHAPE_TAPER.tipY);
+    const chased = Math.abs(o122.outerPx - SHAPE_TAPER.bandEndX) > 8;   /* 실제로 따라갔는가 */
+    check("122. 꼬리 끝 추적 — 연하게 사라지는 꼬리도 끝까지 따라가 뾰족한 곳에 선다",
+      o122.ok && chased && dx < 10 && dy < 8,
+      `아우터 ${o122.outerPx.toFixed(0)} (끝점 ${SHAPE_TAPER.tipX} · 본 판독은 ${SHAPE_TAPER.bandEndX} 에서 끊김 · 따라감=${chased}) · `
+      + `꼬리 ${o122.tailPx.toFixed(0)} (끝점 ${SHAPE_TAPER.tipY})`);
+  }
+
+  /* 121. ⚠️ v1.70.0 — **원장님이 정해 주신 판정 기준** (2026-08-24, 사진 3장 + 확인 답변)
+       · 꼬리 자 = 꼬리의 **뾰족한 끝**(끝 구간의 아랫선). 윗선이 아닙니다 → 예전보다 **아래**
+       · 아치선 = **꺾임점**(아치 가로선에서 눈썹이 아래로 빠지는 자리). 산꼭대기가 아닙니다 → **바깥쪽**
+       · 앞머리 = 이너 × 앞머리의 90° 꼭지점이 눈썹 앞부분 끝에 닿는다 (구간 평균이 아니라 끝 근처)
+     ⛔ 예전 규칙(꼬리=윗선 · 아치선=산꼭대기)으로 되돌리면 이 검사가 바로 잡습니다. */
+  {
+    const outerTop = 152, peakX = 215;      /* 모양 A 의 바깥 끝 윗선 · 산꼭대기 x */
+    const tailBelowTop = o87.tailPx > outerTop + 8;      /* 끝의 아랫선 = 윗선보다 뚜렷이 아래 */
+    const archVOutside = o87.archVPx < peakX - 15;       /* 꺾임점 = 산꼭대기보다 바깥 */
+    /* ⚠️ v1.70.0 — 원장님이 실제 화면에 십자로 찍어 확인해 주신 자리(2026-08-24 「이 위치 아치
+       해석 완료형으로」)를 픽셀로 재니 **눈썹 바깥 끝에서 폭의 26%** 였습니다. 꺾임점이 내는
+       값도 26% 대입니다. 이 띠(15~40%)를 벗어나면 해석이 다시 어긋난 것입니다. */
+    const archFrac = (o87.archVPx - o87.exp.outer) / (o87.exp.inner - o87.exp.outer);
+    const archInBand = archFrac > 0.15 && archFrac < 0.40;
+    const frontOnCorner = Math.abs(o87.innerPx - o87.exp.inner) < 9
+                       && Math.abs(o87.frontPx - o87.exp.front) < 5;
+    check("121. 판정 기준 — 꼬리=끝의 아랫선 · 아치선=꺾임점(바깥에서 ¼ 부근) · 앞머리=90° 꼭지점",
+      tailBelowTop && archVOutside && archInBand && frontOnCorner,
+      `꼬리 ${o87.tailPx.toFixed(0)} > 윗선 ${outerTop}=${tailBelowTop} · `
+      + `아치선 ${o87.archVPx.toFixed(0)} < 산꼭대기 ${peakX}=${archVOutside} · 바깥에서 ${(archFrac * 100).toFixed(0)}%(15~40%)=${archInBand} · `
+      + `앞머리 꼭지점(이너 ${o87.innerPx.toFixed(0)}/${o87.exp.inner.toFixed(0)} · 앞머리 ${o87.frontPx.toFixed(0)}/${o87.exp.front.toFixed(0)})=${frontOnCorner}`);
+  }
+
   /* 120. ⚠️ v1.69.0 — **얼굴을 크게 확대한 사진**에서도 나머지 선을 찾는다 (원장님 지시 2026-08-24:
      「맞은 라인은 앞두께와 아치 라인만 맞았다고 — 나머지 안 맞은 것 교정」)
      증상: 앞머리·아치·꼬리가 **전부 같은 값**(탐색창 천장)으로 나와 자들이 눈썹 위 여백에 뭉쳤다.

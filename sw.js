@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v68";  /* v1.69.0 — 드로잉 맞춤: 크게 확대한 사진에서도 나머지 선을 찾는다 · 교정 프롬프트 ①~⑥ */
+const VERSION = "pb-v69";  /* v1.70.0 — 드로잉 맞춤 판정 기준 + 꼬리 끝 추적 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
