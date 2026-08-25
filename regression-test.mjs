@@ -2090,6 +2090,49 @@ console.log("\n[밸런스 판정]");
       + `<polygon points="${poly}" fill="#2a1c14"/></svg>`);
     return f;
   };
+  /* ⭐ v1.76.0 — **그늘이 창 바닥까지는 안 가는 사진** (원장님 폰 2026-08-25 10:01 · 10:20)
+     v1.75.0 은 「창 바닥에 닿은 덩어리」만 구제했습니다. 그래서 앞머리는 눈썹으로 올라왔지만
+     **아치두께**는 눈꺼풀 위에 그대로 남았고, 다른 손님 사진에서는 **앞머리**가 눈썹 아래
+     맨살에 74px 떨어져 있었습니다 — 그 열의 덩어리는 바닥까지 가지 않고 그늘에서 끝나
+     구제 대상이 아니었기 때문입니다.
+     이 사진의 그늘은 y=200 에서 끝납니다 (창 바닥 212 **위**). 아랫선은 눈썹 아랫선(178)에
+     서야 하고 그늘 끝(200)에 서면 안 됩니다. */
+  const SHADE2 = { shadeEndY: 200 };
+  const makeShade2Face = () => {
+    const f = path.join(ROOT, ".draw-shade2.svg");
+    const up = [], dn = [];
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+    const poly = up.concat(dn.reverse()).join(" ");
+    const su = [], sd = [];
+    for (let x = 120; x <= 340; x += 2) { su.push(`${x},${(edgeAt(SHAPE_A.cp, x, 2) - 2).toFixed(1)}`); sd.push(`${x},${SHADE2.shadeEndY}`); }
+    const shade = su.concat(sd.reverse()).join(" ");
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<polygon points="${shade}" fill="#c9b8a6"/>`
+      + `<polygon points="${poly}" fill="#2a1c14"/></svg>`);
+    return f;
+  };
+  /* ⭐ v1.77.0 — **눈썹 위에 옅은 번짐이 있는 사진** (원장님 폰 2026-08-25 10:12 「앞두께 안 맞음」)
+     파우더 눈썹은 위쪽 경계가 부옇게 번집니다. 그 번짐이 판독 문턱을 아슬아슬하게 넘으면
+     덩어리가 눈썹 **위 맨살**까지 올라가고, 앞두께 자가 눈썹 윗선보다 위에 섭니다
+     (원장님 화면에서 27px 위 · 캔버스로 약 8px).
+     이 사진은 눈썹 윗선 위 y=100 까지 아주 옅은 번짐을 깝니다. 앞두께는 **눈썹 윗선(148)** 에
+     서야 하고 번짐 위(≈100)에 서면 안 됩니다. */
+  const HALO = { haloTopY: 100 };
+  const makeHaloFace = () => {
+    const f = path.join(ROOT, ".draw-halo.svg");
+    const up = [], dn = [];
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+    const poly = up.concat(dn.reverse()).join(" ");
+    const hu = [], hd = [];
+    for (let x = 120; x <= 340; x += 2) { hu.push(`${x},${HALO.haloTopY}`); hd.push(`${x},${(edgeAt(SHAPE_A.cp, x, 1) + 2).toFixed(1)}`); }
+    const halo = hu.concat(hd.reverse()).join(" ");
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<polygon points="${halo}" fill="#d2c2b0"/>`      /* 번짐 — 피부보다 겨우 22 어둡다 */
+      + `<polygon points="${poly}" fill="#2a1c14"/></svg>`);
+    return f;
+  };
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
         fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
         fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h"),
@@ -2249,6 +2292,38 @@ console.log("\n[밸런스 판정]");
     check("127. 아랫선 — 눈썹 아래 그늘이 있어도 창 바닥에 못 박히지 않는다",
       o127.ok && onBrow && notFloor && notSame,
       `앞머리 ${o127.frontPx.toFixed(0)}(눈썹 아랫선 ${o127.exp.front.toFixed(0)}, 창바닥 ${SHADE.floorY}) · 아치두께 ${o127.atPx.toFixed(0)} · 눈썹위=${onBrow} 바닥아님=${notFloor} 둘이다름=${notSame}`);
+  }
+
+  /* 128. ⭐ v1.76.0 — **그늘이 창 바닥에 안 닿아도 아랫선은 색이 있는 곳까지** (원장님 폰 2026-08-25)
+     v1.75.0(바닥에 닿았을 때만 구제)로는 못 잡습니다 — 이 사진의 그늘은 바닥 위에서 끝납니다.
+     원장님 화면: 아치두께가 눈꺼풀 위 · 다른 손님 사진에서는 앞머리가 눈썹 아래 74px.
+     ⛔ 구제 조건을 「바닥에 닿았을 때만」으로 되돌리지 마세요. */
+  {
+    const f128 = makeShade2Face();
+    const o128 = await runDraw(true, f128, null, SHAPE_A);
+    fs.unlinkSync(f128);
+    const onBrow = Math.abs(o128.frontPx - o128.exp.front) < 10;
+    const atOk = Math.abs(o128.atPx - o128.exp.at) < 10;
+    const notShade = o128.frontPx < SHADE2.shadeEndY - 10;
+    check("128. 아랫선 — 그늘이 창 바닥에 안 닿아도 눈썹 아랫선에 선다",
+      o128.ok && onBrow && atOk && notShade,
+      `앞머리 ${o128.frontPx.toFixed(0)}(${o128.exp.front.toFixed(0)}) · 아치두께 ${o128.atPx.toFixed(0)}(${o128.exp.at.toFixed(0)}) · 그늘 끝 ${SHADE2.shadeEndY} 아님=${notShade}`);
+  }
+
+  /* 129. ⭐ v1.77.0 — **윗선도 색이 있는 곳까지** (원장님 폰 2026-08-25 「앞두께 안 맞음」)
+     눈썹 위 옅은 번짐이 덩어리에 붙어 앞두께가 눈썹 윗선보다 위로 올라갔습니다.
+     ⛔ 윗선의 핵심 잘라내기를 빼지 마세요. 단, 문턱은 아랫선(0.45)보다 **훨씬 너그럽게**
+     (0.1) — 파우더 눈썹의 진짜 위 경계까지 잘라 내면 앞두께가 눈썹 속으로 들어갑니다
+     (원장님 사진에서 0.45 로 두니 앞두께 89 → 98, 원장님 표시 87.7 에서 10px 멀어졌습니다). */
+  {
+    const f129 = makeHaloFace();
+    const o129 = await runDraw(true, f129, null, SHAPE_A);
+    fs.unlinkSync(f129);
+    const onBrow = Math.abs(o129.ftPx - o129.exp.ft) < 10;
+    const notHalo = o129.ftPx > HALO.haloTopY + 20;
+    check("129. 윗선 — 눈썹 위 옅은 번짐에 앞두께가 끌려가지 않는다",
+      o129.ok && onBrow && notHalo,
+      `앞두께 ${o129.ftPx.toFixed(0)}(눈썹 윗선 ${o129.exp.ft.toFixed(0)}, 번짐 위 ${HALO.haloTopY}) · 눈썹위=${onBrow} 번짐아님=${notHalo}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)

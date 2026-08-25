@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.75.0";
+const APP_VERSION = "v1.77.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2364,7 +2364,8 @@ function fallbackBox(side) {
 /* 한 열의 어두운 덩어리를 **전부** 모으고, 그중 씨앗(잉크가 가장 많은 것)을 고른다.
    ⚠️ 여기서 덩어리를 합치지 마세요. 합칠지 말지는 `readDrawing` 이 **사진 전체를 보고**
    한 번만 정합니다 — 열마다 따로 합쳤다가 눈꺼풀 주름이 딸려 왔습니다 (v1.31.1 의 실패). */
-const CORE_DROP = 0.45;   // 제일 진한 곳의 이 비율 아래로 떨어지면 「색이 끝났다」 (v1.75.0)
+const CORE_DROP = 0.45;   // 아랫선 — 제일 진한 곳의 이 비율 아래로 떨어지면 「색이 끝났다」 (v1.75.0)
+const CORE_UP = 0.1;      // 윗선 — 위쪽은 더 너그럽게 (v1.77.0 · 아래 주석)
 function columnRuns(img, x, y0, y1, cy, contrast) {
   const { W } = S.dim;
   const v = [];
@@ -2391,7 +2392,7 @@ function columnRuns(img, x, y0, y1, cy, contrast) {
         let pk = t, pv = cut - v[t];
         for (let i = t; i <= b; i++) { const d = cut - v[i]; if (d > pv) { pv = d; pk = i; } }
         let cb = pk; while (cb + 1 <= b && cut - v[cb + 1] >= CORE_DROP * pv) cb++;
-        let ct = pk; while (ct - 1 >= t && cut - v[ct - 1] >= CORE_DROP * pv) ct--;
+        let ct = pk; while (ct - 1 >= t && cut - v[ct - 1] >= CORE_UP * pv) ct--;
         runs.push({ top: y0 + t, bot: y0 + b, coreTop: y0 + ct, coreBot: y0 + cb, ink, len });
       }
       t = -1;
@@ -2621,9 +2622,19 @@ function readDrawing(img, contrast, side) {
        눈에 가깝기 때문입니다 (예비 경로에서는 잘 안 나서 여기 컨테이너 재현에서 못 봤습니다).
        해결: 바닥에 닿은 덩어리는 `coreBot`(진하기가 살아 있는 곳까지)으로 대신합니다.
        ⛔ `r.bot` 을 그대로 쓰도록 되돌리지 마세요 — 회귀 127 이 바로 잡습니다. */
-    const hitFloor = r.bot >= y1 - 1;
-    const bot = hitFloor && sd0.coreBot !== undefined ? Math.min(r.bot, sd0.coreBot) : r.bot;
-    return { x: c.x, top: r.top, bot, ink: sd0.ink,
+    /* ⭐ v1.76.0 — 창 바닥에 **닿지 않아도** 마찬가지입니다 (원장님 폰 2026-08-25 10:01).
+       v1.75.0 은 바닥에 닿은 덩어리만 구제해서 앞머리는 눈썹으로 올라왔지만, **아치두께**는
+       여전히 눈꺼풀 위에 남았습니다 — 그 열의 덩어리는 바닥까지 가지 않고 눈꺼풀에서 끝나서
+       구제 대상이 아니었습니다. 아랫선은 **언제나 색이 살아 있는 곳까지**입니다.
+       ⚠️ 테두리로 그린 드로잉(`outline`)에는 쓰지 않습니다 — 그때 `r` 은 **위·아래 두 줄을 묶은 것**
+       이라 씨앗 한 줄의 핵심으로 자르면 아랫줄이 통째로 날아갑니다 (회귀 89 가 잡습니다). */
+    /* ⭐ v1.77.0 — **윗선도 마찬가지입니다** (원장님 폰 2026-08-25 10:12 「앞두께 안 맞음」).
+       눈썹 앞머리 쪽은 색이 옅어서 그 열의 문턱이 낮게 잡히고, 덩어리가 눈썹 **위 맨살**까지
+       올라갑니다 (원장님 화면: 앞두께가 눈썹 윗선보다 35px 위). 아래와 똑같이 잘라 냅니다. */
+    const usingPair = outline && c.pair;
+    const bot = !usingPair && sd0.coreBot !== undefined ? Math.min(r.bot, sd0.coreBot) : r.bot;
+    const top = !usingPair && sd0.coreTop !== undefined ? Math.max(r.top, sd0.coreTop) : r.top;
+    return { x: c.x, top, bot, ink: sd0.ink,
              dark: sd0.ink / Math.max(1, sd0.len), edge: r.top <= y0 + 1 };
   });
   pts.sort((p, q) => p.x - q.x);
