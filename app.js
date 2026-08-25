@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.77.0";
+const APP_VERSION = "v1.78.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -749,7 +749,17 @@ function segPx(sp) {
   }
   const aL = g[sp.anchor], aR = 2 * g.v1 - aL;
   const half = segHalf() * (sp.halfK || 1) * (Math.abs(g.v2 - g.v4) || 0.12);
-  return [[cl0(aL - half), cl0(aL + half)], [cl0(aR - half), cl0(aR + half)]];
+  /* ⭐ v1.78.0 — **자는 드로잉 위에 놓인다** (원장님 지시 2026-08-25: 「자기는 드로잉 위치가
+     아닌데」). 이너·아우터는 눈썹의 **양 끝**입니다. 자를 그 위에 가운데 맞춰 그리면 절반이
+     눈썹 밖 맨살 위로 떠서, 원장님이 자를 눈썹에 맞춰 볼 수가 없습니다.
+     이제 자는 **세로선에서 눈썹 쪽으로만** 뻗습니다 — 길이는 그대로, 방향만 안쪽으로.
+     그러면 세로선과 가로선이 만나는 자리가 그대로 **90° 꼭지점**이 됩니다 (1-34 판정 기준).
+     아치선(v6)은 눈썹 한가운데라 지금처럼 가운데 맞춤을 유지합니다.
+     ⛔ 다시 가운데 맞춤으로 되돌리지 마세요 — 자가 맨살 위로 떠서 판정이 불가능해집니다. */
+  const oth = sp.anchor === "v2" ? g.v4 : sp.anchor === "v4" ? g.v2 : null;
+  if (oth === null) return [[cl0(aL - half), cl0(aL + half)], [cl0(aR - half), cl0(aR + half)]];
+  const seg = (a, o) => (o >= a ? [cl0(a), cl0(a + 2 * half)] : [cl0(a - 2 * half), cl0(a)]);
+  return [seg(aL, oth), seg(aR, 2 * g.v1 - oth)];
 }
 
 /* 세로선이 실제로 진하게 보이는 구간 — 가장 위 가로선 위쪽부터 눈 기준선 아래까지.

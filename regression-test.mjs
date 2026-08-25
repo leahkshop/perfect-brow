@@ -2326,6 +2326,46 @@ console.log("\n[밸런스 판정]");
       `앞두께 ${o129.ftPx.toFixed(0)}(눈썹 윗선 ${o129.exp.ft.toFixed(0)}, 번짐 위 ${HALO.haloTopY}) · 눈썹위=${onBrow} 번짐아님=${notHalo}`);
   }
 
+  /* 130. ⭐ v1.78.0 — **자는 드로잉 위에 놓인다** (원장님 지시 2026-08-25: 「자기는 드로잉 위치가 아닌데」)
+     이너·아우터는 눈썹의 **양 끝**입니다. 자를 그 위에 가운데 맞춰 그리면 절반이 눈썹 밖
+     맨살 위로 떠서, 자를 눈썹에 맞춰 볼 수가 없습니다. 이제 자는 세로선에서 **눈썹 쪽으로만**
+     뻗고, 세로선과 만나는 자리가 그대로 90° 꼭지점이 됩니다.
+     ⛔ 가운데 맞춤으로 되돌리면 이 검사가 바로 실패합니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);          /* 사진이 있어야 캔버스 크기가 잡힙니다 */
+    await p.waitForTimeout(1200);
+    const o130 = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W;
+      S.g = { ...PBx.DEFAULT_GUIDE }; PBx.render();
+      const g = S.g, sp = (k) => PBx.H_SPECS.find((x) => x.key === k);
+      const q = (k) => PBx.segPx(sp(k));
+      const v2 = g.v2 * W, v4 = g.v4 * W, v6 = g.v6 * W, v1 = g.v1 * W;
+      const f = q("front")[0], t3 = q("h3")[0], a = q("archThickness")[0];
+      const fR = q("front")[1], t3R = q("h3")[1];
+      return { v1, v2, v4, v6,
+        front: f, tail: t3, arch: a, frontR: fR, tailR: t3R,
+        len: { front: f[1] - f[0], tail: t3[1] - t3[0] } };
+    });
+    await ctx.close();
+    /* 왼쪽 눈썹 = [아우터 … 이너] · 앞머리 자는 이너에서 아우터 쪽으로, 꼬리 자는 아우터에서 이너 쪽으로 */
+    const fOnBrow = Math.abs(o130.front[1] - o130.v2) < 1.5 && o130.front[0] < o130.v2;
+    const tOnBrow = Math.abs(o130.tail[0] - o130.v4) < 1.5 && o130.tail[1] > o130.v4;
+    const archCentered = Math.abs((o130.arch[0] + o130.arch[1]) / 2 - o130.v6) < 1.5;
+    /* 거울 쪽도 같은 규칙 (부호만 반대) */
+    const v2R = 2 * o130.v1 - o130.v2, v4R = 2 * o130.v1 - o130.v4;
+    const fMirror = Math.abs(o130.frontR[0] - v2R) < 1.5 && o130.frontR[1] > v2R;
+    const tMirror = Math.abs(o130.tailR[1] - v4R) < 1.5 && o130.tailR[0] < v4R;
+    check("130. 자는 드로잉 위에 — 이너·아우터 자가 눈썹 밖 맨살로 뜨지 않는다",
+      fOnBrow && tOnBrow && archCentered && fMirror && tMirror,
+      `앞머리자 ${o130.front[0].toFixed(0)}~${o130.front[1].toFixed(0)} (이너 ${o130.v2.toFixed(0)} 에서 눈썹 쪽=${fOnBrow}) · `
+      + `꼬리자 ${o130.tail[0].toFixed(0)}~${o130.tail[1].toFixed(0)} (아우터 ${o130.v4.toFixed(0)} 에서 눈썹 쪽=${tOnBrow}) · `
+      + `아치두께자 가운데맞춤=${archCentered} · 거울 ${fMirror}/${tMirror}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.
