@@ -339,7 +339,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.74.0";
+const APP_VERSION = "v1.75.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2364,6 +2364,7 @@ function fallbackBox(side) {
 /* 한 열의 어두운 덩어리를 **전부** 모으고, 그중 씨앗(잉크가 가장 많은 것)을 고른다.
    ⚠️ 여기서 덩어리를 합치지 마세요. 합칠지 말지는 `readDrawing` 이 **사진 전체를 보고**
    한 번만 정합니다 — 열마다 따로 합쳤다가 눈꺼풀 주름이 딸려 왔습니다 (v1.31.1 의 실패). */
+const CORE_DROP = 0.45;   // 제일 진한 곳의 이 비율 아래로 떨어지면 「색이 끝났다」 (v1.75.0)
 function columnRuns(img, x, y0, y1, cy, contrast) {
   const { W } = S.dim;
   const v = [];
@@ -2382,7 +2383,17 @@ function columnRuns(img, x, y0, y1, cy, contrast) {
     if (dark) { if (t < 0) { t = i; ink = 0; } ink += cut - v[i]; }
     if ((!dark || i === N - 1) && t >= 0) {
       const b = dark ? i : i - 1, len = b - t + 1;
-      if (len >= 2 && len <= DRAW_MAX_FILL * N) runs.push({ top: y0 + t, bot: y0 + b, ink, len });
+      if (len >= 2 && len <= DRAW_MAX_FILL * N) {
+        /* ⭐ v1.75.0 — **어두운 핵심**도 같이 재 둔다 (원장님 폰 2026-08-25).
+           덩어리가 탐색창 바닥에 닿으면 그 `bot` 은 눈썹 아랫선이 아니라 **창 바닥**입니다.
+           그때 쓰려고, 제일 진한 곳에서 위아래로 걸어 나가며 진하기가 `CORE_DROP` 아래로
+           떨어지는 자리를 함께 기록합니다 — 「색이 있는 곳까지」를 위아래에도 적용한 것. */
+        let pk = t, pv = cut - v[t];
+        for (let i = t; i <= b; i++) { const d = cut - v[i]; if (d > pv) { pv = d; pk = i; } }
+        let cb = pk; while (cb + 1 <= b && cut - v[cb + 1] >= CORE_DROP * pv) cb++;
+        let ct = pk; while (ct - 1 >= t && cut - v[ct - 1] >= CORE_DROP * pv) ct--;
+        runs.push({ top: y0 + t, bot: y0 + b, coreTop: y0 + ct, coreBot: y0 + cb, ink, len });
+      }
       t = -1;
     }
   }
@@ -2601,7 +2612,18 @@ function readDrawing(img, contrast, side) {
     /* v1.72.0 — `ink` 는 **두께 × 진하기** 라 얇은 꼬리에서 자연히 작아집니다. 꼬리 끝 판정에는
        두께와 무관한 **평균 진하기(dark)** 를 씁니다 — 「검은 드로잉」의 잣대는 진하기입니다. */
     const sd0 = c.runs[c.si];
-    return { x: c.x, top: r.top, bot: r.bot, ink: sd0.ink,
+    /* ⭐⭐ v1.75.0 — **아랫선이 탐색창 바닥에 못 박히는 것을 막는다** (원장님 폰 2026-08-25:
+       「폰에서 아예 안 올라간다」). 원장님 화면에서 앞머리와 아치두께가 **똑같은 y** 에,
+       눈썹이 아니라 눈꺼풀 위에 서 있었습니다. 두 값이 같다는 것이 결정적인 단서였습니다 —
+       아랫선이 사진에서 읽힌 값이 아니라 **창 바닥**이라는 뜻입니다.
+       원인: 눈썹 아래 피부가 그늘지면 눈썹부터 눈꺼풀까지 한 덩어리로 이어져 읽히고,
+       그 덩어리가 창 바닥에서 잘립니다. 랜드마크 경로에서 특히 잘 납니다 — 창 바닥이
+       눈에 가깝기 때문입니다 (예비 경로에서는 잘 안 나서 여기 컨테이너 재현에서 못 봤습니다).
+       해결: 바닥에 닿은 덩어리는 `coreBot`(진하기가 살아 있는 곳까지)으로 대신합니다.
+       ⛔ `r.bot` 을 그대로 쓰도록 되돌리지 마세요 — 회귀 127 이 바로 잡습니다. */
+    const hitFloor = r.bot >= y1 - 1;
+    const bot = hitFloor && sd0.coreBot !== undefined ? Math.min(r.bot, sd0.coreBot) : r.bot;
+    return { x: c.x, top: r.top, bot, ink: sd0.ink,
              dark: sd0.ink / Math.max(1, sd0.len), edge: r.top <= y0 + 1 };
   });
   pts.sort((p, q) => p.x - q.x);

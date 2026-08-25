@@ -2067,6 +2067,29 @@ console.log("\n[밸런스 판정]");
       + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/></svg>`);
     return f;
   };
+  /* ⭐ v1.75.0 — **눈썹 아래가 그늘진 사진** (원장님 폰 2026-08-25)
+     원장님 화면에서 앞머리와 아치두께가 **똑같은 y** 에 서 있었습니다 — 눈꺼풀 위, 눈썹에서
+     한참 아래. 두 값이 같다는 건 아랫선이 **탐색창 바닥에 못 박혔다**는 뜻입니다.
+     원인: 눈썹 아래 피부가 그늘져 눈썹부터 눈꺼풀까지 **한 덩어리로 이어져** 읽히고,
+     그 덩어리가 창 바닥에서 잘려 bot = 바닥이 됩니다.
+     이 사진은 눈썹 아랫선부터 y=230(창 바닥 212 아래)까지 옅은 그늘을 깝니다.
+     앞머리는 **눈썹 아랫선(178)** 에 서야 하고, 창 바닥(212)에 서면 안 됩니다. */
+  const SHADE = { floorY: 212 };
+  const makeShadeFace = () => {
+    const f = path.join(ROOT, ".draw-shade.svg");
+    const up = [], dn = [];
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+    const poly = up.concat(dn.reverse()).join(" ");
+    /* 그늘 — 눈썹 아랫선에서 시작해 창 바닥 아래까지. 피부보다 33 어두워 판독 문턱을 넘습니다 */
+    const su = [], sd = [];
+    for (let x = 120; x <= 340; x += 2) { su.push(`${x},${(edgeAt(SHAPE_A.cp, x, 2) - 2).toFixed(1)}`); sd.push(`${x},230`); }
+    const shade = su.concat(sd.reverse()).join(" ");
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<polygon points="${shade}" fill="#c9b8a6"/>`
+      + `<polygon points="${poly}" fill="#2a1c14"/></svg>`);
+    return f;
+  };
   const fd = drawFace(SHAPE_A, false, "a"), fo = drawFace(SHAPE_A, true, "ao"),
         fb = drawFace(SHAPE_B, false, "b"), fc = drawFace(SHAPE_A, false, "c"),
         fn = drawFace(SHAPE_A, false, "n"), fh = drawFace(SHAPE_A, false, "h"),
@@ -2210,6 +2233,22 @@ console.log("\n[밸런스 판정]");
     check("126. 꼬리 = 색이 끝나는 곳 — 얇아진 꼬리를 끝까지 · 잔털은 제외",
       o126.ok && atTip && notHair && grew,
       `아우터 ${o126.outerPx.toFixed(0)} (드로잉 끝 ${TIP.tipX} 에 섬=${atTip} · 잔털 ${TIP.hairX} 까지 안 감=${notHair} · 잉크 기준보다 더 나감=${grew})`);
+  }
+
+  /* 127. ⭐ v1.75.0 — **아랫선이 탐색창 바닥에 못 박히지 않는다** (원장님 폰 2026-08-25)
+     「폰에서 아예 안 올라간다」 — 앞머리·아치두께가 눈썹이 아니라 눈꺼풀 위에, 그것도 **둘이 같은 y** 에
+     서 있었습니다. 눈썹 아래 그늘이 눈썹과 이어져 읽히고 그 덩어리가 창 바닥에서 잘린 것입니다.
+     ⛔ 아랫선(bot)을 창 바닥 그대로 쓰지 마세요 — 이 검사가 바로 잡습니다. */
+  {
+    const fsh = makeShadeFace();
+    const o127 = await runDraw(true, fsh, null, SHAPE_A);
+    fs.unlinkSync(fsh);
+    const onBrow = Math.abs(o127.frontPx - o127.exp.front) < 10;
+    const notFloor = o127.frontPx < SHADE.floorY - 12;
+    const notSame = Math.abs(o127.frontPx - o127.atPx) > 6;   /* 앞머리와 아치두께가 같은 자리면 바닥이다 */
+    check("127. 아랫선 — 눈썹 아래 그늘이 있어도 창 바닥에 못 박히지 않는다",
+      o127.ok && onBrow && notFloor && notSame,
+      `앞머리 ${o127.frontPx.toFixed(0)}(눈썹 아랫선 ${o127.exp.front.toFixed(0)}, 창바닥 ${SHADE.floorY}) · 아치두께 ${o127.atPx.toFixed(0)} · 눈썹위=${onBrow} 바닥아님=${notFloor} 둘이다름=${notSame}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
