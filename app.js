@@ -51,19 +51,24 @@ const I18N = {
     /* ⚠️ v1.69.0 — 「드로잉 맞춤시 맞아지는 라인은 오직 앞두께·아치만. 나머지 교정 프롬프트
        다시 써라」(원장님 지시 2026-08-24). 자동으로 맞는 두 줄은 **확인**, 나머지는 **손으로 교정**.
        ⛔ 한 줄을 넘기지 마세요 — 시술 화면을 가립니다. */
-    tip_v2: "① 이너 — 콧방울·내안각 선에 세로선을 맞추세요 (좌우 바)",
-    tip_frontThickness: "② 앞두께 — 눈썹 앞부분 <b>윗선</b>에 맞추세요 (위아래 바)",
-    tip_front: "③ 앞머리 — 앞부분 <b>아랫선</b>에 얹으세요 (위아래 바)",
-    tip_h2: "④ 아치 — <b>십자 안쪽 위 모서리</b>를 산꼭대기에 얹으세요 (사선 · 아치선 함께)",
-    tip_archThickness: "⑤ 아치두께 — 산 <b>아랫선</b>에 얹으세요 (위아래만)",
-    tip_h3: "⑥ 꼬리+아우터 — <b>십자 안쪽 위 모서리</b>를 꼬리 끝에 얹으세요 (사선으로 둘이 함께)",
+    /* ⚠️ v1.81.0 — 번호(①②③…)는 **문구에 박지 않습니다.** 순서를 원장님이 바꾸실 수 있으므로
+       updateGuideTip 이 지금 순서에서 매번 붙입니다. ⛔ 번호를 다시 문구에 넣지 마세요. */
+    tip_v2: "이너 — 콧방울·내안각 선에 세로선을 맞추세요 (좌우 바)",
+    tip_front: "앞머리 — 눈썹 앞부분 <b>아랫선</b>에 얹으세요 (위아래 바)",
+    tip_frontThickness: "앞두께 — 앞부분 <b>윗선</b>에 맞추세요 (위아래 바)",
+    tip_h2: "아치엣지 — 산꼭대기 <b>윗선</b>에 얹으세요 (위아래 바)",
+    tip_archThickness: "아치두께 — 산 <b>아랫선</b>에 얹으세요 (위아래 바)",
+    tip_v4: "꼬리 아우터 — <b>십자 안쪽 위 모서리</b>를 꼬리 끝에 맞추세요 (좌우 바)",
+    tip_h3: "꼬리 높이 — 꼬리 끝 <b>아랫선</b>에 얹으세요 (위아래 바)",
     set_tab_base: "기본 선 · 차례", set_tab_grab: "잡은 선 · 움직일 때",
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
-    set_prev_note: "왼쪽 = 밝은 피부 · 오른쪽 = 어두운 눈썹 위. 두 쪽 다 잘 보이는 조합을 고르세요.",
-    set_none: "없음", set_auto: "자동", set_light: "흰색", set_dark: "먹색",
+    set_vlines: "세로선",
+    set_prev_note: "왼쪽 = 밝은 피부 · 오른쪽 = 어두운 피부. 선 이름이 그 선이 눈썹에서 놓이는 자리에 붙어 있습니다.",
+    set_order: "가이드 순서", set_order_note: "▲▼ 로 순서를 바꾸고, 이름을 눌러 그 단계를 켜고 끕니다.",
+    set_none: "없음", set_auto: "자동", set_light: "흰색", set_black: "검정", set_dark: "먹색",
     set_thin: "얇게", set_mid: "중간", set_thick: "두껍게",
     set_short: "짧게", set_long: "길게",
     set_c_now: "현재 세트", set_c_now_d: "지금 쓰던 색 그대로",
@@ -154,7 +159,9 @@ const I18N = {
     line_eye: "눈",
     line_front: "앞머리",
     line_ft: "앞두께",
-    line_arch: "아치",
+    /* v1.81.0 — 원장님 지시 2026-08-27 「아치 (아치엣지:이름변경)」 — **가로선** 이름만 바뀝니다.
+       세로선(v6)은 「아치선」 그대로입니다. */
+    line_arch: "아치엣지",
     line_at: "아치두께",
     line_tail: "꼬리",
     line_center: "센터",
@@ -202,19 +209,22 @@ const I18N = {
     set_title: "Settings — Line look", set_badge: "Set",
     set_dragc: "Grab core", set_drage: "Grab outline", set_back: "Undo changes",
     set_cycle: "Colors", set_c_mine: "My set",
-    tip_v2: "① Inner — align the vertical to the nostril / inner-canthus line",
-    tip_frontThickness: "② Front thickness — put it on the <b>upper</b> edge of the front",
-    tip_front: "③ Front — put it on the <b>lower</b> edge of the front",
-    tip_h2: "④ Arch — put the <b>inner-upper corner</b> on the peak (diagonal · arch line follows)",
-    tip_archThickness: "⑤ Arch thickness — put it on the <b>lower</b> edge of the arch (up/down only)",
-    tip_h3: "⑥ Tail+Outer — put the <b>inner-upper corner</b> on the tail tip (drag diagonally)",
+    tip_v2: "Inner — align the vertical to the nostril / inner-canthus line",
+    tip_front: "Front — put it on the <b>lower</b> edge of the front",
+    tip_frontThickness: "Front thickness — put it on the <b>upper</b> edge of the front",
+    tip_h2: "Arch edge — put it on the <b>upper</b> edge of the peak",
+    tip_archThickness: "Arch thickness — put it on the <b>lower</b> edge of the arch",
+    tip_v4: "Tail outer — put the <b>inner-upper corner</b> on the tail tip (left/right bar)",
+    tip_h3: "Tail height — put it on the <b>lower</b> edge of the tail tip",
     set_tab_base: "Base lines", set_tab_grab: "Grabbed line",
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
-    set_prev_note: "Left = bright skin · Right = dark brow. Pick a set that reads on both.",
-    set_none: "None", set_auto: "Auto", set_light: "White", set_dark: "Ink",
+    set_vlines: "Verticals",
+    set_prev_note: "Left = light skin · Right = dark skin. Each name sits where that line lands on the brow.",
+    set_order: "Guide order", set_order_note: "Reorder with ▲▼; tap a name to turn that step on or off.",
+    set_none: "None", set_auto: "Auto", set_light: "White", set_black: "Black", set_dark: "Ink",
     set_thin: "Thin", set_mid: "Medium", set_thick: "Thick",
     set_short: "Short", set_long: "Long",
     set_c_now: "Current", set_c_now_d: "What you use now",
@@ -304,7 +314,7 @@ const I18N = {
     line_eye: "Eye",
     line_front: "Front",
     line_ft: "F.T",
-    line_arch: "Arch",
+    line_arch: "Arch Edge",
     line_at: "A.T",
     line_tail: "Tail",
     line_center: "Center",
@@ -339,7 +349,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.80.0";
+const APP_VERSION = "v1.81.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -363,17 +373,38 @@ const APP_VERSION = "v1.80.0";
    · 아치가 움직이면 **아치두께가 같은 만큼 따라온다** — 두께는 아치두께 차례에서만 정한다
    · 아치선(v6)은 이제 **독립 스텝이 아니다** → 플로우는 꼬리에서 끝난다
    ⛔ v6 를 플로우에 다시 넣지 마세요. 아우터와 같은 이유로 아치와 한 점입니다 (BASELINE 1-31) */
-const GUIDE_FLOW = ["v2", "frontThickness", "front", "h2", "archThickness", "h3"];
-/* 꼬리 스텝이 함께 잡는 세로선 — 좌우 바가 이 선을 잡는다 */
-/* ⚠️ v1.68.0 원장님 지시 2026-08-24 — 「플로우 적용 시 **꼬리와 아우터 지점은 내부쪽과 위**다」
-   (민트 펜으로 위·안쪽 두 팔을 그려 주셨습니다.) 아치와 같은 방향이 됐습니다.
-   ⛔ 아래쪽으로 되돌리지 마세요 — 꼬리 아래는 눈썹이 이어지는 자리라 표식이 드로잉을 덮습니다. */
-const TAIL_PAIR = { step: "h3", lr: "v4", up: true };
-/* 아치 스텝이 함께 잡는 세로선 + 따라오는 두께선 (v1.67.0) */
-const ARCH_PAIR = { step: "h2", lr: "v6", thick: "archThickness", up: true };
-/* 가이드 스텝 ↔ 함께 움직이는 세로선 쌍 (마커·바 배정이 이 표 하나를 본다) */
-const STEP_PAIRS = [TAIL_PAIR, ARCH_PAIR];
-const pairOfStep = (step) => STEP_PAIRS.find((q) => q.step === step) || null;
+/* ⭐ v1.81.0 — **새 플로우 순서 · 사용자가 순서를 바꿀 수 있다** (원장님 지시 2026-08-27)
+   「가이드 - 순서 변경가능 기능 추가 —
+     앞머리 · 앞두께 · 아치(아치엣지) · 아치두께 · 꼬리 아우터 · 꼬리 높이」
+   · 이너(v2)는 **기본 순서에서 빠졌습니다.** 지우지는 않았습니다 —
+     설정 → 가이드 순서에서 켜면 다시 플로우에 들어옵니다.
+   · 꼬리는 **두 스텝으로 나뉩니다** — 아우터(좌우)로 끝점의 x, 꼬리 높이로 y.
+     ⚠️ 손으로 사선을 끄는 규칙(BASELINE 1-27)은 그대로입니다 — 스텝만 나뉜 것입니다.
+   ⛔ 순서를 코드에 다시 박지 마세요. GUIDE_FLOW 는 **배열 내용만 바꿔** 씁니다
+      (window.PB.GUIDE_FLOW 가 같은 배열을 가리키고 있어 재대입하면 회귀 테스트가 옛 순서를 봅니다). */
+const FLOW_KEY = "pb_flow_v1";
+const FLOW_ALL = ["v2", "front", "frontThickness", "h2", "archThickness", "v4", "h3"];
+const FLOW_DEF = ["front", "frontThickness", "h2", "archThickness", "v4", "h3"];
+const GUIDE_FLOW = [];
+function setFlow(list) {
+  const seen = new Set();
+  const clean = (list || []).filter((k) => FLOW_ALL.includes(k) && !seen.has(k) && seen.add(k));
+  GUIDE_FLOW.length = 0;
+  GUIDE_FLOW.push(...(clean.length ? clean : FLOW_DEF));
+}
+function saveFlow() { try { localStorage.setItem(FLOW_KEY, JSON.stringify(GUIDE_FLOW)); } catch (e) {} }
+setFlow((() => { try { return JSON.parse(localStorage.getItem(FLOW_KEY)); } catch (e) { return null; } })());
+
+/* ⚠️ v1.81.0 — **아치는 이제 혼자 움직입니다** (원장님 지시 2026-08-27:
+     「지금은 아치가로선과 아치세로선이 동시움직였는데 **따로 움직이도록 되돌린다**」
+      · 원장님 확인: 아치두께 동반도 함께 해제 — 아치·아치두께·아치선이 전부 따로)
+   ⛔ ARCH_PAIR(v1.67.0)를 되살리지 마세요. 십자 모서리 표식도 아치에서는 그리지 않습니다 —
+      두 선이 한 점이 아니게 됐으므로 표식이 거짓말을 하게 됩니다.
+
+   꼬리 끝만 여전히 **한 점**입니다 (BASELINE 1-27 · 사선 동시 이동은 그대로).
+   플로우에서만 두 스텝으로 나뉘고, 십자 안쪽 **위** 모서리는 두 스텝 모두에서 그립니다. */
+const TAIL_CROSS = { h: "h3", v: "v4", up: true };
+const crossOfStep = (step) => (step === "h3" || step === "v4" ? TAIL_CROSS : null);
 /* v1.46.0 — 기본 회색(GREY_LINE) 폐지 (원장님: 「회색이라 내 드로잉과 겹쳐 잘 안 보인다」).
    모든 선은 **항상 자기 고유색**: 차례/선택이 아니면 연하게(투명도↓), 차례면 진하게+굵게.
    색만 봐도 어떤 선인지 알 수 있어 가이드를 모르는 사용자도 위쪽 칩 색과 바로 짝지을 수 있다. */
@@ -511,6 +542,19 @@ const PALETTE = [
   { hex: "#A855F7", ko: "보라", en: "Violet" },   /* 280° */
   { hex: "#FF4D94", ko: "핑크", en: "Pink" },     /* 334° */
   { hex: "#14161B", ko: "먹",   en: "Ink" },      /* 밝은 피부에서 최고 대비 8.6:1 */
+  /* v1.81.0 — 원장님 지시 2026-08-27 「선 색상 제공 : 흰색 추가」.
+     짙은 눈썹·어두운 피부에서 대비가 가장 큽니다 (짙은 눈썹 13.8:1). */
+  { hex: "#FFFFFF", ko: "흰색", en: "White" },
+];
+/* ⚠️ v1.81.0 — **세로선은 색 목록이 따로입니다** (원장님 지시 2026-08-27)
+   「세로색 목록 추가 — 이너: 기본 민트·먹색·흰색 / 아치선: 먹색·민트·흰색 /
+     꼬리선: 먹색·민트·흰색 (모두 이색 적용)」
+   세로선은 얼굴을 세로로 가로지르므로 색이 많으면 화면이 시끄럽습니다. 세 가지로 고정합니다.
+   ⛔ 가로 자 팔레트(8색)를 세로선에 그대로 붙이지 마세요. */
+const V_PALETTE = [
+  { hex: "#5EEAD4", ko: "민트", en: "Mint" },
+  { hex: "#14161B", ko: "먹",   en: "Ink" },
+  { hex: "#FFFFFF", ko: "흰색", en: "White" },
 ];
 const LOOK_KEY = "pb_look_v1";
 /* ⚠️⚠️ v1.60.0 — **원장님이 실제 앱에서 맞춰 확정한 기본값** (2026-08-23 · 스크린샷 픽셀 판독)
@@ -526,8 +570,15 @@ const LOOK_KEY = "pb_look_v1";
    ⛔ 값을 바꾸려면 원장님 확인을 먼저 받으세요. 회귀 112 가 이 값을 통째로 잠급니다.
    ⛔ LOOK_COMBOS(추천 조합)는 **색과 테두리만** 바꿉니다 — 굵기·길이·투명도·잡은 선은
       원장님 값이 그대로 남아야 합니다 (조합을 돌려도 손에 익은 두께가 안 변하도록). */
+/* ⚠️ v1.81.0 — 원장님 지시 2026-08-27
+   · 세로선 색을 **가로 자와 분리**했습니다 (`vInner`/`vArch`/`vTail`).
+     이너 = 민트(기존 그대로) · 아치선·아우터 = **먹색**.
+     「가이드가 꺼진상태에서 이너라인은 제외한 세로색상은 기본적으로 먹색을 유지」
+   · 테두리 색은 **없음 / 흰색 / 검정 / 먹색** 네 가지 (「자동」 폐지 — 원장님이 목록을 지정하셨습니다)
+   · 선 굵기·테두리 굵기는 **슬라이더**라 값이 연속입니다 (3단 세그먼트 폐지) */
 const LOOK_DEF = { inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
-                   edge: 0, edgeC: "auto", weight: 0.8, hlen: 0.14, alpha: 0.75,
+                   vInner: "#5EEAD4", vArch: "#14161B", vTail: "#14161B",
+                   edge: 0, edgeC: "none", weight: 0.8, hlen: 0.14, alpha: 0.75,
                    dragCore: "#14161B", dragEdge: "none", dragW: 0.8, dragOp: 0.95 };
 /* 맨 위 3개 조합 — 첫 칸은 늘 「현재 세트」(지금 값), 나머지 둘은 상황별 추천 */
 const LOOK_COMBOS = [
@@ -545,9 +596,10 @@ function loadLook() {
 }
 function saveLook() { try { localStorage.setItem(LOOK_KEY, JSON.stringify(S.look)); } catch (e) {} }
 /* 선 키 → 색 묶음. 레일 버튼 색과 1:1 로 맞아야 합니다 (BASELINE 1-20) */
-const GROUP_OF = { v2: "inner", front: "inner", frontThickness: "inner",
-                   v6: "arch", h2: "arch", archThickness: "arch",
-                   v4: "tail", h3: "tail" };
+/* ⚠️ v1.81.0 — 세로선은 자기 열쇠를 씁니다 (가로 자와 색이 분리됨 · LOOK_DEF 주석) */
+const GROUP_OF = { v2: "vInner", front: "inner", frontThickness: "inner",
+                   v6: "vArch", h2: "arch", archThickness: "arch",
+                   v4: "vTail", h3: "tail" };
 const groupColor = (key) => (S.look && S.look[GROUP_OF[key]]) || null;
 /* 상대 휘도 — 테두리 「자동」이 밝은 선엔 먹, 짙은 선엔 흰색을 고르는 근거 */
 function relLum(hex) {
@@ -555,18 +607,30 @@ function relLum(hex) {
   const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
   return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
 }
-const EDGE_LIGHT = "#FFFFFF", EDGE_DARK = "#0A0D14";
+const EDGE_LIGHT = "#FFFFFF", EDGE_BLACK = "#000000", EDGE_DARK = "#14161B";
+/* ⚠️ v1.81.0 — 테두리 색은 원장님이 지정한 **없음 / 흰색 / 검정 / 먹색** 뿐입니다.
+   ⛔ 「자동(대비색)」을 되살리지 마세요 — 원장님이 목록에서 빼셨습니다.
+   옛 저장값(`auto`)은 대비색으로 한 번 환산해 줍니다 (기존 기기에서 테두리가 사라지지 않게). */
 function edgeColorFor(hex) {
-  if (S.look.edgeC === "light") return EDGE_LIGHT;
-  if (S.look.edgeC === "dark") return EDGE_DARK;
-  return relLum(hex) > 0.32 ? EDGE_DARK : EDGE_LIGHT;   /* 자동 = 대비색 */
+  const c = S.look.edgeC;
+  if (c === "light") return EDGE_LIGHT;
+  if (c === "black") return EDGE_BLACK;
+  if (c === "dark") return EDGE_DARK;
+  if (c === "auto") return relLum(hex) > 0.32 ? EDGE_DARK : EDGE_LIGHT;   /* 옛 저장값 호환 */
+  return null;                                                            /* "none" = 테두리 없음 */
 }
+/* 테두리를 실제로 그리는가 — 색이 「없음」이거나 굵기가 0이면 그리지 않는다 */
+const hasEdge = () => S.look.edgeC !== "none" && S.look.edge > 0;
 /* 고유색 선 하나 — 테두리(있으면) 먼저, 그 위에 색. 깜빡임 클래스는 둘 다에 붙인다 */
-function drawLive(frag, x1, y1, x2, y2, hex, w, cls) {
-  const op = S.look.alpha;
-  if (S.look.edge > 0) drawLine(frag, x1, y1, x2, y2, edgeColorFor(hex),
-                                w * (1 + 2 * S.look.edge / 100), op * 0.9, cls);
-  drawLine(frag, x1, y1, x2, y2, hex, w, op, cls);
+/* boost = 1 이면 **선택된 선** — 조금 더 굵고 조금 더 밝게 (v1.81.0 · 원장님 지시 2026-08-27).
+   ⚠️ 값을 키우지 마세요: 크게 하면 「잡은 선」과 구분이 안 되고, 자가 눈썹을 덮습니다. */
+const SEL_W = 1.3, SEL_OP = 0.25;
+function drawLive(frag, x1, y1, x2, y2, hex, w, cls, boost) {
+  const op = boost ? Math.min(1, S.look.alpha + SEL_OP) : S.look.alpha;
+  const ww = boost ? w * SEL_W : w;
+  if (hasEdge()) drawLine(frag, x1, y1, x2, y2, edgeColorFor(hex),
+                          ww * (1 + 2 * S.look.edge / 100), op * 0.9, cls);
+  drawLine(frag, x1, y1, x2, y2, hex, ww, op, cls);
 }
 
 /* ═══════════ 3. state ═══════════ */
@@ -593,8 +657,17 @@ const S = {
   locked: false,
   guideOn: false, guideCur: null,   // 가이드 플로우 (v1.42.0)
   dragOn: false,         // 선을 잡고 움직이는 중 (v1.55.0 — 짙은 회색 + 살구색 테두리)
+  /* ⭐ v1.81.0 — **한 번이라도 움직인 선** (원장님 지시 2026-08-27 · 가이드 꺼진 상태 모드)
+     「움직임을 한번이라도 한 색상은 잡은선 색으로 색이 죽어, 움직이지 않은 선들이 눈길을 끌어
+       가이드가 자동으로 없더라도 사용자가 체크를 한 선과 남아있는 선을 직관적으로 볼수있다」
+     ⛔ 되돌리기 스냅샷에 넣지 마세요 — 선택 상태와 같은 이유입니다 (BASELINE 1-9). */
+  doneSet: [],
+  /* v1.81.0 — 사진을 넣은 직후의 **전체라인 인사**: 모든 선이 고유색으로 한 번 깜빡인 뒤
+     첫 플로우가 시작됩니다 (원장님: 「이너 라인만 색이 있고 나머지는 검정색이라 이게 뭐지? 한다」) */
+  intro: false,
   look: loadLook(),      // 선 모양 설정 (v1.56.0) — 색·테두리·굵기·길이·투명도
   lookSnap: null,        // 설정 시트를 연 순간의 값 (「현재 세트」 카드)
+  lookTab: "base",       // 설정 시트에서 열린 탭 (v1.81.0 — 미리보기가 이 탭을 따라간다)
   lookOwn: null,         // 순환 버튼의 「내 세트」 (v1.58.0) — 추천을 돌다 돌아올 내 설정
   dim: { W: 0, H: 0 },
   iw: 0, ih: 0, s0: 1, fitW: 0, fitH: 0,
@@ -789,13 +862,21 @@ function renderGuides() {
      · 가이드 ON  → **지금 차례 하나만** 고유색, 나머지는 조용한 회색 (플로우)
      · 어느 쪽이든 **잡고 있는 선만** 「잡은 선」 색으로 바뀐다 (아래 `grabbed`)
      ⛔ 가이드 OFF 에서 회색으로 되돌리지 마세요 — 회귀 132 가 잡습니다. */
-  const emph = (sp) => !S.guideOn || S.guideCur === sp.key || isSelected(sp.key);
+  /* ⭐ v1.81.0 — 사진 직후의 **전체라인 인사** 동안에는 가이드가 꺼진 것처럼 전부 고유색 */
+  const emph = (sp) => S.intro || !S.guideOn || S.guideCur === sp.key || isSelected(sp.key);
   /* 지금 손가락(또는 조절 바)이 붙잡고 있는 선인가 — 이 선만 「잡은 선」 색으로 그린다.
      예전에는 `sel && S.dragOn` 이라, 가이드를 끄면 **모든 선이 한꺼번에** 잡은 색이 됩니다. */
   const grabbed = (sp) => !!S.dragOn
     && (gDrag && gDrag.keys && gDrag.keys.length ? gDrag.keys.includes(sp.key) : isSelected(sp.key));
   /* 깜빡임(지시등)은 **플로우 차례 선**에만 — 가이드를 끄면 아무것도 깜빡이지 않는다 */
-  const blinkOf = (sp) => (S.guideOn && S.guideCur === sp.key ? "blink" : null);
+  const blinkOf = (sp) => (S.intro ? "blink1" : (S.guideOn && S.guideCur === sp.key ? "blink" : null));
+  /* ⭐ v1.81.0 — **선택된 선은 조금 더 굵고 조금 더 밝다** (원장님 지시 2026-08-27:
+       「선을 선택시 지금은 아무런 액션이 없다 … 그 선 고유의 선색이 조금더 굵어지고
+         조금더 밝아지게 해서 선이 선택되었음을 표시한다」)
+     ⛔ 이 신호를 빼지 마세요 — 왼쪽 버튼만 밝아지면 사진 위에서는 무엇을 잡았는지 알 수 없습니다. */
+  const boost = (sp) => (S.intro || isSelected(sp.key) ? 1 : 0);
+  /* ⭐ v1.81.0 — 가이드가 꺼져 있을 때, **한 번 움직인 선**은 잡은 선 색으로 남는다 (S.doneSet) */
+  const settled = (sp) => !S.guideOn && !S.intro && S.doneSet.includes(sp.key);
   /* v1.56.0 — 고유색은 **설정에서 고른 묶음 색**이 먼저. 설정에 없는 선(눈·센터)만 스펙 색 */
   const liveColor = (sp) => groupColor(sp.key) || sp.color;
   /* ⚠️ v1.48.0 — 연한 상태를 **알파로 만들지 않는다** (원장님 지시 2026-08-22).
@@ -870,8 +951,8 @@ function renderGuides() {
         }
         /* ⚠️ v1.55.0 — 세 상태 (위 상수 주석 참고). 자를 색/회색으로 쪼개지 않는다 */
         if (bad) { drawLine(frag, xa, y, xb, y, BAL_RED, sp.w + 2.2, 1); return; }
-        if (grabbed(sp)) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
-        if (sel) { drawLive(frag, xa, y, xb, y, liveColor(sp), (sp.w + 1.8) * S.look.weight, blinkOf(sp)); return; }
+        if (grabbed(sp) || settled(sp)) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
+        if (sel) { drawLive(frag, xa, y, xb, y, liveColor(sp), (sp.w + 1.8) * S.look.weight, blinkOf(sp), boost(sp)); return; }
         drawLine(frag, xa, y, xb, y, HALF_GREY, HALF_W, HALF_OP);
       });
     }
@@ -893,8 +974,8 @@ function renderGuides() {
       const lc = lineColor(sp, sel);
       const draw = (x) => {
         if (full) {
-          if (grabbed(sp)) { drawGrab(frag, x, 0, x, H, w); return; }
-          if (sel) { drawLive(frag, x, 0, x, H, lc, w * S.look.weight, blinkOf(sp)); return; }
+          if (grabbed(sp) || settled(sp)) { drawGrab(frag, x, 0, x, H, w); return; }
+          if (sel) { drawLive(frag, x, 0, x, H, lc, w * S.look.weight, blinkOf(sp), boost(sp)); return; }
           drawLine(frag, x, 0, x, H, lc, w, op); return;
         }
         frag.appendChild(mk("line", {                       // 라벨 ↔ 선 연결 (헤일로 없음)
@@ -903,8 +984,8 @@ function renderGuides() {
         }));
         /* v1.52.0 — 잡은(강조) 세로선은 **전체 길이 고유색**: "세로줄 = 좌우 이동" 신호.
            조용할 땐 **전체가 회색 한 줄** — 색과 토막이 없어 자의 색 토막과 헷갈리지 않는다 */
-        if (grabbed(sp)) { drawGrab(frag, x, by0, x, by1, w); return; }
-        if (sel) { drawLive(frag, x, by0, x, by1, lc, w * S.look.weight, blinkOf(sp)); return; }
+        if (grabbed(sp) || settled(sp)) { drawGrab(frag, x, by0, x, by1, w); return; }
+        if (sel) { drawLive(frag, x, by0, x, by1, lc, w * S.look.weight, blinkOf(sp), boost(sp)); return; }
         drawLine(frag, x, by0, x, by1, HALF_GREY, VGREY_W, VGREY_OP);
       };
       const x = g[sp.key] * W;
@@ -997,20 +1078,20 @@ function renderGuides() {
        · 아치 : 안쪽 + **위**  — 산 바로 아래가 눈썹이라, 아래로 그으면 드로잉을 덮습니다
      ⛔ 두 방향을 같게 만들지 마세요. */
   {
-    const pr = S.guideOn ? pairOfStep(S.guideCur) : null;
-    const vsp = pr ? V_SPECS.find((q) => q.key === pr.lr) : null;
-    if (pr && vsp && g[specOf(pr.step).vis] && g[vsp.vis]) {
-      const y = g[pr.step] * H, arm = Math.max(16, Math.min(W, H) * 0.045);
+    const pr = S.guideOn ? crossOfStep(S.guideCur) : null;
+    const vsp = pr ? V_SPECS.find((q) => q.key === pr.v) : null;
+    if (pr && vsp && g[specOf(pr.h).vis] && g[vsp.vis]) {
+      const y = g[pr.h] * H, arm = Math.max(16, Math.min(W, H) * 0.045);
       const ay = pr.up ? y - arm : y + arm;
-      for (const [x, inward] of [[g[pr.lr] * W, 1], [(2 * g.v1 - g[pr.lr]) * W, -1]]) {
+      for (const [x, inward] of [[g[pr.v] * W, 1], [(2 * g.v1 - g[pr.v]) * W, -1]]) {
         if (x < 2 || x > workRight() * W) continue;
         const d = `M ${x + inward * arm} ${y} L ${x} ${y} L ${x} ${ay}`;
-        const hex = liveColor(specOf(pr.step));
+        const hex = liveColor(specOf(pr.h));
         /* ⚠️ v1.68.0 — 표식의 테두리는 **설정의 「테두리」를 그대로 따른다** (원장님 지시 2026-08-24:
            「꼬리와 아우터에 회색 테두리가 자동으로 생겼다. 내가 의도하지 않음 — 테두리 없게」).
            v1.64~1.67 은 여기에 짙은 테두리를 **박아** 두어, 설정이 「없음」인데도 회색 테두리가 났습니다.
            ⛔ 다시 박지 마세요. 선과 표식은 같은 규칙을 씁니다 (drawLive 와 동일). */
-        if (S.look.edge > 0) frag.appendChild(mk("path", { d, fill: "none", stroke: edgeColorFor(hex),
+        if (hasEdge()) frag.appendChild(mk("path", { d, fill: "none", stroke: edgeColorFor(hex),
           "stroke-width": 3 * (1 + 2 * S.look.edge / 100), "stroke-linecap": "round",
           "stroke-linejoin": "round", "stroke-opacity": S.look.alpha * 0.9 }));
         frag.appendChild(mk("path", { d, fill: "none", stroke: hex, "stroke-opacity": S.look.alpha,
@@ -1023,13 +1104,16 @@ function renderGuides() {
 }
 
 /* v1.64.0 — 지금 차례인 선의 프롬프트 한 줄. 가이드가 꺼져 있으면 숨긴다 */
+const STEP_NUM = ["①", "②", "③", "④", "⑤", "⑥", "⑦"];
 function updateGuideTip() {
   const el = $("guideTip"); if (!el) return;
   const key = S.guideOn ? S.guideCur : null;
   const msg = key ? t("tip_" + key) : "";
   if (!key || msg === "tip_" + key) { el.hidden = true; return; }
+  /* 번호는 **지금 순서**에서 계산한다 — 원장님이 순서를 바꾸면 번호도 따라 바뀐다 (v1.81.0) */
+  const i = GUIDE_FLOW.indexOf(key);
   el.hidden = false;
-  el.innerHTML = msg;
+  el.innerHTML = (i >= 0 ? (STEP_NUM[i] || (i + 1) + ".") + " " : "") + msg;
 }
 
 function render() {
@@ -1238,14 +1322,8 @@ touch.addEventListener("pointerdown", (e) => {
         flip: key === "v4" ? mirrored : sp.x > S.g.v1 * S.dim.W,
       };
     }
-    /* v1.67.0 — 아치(h2)·아치선(v6)도 같은 규칙. 아치두께는 아치를 따라 **같은 만큼** 내려간다
-       (두께를 유지한 채 산 전체가 움직인다). ⛔ 아치두께 자체를 잡으면 위아래만 — 그대로 둡니다. */
-    if (!S.multi && (key === "h2" || key === "v6") && S.g.h2Visible && S.g.v6Visible) {
-      gDrag.archPair = {
-        h2: S.g.h2, v6: S.g.v6, at: S.g.archThickness,
-        flip: key === "v6" ? mirrored : sp.x > S.g.v1 * S.dim.W,
-      };
-    }
+    /* ⛔ v1.81.0 — 아치·아치선의 사선 동반(archPair)은 **폐지**되었습니다 (원장님 지시 2026-08-27).
+       아치 가로선, 아치두께, 아치선은 각자 자기 축으로만 움직입니다. 회귀 117 이 지킵니다. */
     render();
     const c0 = posConfig();
     /* 값 HUD 없음 (v1.44.0) — 바 라벨의 숫자로 충분합니다 */
@@ -1287,12 +1365,6 @@ touch.addEventListener("pointermove", (e) => {
       /* 꼬리·아우터 사선 (v1.61.0) — 한 손짓으로 꼬리 끝 점을 놓는다 */
       setLine("h3", gDrag.tailPair.h3 + dyN);
       setLine("v4", gDrag.tailPair.flip ? gDrag.tailPair.v4 - dxN : gDrag.tailPair.v4 + dxN);
-    } else if (gDrag.archPair) {
-      /* 아치·아치선 사선 (v1.67.0) — 산꼭대기 한 점을 한 손짓으로. 두께가 함께 따라온다 */
-      const a = gDrag.archPair;
-      setLine("h2", a.h2 + dyN);
-      setLine(ARCH_PAIR.thick, a.at + dyN);
-      setLine("v6", a.flip ? a.v6 - dxN : a.v6 + dxN);
     } else {
       dragLineBy(gDrag.key, gDrag.base, dxN, dyN, gDrag.mirrored);
     }
@@ -1343,10 +1415,12 @@ function endPointer(e) {
     }
   }
   const guideKey = gMode === "line" && gDrag && gDrag.moved ? gDrag.key : null;
+  const gKeys = gMode === "line" && gDrag && gDrag.moved ? gDrag.keys : null;
   if (pts.size < 2) { gMode = pts.size === 1 ? null : null; gDrag = null; }
   if (pts.size === 0) {
     commitEdit();   /* 손을 다 떼면 한 작업으로 확정 */
-    if (guideKey) guideAdvance(guideKey);
+    /* v1.81.0 — 실제로 움직인 선만 「끝냄」으로 표시한다 (탭만 한 것은 표시하지 않는다) */
+    if (guideKey) { (gKeys || [guideKey]).forEach(markDone); guideAdvance(guideKey); }
   }
 }
 
@@ -1361,11 +1435,7 @@ function endPointer(e) {
    마지막(꼬리) 뒤로는 처음으로 돌아가지 않는다 — 플로우 종료 (원장님 지시 2026-08-21) */
 function guideAdvance(key) {
   if (!S.guideOn) return;
-  /* 꼬리 스텝에서 아우터를 움직였어도 **그 스텝을 끝낸 것**으로 친다 (v1.64.0) */
-  {
-    const pr = pairOfStep(S.guideCur);
-    if (pr && key === pr.lr) key = pr.step;
-  }
+  /* v1.81.0 — 꼬리는 아우터(x)·높이(y)가 **각자의 스텝**입니다. 움직인 선이 곧 끝낸 스텝입니다. */
   const i = GUIDE_FLOW.indexOf(key);
   if (i < 0) return;                                   // 플로우 밖의 선은 순서에 영향 없음
   const next = i + 1 < GUIDE_FLOW.length ? GUIDE_FLOW[i + 1] : null;
@@ -1449,6 +1519,14 @@ function redo() {
 /* 한 번의 클릭으로 끝나는 작업을 감싸는 helper */
 function step(fn) { beginEdit(); fn(); commitEdit(); }
 
+/* ⭐ v1.81.0 — 이 선의 **움직임이 끝났다**고 표시한다 (가이드 꺼진 상태 모드 · S.doneSet 주석).
+   꼬리 끝은 한 점이라 사선으로 끌면 꼬리·아우터가 함께 놓입니다 → 둘 다 표시합니다. */
+function markDone(key) {
+  const add = (k) => { if (k && !S.doneSet.includes(k)) S.doneSet.push(k); };
+  add(key);
+  if (key === "h3" || key === "v4") { add("h3"); add("v4"); }
+}
+
 /* ═══════════ 6. 버튼 · 패널 ═══════════ */
 
 /* ── 선택 판정 (v1.18.0) ──────────────────────────────
@@ -1487,9 +1565,6 @@ function noteSel(key) {
      잠시 내리고(null), 플로우 안 선을 다시 고르면 **그 선부터 재개**한다.
      ⚠️ 이 두 줄을 지우면 밝은 선이 두 개가 되는 문제가 그대로 돌아옵니다. */
   if (S.guideOn) S.guideCur = GUIDE_FLOW.includes(key) ? key : null;
-  /* v1.64.0 — 꼬리 스텝은 **꼬리+아우터 동시**: 위아래 바=꼬리, 좌우 바=아우터
-     v1.67.0 — 아치 스텝도 같은 방식: 위아래 바=아치, 좌우 바=아치선 */
-  if (S.guideOn) { const pr = pairOfStep(S.guideCur); if (pr) S.selLR = pr.lr; }
 }
 function setSel(key) {
   noteSel(key);
@@ -1609,13 +1684,8 @@ function applyPos(v, key) {
   v = clamp(v, 0, 1);
   if (k === "outerAngle") S.g.outerAngle = v;
   else if (k === "innerAngle") S.g.innerAngle = clamp(1 - v, 0.02, 0.98);
-  else if (k === ARCH_PAIR.step) {
-    /* v1.67.0 — 바·화살표로 아치를 올리면 **아치두께도 같은 만큼** 따라온다.
-       손으로 끄는 사선과 같은 규칙이어야 합니다 (한쪽만 고치면 두께가 어긋납니다). */
-    const nv = c.invert ? 1 - v : v, d = nv - S.g[k];
-    setLine(k, nv);
-    setLine(ARCH_PAIR.thick, S.g[ARCH_PAIR.thick] + d);
-  } else setLine(k, c.invert ? 1 - v : v);
+  /* ⛔ v1.81.0 — 아치를 올려도 아치두께는 따라오지 않습니다 (원장님 지시 2026-08-27 · 위 주석) */
+  else setLine(k, c.invert ? 1 - v : v);
   render();
 }
 
@@ -2855,6 +2925,24 @@ function autoFromDrawing() {
     kx = eyeR ? (eyeR.a + eyeR.b) / 2 : seq[pk].x;          // ② 눈꼬리 근처
   }
   setLine("v6", clamp(S.g.v1 - Math.abs(kx - cx) / W, 0.02, 0.98));
+
+  /* ⭐⭐ v1.81.0 — **아치두께의 마지노선** (원장님 지시 2026-08-27)
+     「절대로 : 아치두께는 절대로 꼬리가 측정된 위치 밑으로 내려오지 않는다.
+       눈썹중 꼬리가 가장 낮은곳에 위치한다. 아치두께는 앞머리와 같은선 위치 하거나 높은곳에 위치한다.
+       그러니 아치두께를 자동위치할때 꼬리보다 낮은곳에 쉐도우·어두운 선을 아치두께라고 인식할수 없다」
+
+     눈썹의 해부학이 정해 주는 순서입니다 — **아치두께 ≤ 앞머리 ≤ 꼬리** (y 는 아래로 갈수록 큼).
+     아치두께가 이 선을 넘었다면 그것은 눈썹이 아니라 **눈꺼풀 그늘**을 읽은 것입니다.
+     ⛔ 이 상한을 지우지 마세요 — 회귀 133 이 잡습니다.
+     ⚠️ `AT_GAP` — 상한에 **딱 붙이지 않고 조금 위**에 세웁니다. 딱 붙이면 아치두께와 앞머리가
+        같은 값이 되어, 못박음 검사(회귀 131)가 「사진에서 읽은 값이 아니다」로 잡습니다.
+        상한이 걸렸다는 것 자체가 판독이 흔들렸다는 뜻이므로 붙여 두면 안 됩니다. */
+  {
+    const AT_GAP = 3 / H;                        // 캔버스 3px — 못박음 검사와 부딪히지 않는 최소 간격
+    const floor = S.g.h2 + 4 / H;                // 아치 윗선보다는 반드시 아래
+    const lim = Math.max(floor, Math.min(S.g.h3, S.g.front) - AT_GAP);
+    if (S.g.archThickness > lim) setLine("archThickness", lim);
+  }
   return true;
 }
 
@@ -2931,6 +3019,9 @@ async function exportImage() {
 }
 
 /* ═══════════ 화면 전환 · 사진 로드 ═══════════ */
+/* 전체라인 인사가 유지되는 시간 — CSS `pbBlink1` 한 바퀴(1.4s)보다 조금 길게 */
+const INTRO_MS = 1600;
+let introTimer = null;
 /* 화면을 바꾸면 방향 판정도 다시 한다 (v1.27.0)
    홈 = 기기 방향 그대로(세로) / 편집기 = 가로 강제. applyLayout() 참고. */
 function show(id) {
@@ -2958,7 +3049,22 @@ function loadPhoto(file) {
     /* v1.47.0 원장님 지시 — 「가이드는 앱이 켜지면 항상 시작 상태로 유지, 사용자가 클릭할 때만 꺼짐」
        사진이 올라와 편집이 시작될 때마다 가이드 ON + 이너부터. 끄는 건 가이드 버튼 클릭뿐. */
     S.guideOn = true;
-    S.guideCur = GUIDE_FLOW[0];
+    /* ⭐ v1.81.0 — 원장님 지시 2026-08-27: 「앱이 열리면 가이드 첫 라인이 시작되기 전에
+       **전체라인이 아주 살짝 두껍게 밝게** 표시되고, 동시에 **1번 가벼운 블링킹** 뒤에
+       가이드 첫 라인 시작해라. 첫 사진 불러오자마자 이너 라인만 색이 있고 나머지는
+       검정색이라 사용자가 이게 뭐지? 한다」
+       ⚠️ 이 타이머는 **한 번만** 도는 플래그 전환입니다 — v1.54.0 처럼 매 프레임 render() 를
+          돌리는 깜빡임이 아닙니다 (BASELINE 1-24 의 ⛔ 는 그쪽을 막는 것입니다). */
+    S.intro = true;
+    S.guideCur = null;
+    S.doneSet = [];
+    clearTimeout(introTimer);
+    introTimer = setTimeout(() => {
+      S.intro = false;
+      S.guideCur = GUIDE_FLOW[0];
+      noteSel(GUIDE_FLOW[0]);
+      render();
+    }, INTRO_MS);
     clearHist();                 /* 새 사진 = 되돌리기 기록 초기화 */
     show("editor");
     requestAnimationFrame(() => {
@@ -3017,11 +3123,28 @@ function buildLookUI() {
     b.onclick = () => lookSet({ ...v });
     combo.appendChild(b);
   });
-  /* ② 묶음별 색상표 */
+  /* ② 묶음별 색상표 (가로 자) */
   [["swInner", "inner"], ["swArch", "arch"], ["swTail", "tail"]].forEach(([id, key]) => {
     const box = $(id); box.innerHTML = "";
     PALETTE.forEach((p) => box.appendChild(swatchBtn(p.hex, L[key] === p.hex, () => lookSet({ [key]: p.hex }))));
   });
+  /* ②-b **세로선 색** — 세 선을 한 줄에, 각자 이름표를 달고 (v1.81.0 원장님 지시 2026-08-27).
+     목록은 민트·먹색·흰색 세 가지뿐입니다 (V_PALETTE 주석 참고). */
+  {
+    const box = $("swVAll");
+    if (box) {
+      box.innerHTML = "";
+      [["v2", "vInner"], ["v6", "vArch"], ["v4", "vTail"]].forEach(([lineKey, key]) => {
+        const g = document.createElement("span");
+        g.className = "vgrp";
+        const b = document.createElement("b");
+        b.textContent = labelOf(lineKey);
+        g.appendChild(b);
+        V_PALETTE.forEach((p) => g.appendChild(swatchBtn(p.hex, L[key] === p.hex, () => lookSet({ [key]: p.hex }))));
+        box.appendChild(g);
+      });
+    }
+  }
   /* v1.57.0 — 잡은 선(드래그)의 심·테두리. v1.59.0 — 테두리에 **없음** 추가 (사선 스와치) */
   [["swDragC", "dragCore", ["#FFFFFF"]], ["swDragE", "dragEdge", [APRICOT, "none"]]].forEach(([id, key, extra]) => {
     const box = $(id); if (!box) return; box.innerHTML = "";
@@ -3031,22 +3154,27 @@ function buildLookUI() {
       box.appendChild(b);
     });
   });
-  /* ③ 테두리 · 굵기 · 길이 */
-  const edge = $("segEdge"); edge.innerHTML = "";
-  [[0, t("set_none")], [40, "40%"], [70, "70%"], [100, "100%"]]
-    .forEach(([v, lb]) => edge.appendChild(segBtn(lb, L.edge === v, () => lookSet({ edge: v }))));
+  /* ③ 테두리 색 — **없음 / 흰색 / 검정 / 먹색** (v1.81.0 · 「자동」 폐지).
+     색을 고르는데 굵기가 0 이면 아무 변화가 없어 고장처럼 보입니다 → 그때만 70% 로 올려 줍니다. */
   const edgeC = $("segEdgeC"); edgeC.innerHTML = "";
-  [["auto", t("set_auto")], ["light", t("set_light")], ["dark", t("set_dark")]]
-    .forEach(([v, lb]) => edgeC.appendChild(segBtn(lb, L.edgeC === v, () => lookSet({ edgeC: v }))));
-  const sw = $("segW"); sw.innerHTML = "";
-  [[0.8, t("set_thin")], [1, t("set_mid")], [1.35, t("set_thick")]]
-    .forEach(([v, lb]) => sw.appendChild(segBtn(lb, L.weight === v, () => lookSet({ weight: v }))));
+  [["none", t("set_none")], ["light", t("set_light")], ["black", t("set_black")], ["dark", t("set_dark")]]
+    .forEach(([v, lb]) => edgeC.appendChild(segBtn(lb, L.edgeC === v, () =>
+      lookSet(v !== "none" && !(L.edge > 0) ? { edgeC: v, edge: 70 } : { edgeC: v }))));
+  /* v1.81.0 — **선 굵기·테두리 굵기도 슬라이더** (원장님 지시 2026-08-27 「드레그 조정으로 변경」).
+     ⛔ 3단(얇게·중간·두껍게) 세그먼트로 되돌리지 마세요 — 그 사이 값을 만들 수 없습니다. */
+  $("rngW").value = Math.round(L.weight * 100);
+  $("wVal").textContent = Math.round(L.weight * 100) + "%";
+  $("rngEdge").value = Math.round(L.edge);
+  $("edgeVal").textContent = Math.round(L.edge) + "%";
   /* v1.68.0 — 「가로 길이」는 **슬라이더**. 3단(짧게·중간·길게)으로는 원장님이 원하시는
      **아주 짧은** 자를 만들 수 없었습니다. 값 = 자 전체 길이 ÷ 눈썹 폭 (%) */
   $("rngLen").value = Math.round(L.hlen * 200);
   $("lenVal").textContent = Math.round(L.hlen * 200) + "%";
   $("rngAlpha").value = Math.round(L.alpha * 100);
   $("alphaVal").textContent = Math.round(L.alpha * 100) + "%";
+  /* 「모두 이 색」이 **눌렸다는 것이 보여야 한다** (원장님 지시 2026-08-27).
+     상태로 표시합니다 — 세 묶음이 같은 색인 동안 계속 켜져 있어 눌렀는지 되짚을 필요가 없습니다. */
+  { const b = $("lookAll"); if (b) b.classList.toggle("on", L.inner === L.arch && L.arch === L.tail); }
   /* v1.59.0 — 잡은 선 전용 굵기·투명도 (기본 선과 완전 분리) */
   const sdw = $("segDragW");
   if (sdw) {
@@ -3058,46 +3186,159 @@ function buildLookUI() {
   }
   lookPreview();
 }
-/* 미리보기 자의 반폭(px) — **슬라이더를 끌면 길이가 눈앞에서 줄었다 늘었다** 해야 합니다
-   (원장님 지시 2026-08-24). 설정 범위(HLEN_MIN~HLEN_MAX)가 미리보기 폭에 그대로 대응합니다. */
 const HLEN_MIN = 0.04, HLEN_MAX = 0.30;
-const prevHalf = (L) => clamp(L.hlen / HLEN_MAX, 0.08, 1) * 170;
-/* 미리보기 — 왼쪽 밝은 피부 / 오른쪽 어두운 눈썹. 세 묶음 색을 실제 규칙 그대로 그린다 */
+
+/* ═══ 설정 미리보기 (v1.81.0 · 원장님 지시 2026-08-27) ═══════════════════
+   「설정에서 선들이 미리보기가 되어있는데 그냥 선들이 정렬되어있어.
+     **선의 이름과 그 선이 눈썹 위에 올려지는 위치가 매칭되어 보일수 있게**
+     눈썹 드로잉을 밝은피부·어두운피부로 올린 뒤 각 선들이 위치하는 것을 그 위에 올려
+     색을 변경할 때 어떤식으로 보여질지 미리보기를 **더 크게**」
+
+   목적 — 초보자가 **선 이름 ↔ 색 ↔ 눈썹에서의 자리**를 설정 화면에서 한 번에 본다.
+   ⛔ 선을 그냥 나란히 긋던 예전 미리보기로 되돌리지 마세요.
+
+   ⚠️ 눈썹은 **코드로 그립니다 (사진 파일이 아닙니다)** — 원장님 확인 2026-08-27.
+      ① 오프라인 앱이라 사진을 넣으면 용량과 sw.js 캐시가 그만큼 무거워집니다
+      ② 저장소가 **공개**라 고객 얼굴 사진을 올릴 수 없습니다 (BASELINE 1-10)
+      윤곽은 원장님 드로잉 사진의 비율을 따라 잡았습니다 — 꼬리가 가장 낮고,
+      아치두께는 앞머리보다 위입니다 (드로잉 맞춤의 판정 규칙과 같은 모양). */
+
+/* 눈썹 윤곽 — x 0 = 꼬리(화면 왼쪽) … 1 = 앞머리(코 쪽) · y 0 = 위 … 1 = 아래
+   ⚠️ 이 비율은 **판정 규칙과 같은 눈썹**입니다 (BASELINE 1-34 · 아래 1-41):
+     꼬리가 가장 낮고(0.78) · 아치두께(0.545)는 앞머리(0.70)보다 위 · 꼬리 끝은 뾰족하다.
+   ⛔ 이 순서가 깨진 눈썹으로 바꾸지 마세요 — 미리보기가 앱의 판정과 다른 말을 하게 됩니다. */
+const PV_UP = [[0, .765], [.04, .63], [.10, .50], [.18, .40], [.28, .31], [.40, .235], [.53, .21], [.66, .24], [.80, .31], [.92, .38], [1, .42]];
+const PV_LO = [[0, .785], [.04, .72], [.10, .665], [.18, .625], [.28, .59], [.40, .555], [.53, .545], [.66, .565], [.80, .615], [.92, .685], [1, .735]];
+/* 각 선이 이 눈썹 위에서 **실제로 놓이는 자리** — 위 윤곽에서 그대로 뽑은 값 */
+const PV_Y = { h2: .21, frontThickness: .40, archThickness: .545, front: .71, h3: .785 };
+const PV_X = { v4: .02, v6: .28, v2: .98 };
+const PV_W = 360, PV_H = 320;          /* 한 칸 크기 (두 칸 = 720 × 320) */
+const pvAt = (arr, t) => {
+  for (let k = 0; k < arr.length - 1; k++) {
+    const a = arr[k], b = arr[k + 1];
+    if (t >= a[0] && t <= b[0]) return a[1] + (b[1] - a[1]) * (t - a[0]) / (b[0] - a[0]);
+  }
+  return arr[arr.length - 1][1];
+};
+/* 한 칸 안에서 눈썹이 차지하는 상자 */
+function pvBox(x0) { return { x: x0 + 28, y: 54, w: 252, h: 152 }; }
+/* 글자가 피부 위에서도 눈썹 위에서도 읽히게 — **대비색 헤일로**를 깔고 그 위에 선 색.
+   ⚠️ 헤일로를 늘 어둡게 두면 **먹색 이름표가 검은 헤일로에 묻혀** 안 읽힙니다
+   (세로선 기본이 먹색이 된 v1.81.0 에서 실제로 그랬습니다). 휘도로 갈라 주세요. */
+function pvText(f, x, y, txt, color, anchor, size) {
+  const t = mk("text", {
+    x, y, fill: color, "font-size": size || 12, "font-weight": "800",
+    "text-anchor": anchor || "start", "font-family": "system-ui,-apple-system,sans-serif",
+    stroke: relLum(color) > 0.32 ? "#0A0D14" : "#FFFFFF", "stroke-width": 3.4, "stroke-opacity": .8,
+    "paint-order": "stroke", "stroke-linejoin": "round",
+  });
+  t.textContent = txt;
+  f.appendChild(t);
+}
+/* 한 칸 — 피부 + 눈썹 드로잉 + 눈 */
+function pvBrowArt(f, x0, dark) {
+  const skin = dark ? "#6E4C38" : "#EAC6A6";
+  const shade = dark ? "#4E3327" : "#D6AC86";
+  const ink = dark ? "#1E1310" : "#3A2A20";
+  f.appendChild(mk("rect", { x: x0, y: 0, width: PV_W, height: PV_H, fill: skin }));
+  /* 평평한 색판으로 보이지 않게 — 관자놀이·눈두덩 그늘 */
+  f.appendChild(mk("ellipse", { cx: x0 + PV_W * .55, cy: PV_H * 1.3, rx: PV_W * .8, ry: PV_H * .68,
+                                fill: shade, "fill-opacity": .45 }));
+  f.appendChild(mk("ellipse", { cx: x0 + PV_W * .02, cy: PV_H * .45, rx: PV_W * .2, ry: PV_H * .8,
+                                fill: shade, "fill-opacity": .3 }));
+  const b = pvBox(x0);
+  const pt = (t, up) => [b.x + t * b.w, b.y + pvAt(up ? PV_UP : PV_LO, t) * b.h];
+  const pstr = (t, up) => pt(t, up).map((v) => v.toFixed(1)).join(",");
+  const d = "M " + PV_UP.map(([t]) => pstr(t, true)).join(" L ")
+          + " L " + PV_LO.slice().reverse().map(([t]) => pstr(t, false)).join(" L ") + " Z";
+  /* 파우더 번짐 → 진한 심 (PMU 드로잉의 결) */
+  f.appendChild(mk("path", { d, fill: ink, "fill-opacity": .18, stroke: ink,
+                             "stroke-opacity": .14, "stroke-width": 5, "stroke-linejoin": "round" }));
+  f.appendChild(mk("path", { d, fill: ink, "fill-opacity": .93 }));
+  /* 털결 — 꼬리 쪽으로 눕는다 */
+  for (let i = 1; i < 30; i++) {
+    const t = .04 + (i / 30) * .93;
+    const [x1, y1] = pt(t, false), [x2, y2] = pt(t, true);
+    f.appendChild(mk("line", { x1: x1 + 3, y1: y1 - 1.5, x2: x2 - 4, y2: y2 + 1.5,
+      stroke: dark ? "#0C0806" : "#20150E", "stroke-opacity": .45, "stroke-width": 1.5, "stroke-linecap": "round" }));
+  }
+  /* 눈 — 「이 선이 눈썹의 어디냐」를 얼굴로 읽히게 하는 최소한의 기준 */
+  const ex = b.x + b.w * .46, ey = 254, ew = 52, eh = 11;
+  f.appendChild(mk("path", { d: `M ${ex - ew} ${ey} Q ${ex} ${ey - eh} ${ex + ew} ${ey} Q ${ex} ${ey + eh} ${ex - ew} ${ey} Z`,
+    fill: dark ? "#E4D8CD" : "#FAF4ED", "fill-opacity": .9 }));
+  f.appendChild(mk("circle", { cx: ex + 4, cy: ey, r: 7.5, fill: "#4A3527" }));
+  f.appendChild(mk("circle", { cx: ex + 4, cy: ey, r: 3.2, fill: "#120C08" }));
+  f.appendChild(mk("path", { d: `M ${ex - ew} ${ey} Q ${ex} ${ey - eh - 1.5} ${ex + ew} ${ey}`,
+    fill: "none", stroke: ink, "stroke-opacity": .7, "stroke-width": 2.4, "stroke-linecap": "round" }));
+  f.appendChild(mk("path", { d: `M ${ex - ew * .8} ${ey - 22} Q ${ex} ${ey - 30} ${ex + ew * .9} ${ey - 20}`,
+    fill: "none", stroke: ink, "stroke-opacity": .18, "stroke-width": 2 }));   /* 쌍꺼풀 결 */
+}
+
+/* 미리보기 — 왼쪽 밝은 피부 / 오른쪽 어두운 피부. 두 칸 모두 **같은 눈썹** 위에
+   지금 설정한 선을 실제 자리·실제 규칙(테두리·굵기·길이·투명도)으로 올린다. */
 function lookPreview() {
   const svgP = $("lookPrev"); if (!svgP) return;
-  svgP.innerHTML = "";
-  const f = document.createDocumentFragment();
-  f.appendChild(mk("rect", { x: 0, y: 0, width: 360, height: 96, fill: SKIN_PREV }));
-  f.appendChild(mk("rect", { x: 360, y: 0, width: 360, height: 96, fill: BROW_PREV }));
-  const L = S.look;
-  [["inner", 18], ["arch", 40], ["tail", 62]].forEach(([k, y]) => {
-    const hex = L[k], w = 3.0 * L.weight;
-    const put = (x1, x2) => {
-      if (L.edge > 0) f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: edgeColorFor(hex),
-        "stroke-width": w * (1 + 2 * L.edge / 100), "stroke-opacity": L.alpha * 0.9, "stroke-linecap": "round" }));
-      f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: hex,
-        "stroke-width": w, "stroke-opacity": L.alpha, "stroke-linecap": "round" }));
+  const L = S.look, f = document.createDocumentFragment();
+  const grabTab = S.lookTab === "grab";
+  const put = (x1, y1, x2, y2, hex, w, forceGrab) => {
+    if (forceGrab) {                                  /* 잡은 선 탭 — drawGrab 과 같은 규칙 */
+      const gw = w * (L.dragW || 1), op = L.dragOp != null ? L.dragOp : 1, e = L.dragEdge || "none";
+      if (e !== "none") f.appendChild(mk("line", { x1, y1, x2, y2, stroke: e, "stroke-width": gw + 4,
+        "stroke-opacity": .95 * op, "stroke-linecap": "round" }));
+      f.appendChild(mk("line", { x1, y1, x2, y2, stroke: L.dragCore || "#14161B", "stroke-width": gw,
+        "stroke-opacity": op, "stroke-linecap": "round" }));
+      return;
+    }
+    if (hasEdge()) f.appendChild(mk("line", { x1, y1, x2, y2, stroke: edgeColorFor(hex),
+      "stroke-width": w * (1 + 2 * L.edge / 100), "stroke-opacity": L.alpha * .9, "stroke-linecap": "round" }));
+    f.appendChild(mk("line", { x1, y1, x2, y2, stroke: hex, "stroke-width": w,
+      "stroke-opacity": L.alpha, "stroke-linecap": "round", class: "pv-ruler" }));
+  };
+  [0, 1].forEach((side) => {
+    const x0 = side * PV_W, dark = side === 1;
+    pvBrowArt(f, x0, dark);
+    const b = pvBox(x0);
+    const vx = (k) => b.x + PV_X[k] * b.w;
+    const hy = (k) => b.y + PV_Y[k] * b.h;
+    const half = clamp(L.hlen, HLEN_MIN, HLEN_MAX) * (vx("v2") - vx("v4"));
+    const wOf = (k) => (specOf(k).w + 1.8) * L.weight * 1.45;
+    /* 세로선 — 이너는 눈까지 길게, 아치선·아우터는 눈썹 구간만 (앱과 같은 규칙) */
+    [["v2", 268], ["v6", 214], ["v4", 214]].forEach(([k, y1]) => {
+      const x = vx(k), c = groupColor(k) || specOf(k).color;
+      f.appendChild(mk("line", { x1: x, y1: 42, x2: x, y2: y1, stroke: c,
+        "stroke-width": 1, "stroke-opacity": .18 }));       /* 이름표까지 잇는 옅은 선 */
+      put(x, 46, x, y1, c, wOf(k), grabTab && k === "v6");
+    });
+    /* 가로 자 — 자는 세로선에서 **눈썹 쪽으로만** 뻗는다 (BASELINE 1-38) */
+    const seg = {
+      front: [vx("v2") - 2 * half, vx("v2")],
+      frontThickness: [vx("v2") - 2 * half, vx("v2")],
+      h2: [vx("v6") - half, vx("v6") + half],
+      archThickness: [vx("v6") - half, vx("v6") + half],
+      h3: [vx("v4"), vx("v4") + half],                      /* 꼬리 자는 길이 반 (halfK 0.5) */
     };
-    const half = prevHalf(L);
-    put(180 - half, 180 + half);
-    put(540 - half, 540 + half);
+    Object.keys(seg).forEach((k) => {
+      const y = hy(k), c = groupColor(k) || specOf(k).color;
+      put(seg[k][0], y, seg[k][1], y, c, wOf(k), grabTab && k === "h2");
+    });
+    /* 이름표 — 자 바로 옆에 그 선의 색으로. 「이름 ↔ 색 ↔ 자리」가 한눈에 붙는다 */
+    const lab = (k, x, anchor) => pvText(f, x, hy(k) + 4, labelOf(k), groupColor(k) || specOf(k).color, anchor);
+    lab("h2", seg.h2[1] + 7);
+    lab("archThickness", seg.archThickness[1] + 7);
+    lab("h3", seg.h3[1] + 7);
+    lab("frontThickness", seg.frontThickness[1] + 7);
+    lab("front", seg.front[1] + 7);
+    /* 세로선 이름표는 **위쪽 한 줄** — 앱에서도 세로선 라벨은 캔버스 맨 위입니다 (BASELINE 1-7) */
+    /* 세 이름이 붙지 않게 자리를 나눈다 — 아우터는 칸 왼쪽 끝, 아치선은 자기 선 오른쪽, 이너는 왼쪽 */
+    [["v4", "start", x0 + 5], ["v6", "start", vx("v6") + 7], ["v2", "end", vx("v2") - 6]]
+      .forEach(([k, an, lx]) => pvText(f, lx, 38, labelOf(k), groupColor(k) || specOf(k).color, an, 12));
+    pvText(f, x0 + 10, 17, dark ? (LANG === "ko" ? "어두운 피부" : "Dark skin")
+                               : (LANG === "ko" ? "밝은 피부" : "Light skin"), "#FFFFFF", "start", 11);
   });
-  /* 맨 아래 줄 = **잡은 선** — drawGrab 과 같은 규칙 (v1.59.0: 굵기·투명도·없음 분리) */
-  {
-    const y = 84, w = 3.0 * (L.dragW || 1), op = L.dragOp != null ? L.dragOp : 1;
-    const half = prevHalf(L), e = L.dragEdge || "#FFC9A3";
-    const put = (x1, x2) => {
-      if (e !== "none") f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: e,
-        "stroke-width": w + 4, "stroke-opacity": 0.95 * op, "stroke-linecap": "round" }));
-      f.appendChild(mk("line", { x1, y1: y, x2, y2: y, stroke: L.dragCore || "#14161B",
-        "stroke-width": w, "stroke-opacity": op, "stroke-linecap": "round" }));
-    };
-    put(180 - half, 180 + half);
-    put(540 - half, 540 + half);
-  }
-  svgP.appendChild(f);
+  svgP.setAttribute("viewBox", `0 0 ${PV_W * 2} ${PV_H}`);
+  svgP.replaceChildren(f);
 }
-$("btnLook").onclick = () => { S.lookSnap = { ...S.look }; buildLookUI(); $("mLook").classList.add("on"); };
+$("btnLook").onclick = () => { S.lookSnap = { ...S.look }; lookTab("base"); buildLookUI(); $("mLook").classList.add("on"); };
 
 /* ═══ 조합 순환 버튼 (v1.58.0 · 원장님 지시 2026-08-23) ═══════════════════
    「가이드 오른쪽에 선 색변경 버튼 — 클릭 시 다른 추천 조합, 또 클릭 시 다른 조합」
@@ -3131,7 +3372,14 @@ $("btnLookCycle").onclick = () => {
   saveLook(); render(); updateButtons(); cycleLabel();
   showHud(next === "mine" ? t("set_c_mine") : t(LOOK_COMBOS.find((c) => c.id === next).name), 1400);
 };
-$("lookAll").onclick = () => lookSet({ arch: S.look.inner, tail: S.look.inner });
+/* 「모두 이 색」 — 가로 세 묶음을 이너 색으로. 그 색이 **세로선 목록에도 있으면** 세로선까지
+   함께 맞춥니다 (원장님 지시 2026-08-27 세로선 목록 옆의 「모두 이색 적용」).
+   목록 밖 색(라임·핑크 등)일 때 세로선은 그대로 둡니다 — 세로선은 세 색만 쓰기로 정했습니다. */
+$("lookAll").onclick = () => {
+  const c = S.look.inner;
+  const v = V_PALETTE.some((p) => p.hex === c) ? { vInner: c, vArch: c, vTail: c } : {};
+  lookSet({ arch: c, tail: c, ...v });
+};
 $("lookReset").onclick = () => lookSet({ ...LOOK_DEF });
 /* 조작하다 별로면 **시트를 연 순간의 값**으로 한 번에 복귀 (원장님 지시 2026-08-23) */
 $("lookBack").onclick = () => { if (S.lookSnap) { lookSet({ ...S.lookSnap }); showHud(t("set_backed"), 1400); } };
@@ -3142,6 +3390,20 @@ $("rngLen").addEventListener("input", (e) => {
   lookPreview(); render();
 });
 $("rngLen").addEventListener("change", () => { saveLook(); buildLookUI(); });
+/* v1.81.0 — 선 굵기 · 테두리 굵기 슬라이더 (원장님 지시 2026-08-27).
+   끄는 동안 미리보기와 실제 화면이 함께 변합니다 — 가로 길이와 같은 규칙입니다. */
+$("rngW").addEventListener("input", (e) => {
+  S.look.weight = clamp(+e.target.value / 100, 0.6, 1.8);
+  $("wVal").textContent = e.target.value + "%";
+  lookPreview(); render();
+});
+$("rngW").addEventListener("change", () => { saveLook(); buildLookUI(); });
+$("rngEdge").addEventListener("input", (e) => {
+  S.look.edge = clamp(+e.target.value, 0, 120);
+  $("edgeVal").textContent = e.target.value + "%";
+  lookPreview(); render();
+});
+$("rngEdge").addEventListener("change", () => { saveLook(); buildLookUI(); });
 $("rngAlpha").addEventListener("input", (e) => {
   S.look.alpha = +e.target.value / 100;
   $("alphaVal").textContent = e.target.value + "%";
@@ -3155,14 +3417,66 @@ $("rngDragOp").addEventListener("input", (e) => {
 });
 $("rngDragOp").addEventListener("change", () => { saveLook(); buildLookUI(); });
 /* 탭 — 기본 선 / 잡은 선 (v1.59.0) */
+/* ═══ 가이드 순서 편집 (v1.81.0 · 원장님 지시 2026-08-27) ═══════════════════
+   「가이드 - 순서 변경가능 기능 추가」
+   · ▲▼ 로 순서를 바꾸고, 이름을 눌러 그 단계를 **켜고 끈다** (이너처럼 안 쓰는 단계를 뺄 수 있게)
+   · 켜진 단계가 위, 꺼진 단계는 아래에 흐리게 — 목록에서 사라지면 다시 켤 방법이 없습니다
+   · 순서를 바꾸면 프롬프트 번호(①②③…)도 같이 따라갑니다 (updateGuideTip) */
+function buildOrderUI() {
+  const box = $("orderList"); if (!box) return;
+  const off = FLOW_ALL.filter((k) => !GUIDE_FLOW.includes(k));
+  const rows = [...GUIDE_FLOW.map((k) => [k, true]), ...off.map((k) => [k, false])];
+  const apply = () => {
+    saveFlow();
+    /* 지금 차례가 목록에서 빠졌으면 처음으로 되돌린다 — 없는 단계에 머물면 플로우가 멈춥니다 */
+    if (S.guideOn && (!S.guideCur || !GUIDE_FLOW.includes(S.guideCur))) S.guideCur = GUIDE_FLOW[0] || null;
+    buildOrderUI(); render(); updateButtons();
+  };
+  box.replaceChildren(...rows.map(([k, on], i) => {
+    const r = document.createElement("div");
+    r.className = "orow" + (on ? "" : " off");
+    r.dataset.key = k;
+    const n = document.createElement("i");
+    n.textContent = on ? (STEP_NUM[i] || i + 1) : "·";
+    r.appendChild(n);
+    const nm = document.createElement("button");
+    nm.type = "button"; nm.className = "onm"; nm.textContent = labelOf(k);
+    nm.style.setProperty("--dot", groupColor(k) || specOf(k).dot || specOf(k).color);
+    nm.onclick = () => {
+      const at = GUIDE_FLOW.indexOf(k);
+      if (at >= 0) { if (GUIDE_FLOW.length > 1) GUIDE_FLOW.splice(at, 1); }   /* 마지막 하나는 못 끈다 */
+      else GUIDE_FLOW.push(k);
+      apply();
+    };
+    r.appendChild(nm);
+    [["▲", -1], ["▼", 1]].forEach(([g, d]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "omv"; b.textContent = g;
+      const at = GUIDE_FLOW.indexOf(k), to = at + d;
+      b.disabled = !on || to < 0 || to >= GUIDE_FLOW.length;
+      b.onclick = () => { const v = GUIDE_FLOW[at]; GUIDE_FLOW[at] = GUIDE_FLOW[to]; GUIDE_FLOW[to] = v; apply(); };
+      r.appendChild(b);
+    });
+    return r;
+  }));
+}
+
 function lookTab(which) {
+  S.lookTab = which;
   $("tabBase").classList.toggle("on", which === "base");
   $("tabGrab").classList.toggle("on", which === "grab");
+  $("tabOrder").classList.toggle("on", which === "order");
   $("lookTabBase").hidden = which !== "base";
   $("lookTabGrab").hidden = which !== "grab";
+  $("lookTabOrder").hidden = which !== "order";
+  if (which === "order") buildOrderUI();
+  /* v1.81.0 — 미리보기가 지금 탭을 따라간다: 「잡은 선」 탭에서는 아치 자·아치선이
+     잡은 선 색으로 그려져, 눈썹 위에서 실제로 어떻게 보일지 그대로 확인됩니다. */
+  lookPreview();
 }
 $("tabBase").onclick = () => lookTab("base");
 $("tabGrab").onclick = () => lookTab("grab");
+$("tabOrder").onclick = () => lookTab("order");
 document.querySelectorAll("[data-closesheet]").forEach((b) =>
   b.addEventListener("click", () => { $(b.dataset.closesheet).classList.remove("on"); toast(t("set_saved")); }));
 $("mLook").addEventListener("click", (e) => { if (e.target.id === "mLook") $("mLook").classList.remove("on"); });
@@ -3192,6 +3506,7 @@ function applyI18n() {
   const isAndroid = /Android/.test(ua);
   $("installTip").innerHTML = isIOS ? t("install_ios") : isAndroid ? t("install_android") : t("install_desktop");
   buildFavBar();
+  if ($("orderList")) buildOrderUI();
   updateButtons();
   updatePanels();
   if (typeof cycleLabel === "function") cycleLabel();   /* 순환 버튼 라벨 = 지금 조합 이름 (v1.58.0) */
@@ -3255,6 +3570,7 @@ $("btnReset").onclick = () => {
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
     S.pick = [];
+    S.doneSet = [];             /* v1.81.0 — 「체크한 선」 표시도 함께 처음으로 */
     if (S.landmarks) { if (keepPhoto) placeLines(S.landmarks); else autoAlign(S.landmarks); }
   });
   render();
@@ -3450,7 +3766,7 @@ $("btnSnap").onclick = () => {
   step(() => { ok = autoFromDrawing(); });
   /* v1.69.0 — 맞춘 뒤에는 **가이드를 처음(① 이너)부터** 다시 돕니다.
      드로잉 맞춤이 놓는 것은 앞두께·아치 둘뿐이므로, 나머지를 손으로 놓는 순서가 곧 다음 할 일입니다. */
-  if (ok && S.guideOn) { S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
+  if (ok && S.guideOn) { S.intro = false; clearTimeout(introTimer); S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
   render(); updateButtons();
   showHud(ok ? t("ai_drawn") : t("ai_redraw_fail"), 2200);
 };
@@ -3462,6 +3778,7 @@ $("btnGuide").onclick = () => {
      「시작 시 가이드 켜진 상태로 시작, 시작의 이너가 먼저 굵은 표시로」).
      끄면 즉시 종료. */
   S.guideCur = S.guideOn ? GUIDE_FLOW[0] : null;
+  if (S.guideOn) { S.intro = false; clearTimeout(introTimer); noteSel(GUIDE_FLOW[0]); }
   updateButtons();
   render();
 };
@@ -3494,18 +3811,20 @@ posSliderV.addEventListener("input", (e) => { beginEdit(); noteSel(S.selUD);
   S.dragOn = true;                                                 /* v1.55.0 */
   if (S.guideOn && GUIDE_FLOW.includes(S.selUD)) S.guideCur = S.selUD;
   applyPos(parseFloat(e.target.value), S.selUD); });
-posSliderV.addEventListener("change", () => { S.dragOn = false; guideAdvance(S.selUD); });
-$("posMinusV").onclick = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); });
-$("posPlusV").onclick  = () => step(() => { noteSel(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); });
+posSliderV.addEventListener("change", () => { const moved = S.dragOn; S.dragOn = false;
+  if (moved) markDone(S.selUD); guideAdvance(S.selUD); });
+$("posMinusV").onclick = () => step(() => { noteSel(S.selUD); markDone(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); });
+$("posPlusV").onclick  = () => step(() => { noteSel(S.selUD); markDone(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); });
 
 /* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
 posSliderH.addEventListener("input", (e) => { beginEdit(); if (!hIsPhoto()) noteSel(S.selLR);
   if (!hIsPhoto()) { S.dragOn = true; }                            /* v1.55.0 */
   if (!hIsPhoto() && S.guideOn && GUIDE_FLOW.includes(S.selLR)) S.guideCur = S.selLR;
   applyH(parseFloat(e.target.value)); });
-posSliderH.addEventListener("change", () => { S.dragOn = false; if (!hIsPhoto()) guideAdvance(S.selLR); });
-$("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) - hConfig().step); });
-$("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) noteSel(S.selLR); applyH(parseFloat(posSliderH.value) + hConfig().step); });
+posSliderH.addEventListener("change", () => { const moved = S.dragOn; S.dragOn = false;
+  if (!hIsPhoto()) { if (moved) markDone(S.selLR); guideAdvance(S.selLR); } });
+$("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) { noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) - hConfig().step); });
+$("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) { noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) + hConfig().step); });
 
 /* 사진 보정 모드 버튼 — 누르면 아래 가로 바가 사진 조절로 전환된다.
    같은 버튼을 다시 누르면 선 조절로 되돌아간다. */
@@ -3727,4 +4046,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
-  GUIDE_FLOW, TAIL_PAIR, ARCH_PAIR, updateGuideTip, trimOutside, browBoxes };
+  GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
+  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge };

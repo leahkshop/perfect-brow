@@ -2398,14 +2398,17 @@ console.log("\n[밸런스 판정]");
       const o = await runDraw(c.lm, c.f, null, c.sh);
       const ys = [o.ftPx, o.frontPx, o.archPx, o.atPx, o.tailPx];
       const uniq = new Set(ys.map((v) => Math.round(v))).size === ys.length;
+      /* ⭐ v1.81.0 — 원장님이 정하신 해부학 순서도 **모든 사진에서** 지켜져야 한다:
+         아치두께 ≤ 앞머리 ≤ 꼬리 (y 는 아래로 갈수록 큼). 넘었다면 눈꺼풀 그늘을 읽은 것. */
+      const anat = o.atPx <= o.frontPx && o.atPx <= o.tailPx;
       const ok = o.ok && o.ftPx < o.frontPx && o.archPx < o.atPx
-        && Math.abs(o.frontPx - o.atPx) > 2 && uniq;
+        && Math.abs(o.frontPx - o.atPx) > 2 && uniq && anat;
       if (!ok) bad.push(`${c.name}(앞두께 ${o.ftPx.toFixed(0)}/앞머리 ${o.frontPx.toFixed(0)}/아치 ${o.archPx.toFixed(0)}/아치두께 ${o.atPx.toFixed(0)}/꼬리 ${o.tailPx.toFixed(0)})`);
     }
     [fSh, fSh2, fHl, fTp, fHd, fTa, fSm].forEach((f) => { try { fs.unlinkSync(f); } catch {} });
-    check("131. 못박음 검사 — 까다로운 사진 9장에서 자가 창 경계·그늘에 못박히지 않는다",
+    check("131. 못박음 검사 — 까다로운 사진 9장 · 자가 창 경계·그늘에 못박히지 않고 아치두께가 꼬리 위",
       bad.length === 0,
-      bad.length ? `못박힘: ${bad.join(" · ")}` : `9장 모두 통과 (윗선<아랫선 · 앞머리≠아치두께 · 다섯 값 모두 다름)`);
+      bad.length ? `못박힘: ${bad.join(" · ")}` : `9장 모두 통과 (윗선<아랫선 · 앞머리≠아치두께 · 다섯 값 모두 다름 · 아치두께≤앞머리≤꼬리)`);
   }
 
   /* 132. ⭐ v1.80.0 — **가이드 OFF = 전부 고유색 · 가이드 ON = 한 줄씩 플로우 · 잡은 선만 잡은 색**
@@ -2422,7 +2425,7 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     const o132 = await p.evaluate(() => {
       const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };
       S.multi = false; S.selSet = []; S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
       const lines = () => [...document.getElementById("guides").querySelectorAll("line")].map((l) => ({
@@ -2459,8 +2462,9 @@ console.log("\n[밸런스 판정]");
       return { off, on, drag, grabCore: S.look.dragCore };
     });
     await ctx.close();
+    /* v1.81.0 — 세로선 색이 분리됐습니다: 이너 = 민트 · **아우터 = 먹색**(원장님 지시 2026-08-27) */
     const offAll = o132.off.front === "#5EEAD4" && o132.off.arch === "#2E8BFF"
-      && o132.off.tail === "#A855F7" && o132.off.inner === "#5EEAD4" && o132.off.outer === "#A855F7";
+      && o132.off.tail === "#A855F7" && o132.off.inner === "#5EEAD4" && o132.off.outer === "#14161B";
     const offNoBlink = o132.off.blink === 0;
     /* 조용한 선은 **얇은 회색**이라 굵은 토막 검색에서는 아예 안 잡힙니다 (null) — 둘 다 조용으로 봅니다 */
     const quiet = (c) => c === null || c === "#14161B";
@@ -2473,6 +2477,155 @@ console.log("\n[밸런스 판정]");
       `끔: 앞머리 ${o132.off.front}/아치 ${o132.off.arch}/꼬리 ${o132.off.tail}/이너 ${o132.off.inner}/아우터 ${o132.off.outer} 깜빡임 ${o132.off.blink} · `
       + `켬: 앞머리 ${o132.on.front}/아치 ${o132.on.arch}/꼬리 ${o132.on.tail} 깜빡임 ${o132.on.blink} · `
       + `잡는중: 앞머리 ${o132.drag.front}(잡은색 ${o132.grabCore})/아치 ${o132.drag.arch}/꼬리 ${o132.drag.tail}`);
+  }
+
+  /* 133. ⭐⭐ v1.81.0 — **아치두께의 마지노선** (원장님 지시 2026-08-27)
+     「아치두께는 절대로 꼬리가 측정된 위치 밑으로 내려오지 않는다 …
+       아치두께는 앞머리와 같은선 위치 하거나 높은곳에 위치한다 …
+       꼬리보다 낮은곳에 쉐도우·어두운 선을 아치두께라고 인식할수 없다」
+     이 사진은 **산 아래에만** 짙은 그늘을 깔아 아치두께를 눈꺼풀까지 끌어내립니다.
+     ⛔ 상한을 지우면 아치두께가 꼬리(164)·앞머리(178) 아래로 내려가 바로 실패합니다. */
+  {
+    const f133 = (() => {
+      const f = path.join(ROOT, ".draw-archshade.svg");
+      const up = [], dn = [];
+      for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+      const poly = up.concat(dn.reverse()).join(" ");
+      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+        + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+        /* 산(x 170~250) 아래에만 눈꺼풀까지 이어지는 짙은 그늘 */
+        + `<rect x="170" y="136" width="80" height="72" fill="#b9a693"/>`
+        + `<polygon points="${poly}" fill="#2a1c14"/></svg>`);
+      return f;
+    })();
+    const o133 = await runDraw(true, f133, null, SHAPE_A);
+    fs.unlinkSync(f133);
+    const aboveTail = o133.atPx < o133.tailPx;
+    const aboveFront = o133.atPx < o133.frontPx;
+    const belowArch = o133.atPx > o133.archPx;
+    check("133. 아치두께 마지노선 — 꼬리·앞머리보다 아래로 내려가지 않는다 (눈꺼풀 그늘 방어)",
+      o133.ok && aboveTail && aboveFront && belowArch,
+      `아치두께 ${o133.atPx.toFixed(0)} · 꼬리 ${o133.tailPx.toFixed(0)}(위=${aboveTail}) · `
+      + `앞머리 ${o133.frontPx.toFixed(0)}(위=${aboveFront}) · 아치 ${o133.archPx.toFixed(0)}(아래=${belowArch})`);
+  }
+
+  /* 134. ⭐ v1.81.0 — **선택·이동·끝냄이 사진 위에서 보인다** (원장님 지시 2026-08-27)
+       · 사진을 넣으면 **전체 라인이 고유색으로 한 번 깜빡인 뒤** 첫 플로우가 시작된다
+         (「이너 라인만 색이 있고 나머지는 검정색이라 사용자가 이게 뭐지? 한다」)
+       · 선을 **선택**하면 그 선이 조금 더 굵고 조금 더 밝아진다 (예전엔 아무 신호가 없었다)
+       · 가이드가 꺼진 상태에서 **한 번 움직인 선**은 잡은 선 색으로 남는다 —
+         움직이지 않은 선만 고유색으로 남아 무엇이 남았는지 눈으로 읽힌다
+     ⛔ 이 세 신호를 빼지 마세요. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(400);                    /* 인사(1.6s) 가 도는 중 */
+    const intro = await p.evaluate(() => {
+      const S = window.PB.S, H = S.dim.H;
+      const ls = () => [...document.getElementById("guides").querySelectorAll("line")];
+      const hcol = (key) => {
+        const y = S.g[key] * H;
+        const q = ls().filter((l) => Math.abs(l.getAttribute("y1") - l.getAttribute("y2")) < 0.5
+          && Math.abs(+l.getAttribute("y1") - y) < 1 && Math.abs(+l.getAttribute("x2") - +l.getAttribute("x1")) > 2
+          && +(l.getAttribute("stroke-opacity") || 1) > 0.3 && +l.getAttribute("stroke-width") > 1.2);
+        return q.length ? q[0].getAttribute("stroke") : null;
+      };
+      return { on: S.intro, cur: S.guideCur,
+               blink1: ls().filter((l) => (l.getAttribute("class") || "").includes("blink1")).length,
+               arch: hcol("h2"), tail: hcol("h3"), front: hcol("front") };
+    });
+    await p.waitForTimeout(1500);                   /* 인사가 끝난 뒤 */
+    const after = await p.evaluate(() => ({ on: window.PB.S.intro, cur: window.PB.S.guideCur,
+      first: window.PB.GUIDE_FLOW[0], sel: window.PB.S.sel }));
+    const marks = await p.evaluate(() => {
+      const S = window.PB.S, PBx = window.PB, H = S.dim.H;
+      S.intro = false; S.guideOn = false; S.guideCur = null; S.doneSet = [];
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 0.7 };
+      S.multi = false; S.selSet = []; S.sel = "h1"; PBx.render();
+      const seg = (key) => {
+        const y = S.g[key] * H;
+        const q = [...document.getElementById("guides").querySelectorAll("line")]
+          .map((l) => ({ c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+                         o: +(l.getAttribute("stroke-opacity") || 1),
+                         y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+                         x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2") }))
+          .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
+                      && Math.abs(l.x2 - l.x1) > 2 && l.o > 0.3);
+        return q.sort((a, b) => b.w - a.w)[0] || null;
+      };
+      const plain = seg("front");
+      S.sel = "front"; PBx.render();
+      const picked = seg("front");
+      /* 움직임이 끝났다고 표시 → 잡은 선 색으로 남는다 */
+      PBx.S.doneSet = ["front"]; S.sel = "h1"; PBx.render();
+      const settled = seg("front"), other = seg("h2");
+      return { plain, picked, settled, other, grabCore: S.look.dragCore };
+    });
+    await ctx.close();
+    const introOk = intro.on === true && intro.cur === null && intro.blink1 > 4
+      && intro.arch === "#2E8BFF" && intro.tail === "#A855F7" && intro.front === "#5EEAD4";
+    const startedOk = after.on === false && after.cur === after.first && after.sel === after.first;
+    const pickOk = marks.picked.w > marks.plain.w * 1.15 && marks.picked.o > marks.plain.o + 0.15;
+    const settleOk = marks.settled.c === marks.grabCore && marks.other.c === "#2E8BFF";
+    check("134. 전체라인 인사 1회 깜빡임 · 선택하면 굵고 밝게 · 움직인 선은 잡은 선 색으로 남음",
+      introOk && startedOk && pickOk && settleOk,
+      `인사: 켜짐=${intro.on} 차례없음=${intro.cur === null} blink1 ${intro.blink1}개 색 ${intro.front}/${intro.arch}/${intro.tail} · `
+      + `끝난 뒤 첫 스텝=${after.cur}(${startedOk}) · `
+      + `선택 굵기 ${marks.plain.w.toFixed(2)}→${marks.picked.w.toFixed(2)} 투명도 ${marks.plain.o}→${marks.picked.o} · `
+      + `움직인 선 ${marks.settled.c}(잡은색 ${marks.grabCore}) / 안 움직인 선 ${marks.other.c}`);
+  }
+
+  /* 135. ⭐ v1.81.0 — **가이드 순서를 원장님이 바꿀 수 있다** (원장님 지시 2026-08-27
+       「가이드 - 순서 변경가능 기능 추가」)
+     · 설정 → 「가이드 순서」 탭에서 ▲▼ 로 순서를 바꾸고, 이름을 눌러 단계를 켜고 끈다
+     · 프롬프트 번호(①②③…)는 **바뀐 순서를 따라간다** — 번호를 문구에 박으면 여기서 걸린다
+     · 저장되어 다음에도 유지된다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      document.getElementById("btnLook").click();
+      document.getElementById("tabOrder").click();
+      const rows = () => [...document.querySelectorAll("#orderList .orow")];
+      const keys = () => rows().map((r2) => r2.dataset.key);
+      const listed = keys().join(",");                     /* 켜진 것 + 꺼진 것(이너) */
+      const flow0 = PBx.GUIDE_FLOW.join(",");
+      /* 첫 줄을 ▼ 로 한 칸 내린다 */
+      rows()[0].querySelectorAll(".omv")[1].click();
+      const flow1 = PBx.GUIDE_FLOW.join(",");
+      /* 프롬프트 번호가 새 순서를 따라간다 */
+      S.guideOn = true; S.guideCur = PBx.GUIDE_FLOW[1]; PBx.updateGuideTip();
+      const num2 = document.getElementById("guideTip").textContent.trim().slice(0, 1);
+      /* 꺼져 있던 이너를 눌러 켠다 → 맨 뒤에 붙는다 */
+      const innerRow = rows().find((r2) => r2.dataset.key === "v2");
+      const innerWasOff = innerRow.classList.contains("off");
+      innerRow.querySelector(".onm").click();
+      const flow2 = PBx.GUIDE_FLOW.join(",");
+      const saved = JSON.parse(localStorage.getItem("pb_flow_v1") || "[]").join(",");
+      /* 다시 눌러 끈다 */
+      rows().find((r2) => r2.dataset.key === "v2").querySelector(".onm").click();
+      const flow3 = PBx.GUIDE_FLOW.join(",");
+      document.getElementById("mLook").classList.remove("on");
+      return { listed, flow0, flow1, num2, innerWasOff, flow2, flow3, saved };
+    });
+    await ctx.close();
+    check("135. 가이드 순서 — ▲▼ 로 바꾸고 이름을 눌러 켜고 끈다 · 번호가 새 순서를 따라간다",
+      r.listed === "front,frontThickness,h2,archThickness,v4,h3,v2"
+        && r.flow0 === "front,frontThickness,h2,archThickness,v4,h3"
+        && r.flow1 === "frontThickness,front,h2,archThickness,v4,h3"
+        && r.num2 === "②" && r.innerWasOff
+        && r.flow2 === "frontThickness,front,h2,archThickness,v4,h3,v2"
+        && r.saved === r.flow2
+        && r.flow3 === "frontThickness,front,h2,archThickness,v4,h3",
+      `목록 [${r.listed}] · ${r.flow0} → ▼ ${r.flow1} (2번째 번호 ${r.num2}) → 이너 켬 ${r.flow2} → 끔 ${r.flow3} · 저장=${r.saved === r.flow2}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
@@ -2642,27 +2795,33 @@ console.log("\n[밸런스 판정]");
       `빈사진 ${a.v4.toFixed(3)}(연장선 ${a.tipX.toFixed(3)}) · 잉크사진 ${b.v4.toFixed(3)}(잉크끝 ${b.inkEnd.toFixed(3)} / 연장선 ${b.tipX.toFixed(3)})`);
   }
 
-  /* 101. ⚠️ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21)
-     · 기본색은 전부 짙은 회색 — 고유색은 "지금 차례"거나 선택된 선만
-     · 순서: 이너 → 앞두께 → 앞머리 → 아치두께 → 아치 → 꼬리
-     · 처음 움직인 선에서 시작 · 움직임이 끝나면 그 선의 **다음**이 켜짐
-     · 다른 선을 움직이면 그 선이 켜지고, 끝나면 그 선의 다음
-     · 마지막(꼬리) 뒤로는 돌아가지 않음 · 가이드 끄면 즉시 종료 */
+  /* 101. ⚠️ 가이드 플로우 — **v1.81.0 새 순서** (원장님 지시 2026-08-27)
+       앞머리 → 앞두께 → 아치엣지 → 아치두께 → 꼬리 아우터 → 꼬리 높이 · 끝
+     · 이너(v2)는 기본 순서에서 빠졌다 (설정 → 가이드 순서에서 켤 수 있다)
+     · 꼬리는 **두 스텝**이다 — 아우터(좌우)와 꼬리 높이(위아래)
+     · 조용한 선은 얇은 회색 · 움직임이 끝나면 그 선의 **다음** · 꼬리 높이 뒤로는 종료
+     · 가이드를 끄면 즉시 종료
+     ⛔ 순서를 코드에 박지 마세요 — 원장님이 설정에서 바꾸실 수 있습니다 (회귀 137). */
   {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(300);
     await p.setInputFiles("#fileInput", face.file);
-    await p.waitForTimeout(1000);
+    await p.waitForTimeout(2000);          /* 전체라인 인사(1.6s)가 끝난 뒤를 본다 */
     const g101 = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB;
-      /* ⚠️ v1.60.0 — 원장님 확정 기본값은 얇게/짧게/75%·잡은선 테두리 없음입니다(회귀 112).
-         이 검사는 **선 그리기 규칙**을 보는 것이므로, 값에 흔들리지 않게 중립값으로 고정합니다. */
-      const NEUTRAL = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1,
-                        dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
-      S.look = { ...NEUTRAL };
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = []; S.selUD = "front"; PBx.render();
+      /* 값에 흔들리지 않게 중립값 (회귀 112 참고) */
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1,
+                 dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
+      /* 인사가 끝나면 **첫 스텝(앞머리)** 이 켜져 있어야 한다 */
+      const startsAtFirst = S.guideOn === true && S.intro === false
+                         && S.guideCur === PBx.GUIDE_FLOW[0] && PBx.GUIDE_FLOW[0] === "front";
+      const flowIs = PBx.GUIDE_FLOW.join(",") === "front,frontThickness,h2,archThickness,v4,h3";
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.doneSet = []; S.multi = false; S.selSet = [];
+      S.guideOn = true; S.guideCur = "front"; S.sel = "front"; S.selUD = "front"; S.selLR = "v1";
+      S.hMode = "line"; PBx.render();
       const lineColorOf = (key) => {
         const sp = PBx.H_SPECS.concat(PBx.V_SPECS).find((x) => x.key === key);
         const x = key.startsWith("v") ? S.g[key] * S.dim.W : null;
@@ -2671,70 +2830,44 @@ console.log("\n[밸런스 판정]");
           .filter((l) => +(l.getAttribute("stroke-opacity") || 1) > 0.3
             && (x !== null ? Math.abs(+l.getAttribute("x1") - x) < 1 && Math.abs(+l.getAttribute("x1") - +l.getAttribute("x2")) < 0.5
                            : Math.abs(+l.getAttribute("y1") - y) < 1 && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5));
-        /* v1.46.0 — own = 고유색 **진하게**(강조) · v1.49.0 — dimc = **dimColor 로 연하게**(기본) */
-        return { own: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) > 0.9),
-                 dim: ls.some((l) => l.getAttribute("stroke") === sp.color && +(l.getAttribute("stroke-opacity") || 1) <= 0.85),
-                 dimc: ls.some((l) => !!sp.dimColor && l.getAttribute("stroke") === sp.dimColor),
-                 greyAll: ls.length > 0 && ls.every((l) => l.getAttribute("stroke") === "#14161B"),
-                 grey: ls.some((l) => l.getAttribute("stroke") === "#3A414E") };
+        return { own: ls.some((l) => l.getAttribute("stroke") === (PBx.S.look[{ front: "inner", frontThickness: "inner", h2: "arch", archThickness: "arch", h3: "tail", v2: "vInner", v6: "vArch", v4: "vTail" }[key]] || sp.color)),
+                 greyAll: ls.length > 0 && ls.every((l) => l.getAttribute("stroke") === "#14161B") };
       };
-      /* v1.49.0 — 기본(연한) = **dimColor 로 그린다** (알파 아님 · 회색 아님). 플로우 밖 아치·아우터로 확인.
-         ⚠️ 알파 방식으로 되돌리면 파랑·보라가 피부와 밝기가 같아져 사실상 안 보입니다 (104 참고) */
-      /* ⚠️ v1.55.0 — 조용한 선은 **가로 자도 세로선도 전부 얇은 짙은 회색 한 줄** (원장님 지시
-         「움직임 없을 때는 현재 얇은 회색 유지」). dimColor(연회색·연파랑·연보라)는 폐지. */
-      const greyByDefault = lineColorOf("h2").greyAll && !lineColorOf("h2").own
-                            && lineColorOf("v4").greyAll && !lineColorOf("v4").own;
-      /* v1.47.0 — 사진이 올라오면 가이드는 **저절로 켜져** 이너부터 시작한다 (원장님 지시).
-         버튼 클릭은 켜기 위해서가 아니라 **끄기 위해서만** 필요하다. */
-      const noneAtStart = S.guideCur === "v2" && S.guideOn === true;
-      /* ⚠️ v1.67.0 플로우: 이너 → 앞두께 → 앞머리 → **아치(+아치선)** → 아치두께 → 꼬리(+아우터) → 끝
-         앞머리를 슬라이더로 움직이면 끝난 뒤 다음은 **아치(h2)** 다 */
-      S.selUD = "front";
-      const sl = document.getElementById("posSliderV") || document.querySelector(".posctl.axis-v input");
-      sl.dispatchEvent(new Event("input", { bubbles: true }));
-      const duringFront = S.guideCur === "front";
-      sl.dispatchEvent(new Event("change", { bubbles: true }));
-      const afterFront = S.guideCur === "h2";
-      PBx.render();
-      const atLit = lineColorOf("h2").own;
-      /* 이너(v2) 를 다시 움직이면 이너가 켜지고, 끝나면 이너의 다음(앞두께) */
-      S.selUD = "v2";   // v2 는 세로선 — 좌우 슬라이더 담당이지만 guide 훅 검증은 가로 슬라이더 방식과 동일하므로 selLR 로
-      S.selLR = "v2"; S.hMode = "line";
-      const sh = document.getElementById("posSliderH") || document.querySelector(".posctl.axis-h input");
-      sh.dispatchEvent(new Event("input", { bubbles: true }));
-      const duringInner = S.guideCur === "v2";
-      sh.dispatchEvent(new Event("change", { bubbles: true }));
-      const afterInner = S.guideCur === "frontThickness";
-      /* ⚠️ v1.67.0 — 아치(h2)는 **아치선(v6)과 한 스텝**이다. 아치 차례에는 좌우 바가 아치선을
-         잡고, 아치선을 움직여 끝내도 같은 스텝을 끝낸 것으로 쳐서 다음(아치두께)으로 간다. */
-      S.selUD = "frontThickness";
-      sl.dispatchEvent(new Event("change", { bubbles: true }));   /* 앞두께 끝 → 앞머리 */
-      S.selUD = "front";
-      sl.dispatchEvent(new Event("change", { bubbles: true }));   /* 앞머리 끝 → 아치 */
-      const archPairsArchV = S.guideCur === "h2" && S.selLR === "v6";
-      S.hMode = "line";
-      sh.dispatchEvent(new Event("change", { bubbles: true }));   /* 아치선을 움직여 끝냄 */
-      const afterArch = S.guideCur === "archThickness";
-      /* ⚠️ v1.64.0 — 꼬리(h3)는 **아우터(v4)와 한 스텝**. 꼬리 차례에는 좌우 바가 아우터를 잡고,
-         아우터를 움직여 끝내도 같은 스텝을 끝낸 것으로 친다.
-         v1.67.0 — **꼬리가 마지막**이다 (아치선이 아치와 합쳐져 독립 스텝이 사라짐). */
-      S.selUD = "archThickness";
-      sl.dispatchEvent(new Event("change", { bubbles: true }));
-      const tailPairsOuter = S.guideCur === "h3" && S.selLR === "v4";
-      S.hMode = "line";
-      sh.dispatchEvent(new Event("change", { bubbles: true }));   /* 아우터를 움직여 끝냄 */
-      const endsAfterTail = archPairsArchV && afterArch && tailPairsOuter
-                            && S.guideCur === null && S.guideOn === true;
-      /* 가이드 끄면 즉시 종료 */
+      /* 차례가 아닌 선은 조용한 회색 */
+      const greyByDefault = lineColorOf("h2").greyAll && lineColorOf("h3").greyAll;
+      const litFirst = lineColorOf("front").own;
+      const sl = document.getElementById("posSliderV");
+      const sh = document.getElementById("posSliderH");
+      const stepUD = (key) => { S.selUD = key; S.hMode = "line";
+        sl.dispatchEvent(new Event("input", { bubbles: true }));
+        sl.dispatchEvent(new Event("change", { bubbles: true })); return S.guideCur; };
+      const stepLR = (key) => { S.selLR = key; S.hMode = "line";
+        sh.dispatchEvent(new Event("input", { bubbles: true }));
+        sh.dispatchEvent(new Event("change", { bubbles: true })); return S.guideCur; };
+      const seq = [];
+      seq.push(stepUD("front"));               /* 앞머리 끝 → 앞두께 */
+      seq.push(stepUD("frontThickness"));      /* → 아치엣지 */
+      seq.push(stepUD("h2"));                  /* → 아치두께 */
+      seq.push(stepUD("archThickness"));       /* → 꼬리 아우터 */
+      seq.push(stepLR("v4"));                  /* → 꼬리 높이 */
+      seq.push(stepUD("h3"));                  /* → 종료 */
+      const order = seq.join(",");
+      const endsAfterTail = S.guideCur === null && S.guideOn === true;
+      /* ⭐ v1.81.0 — 움직임이 끝난 선은 「끝냄」으로 기록된다 (가이드 꺼진 상태의 표시에 쓰인다) */
+      const marked = ["front", "frontThickness", "h2", "archThickness", "v4", "h3"]
+        .every((k) => S.doneSet.includes(k));
+      document.getElementById("btnGuide").click();
+      document.getElementById("btnGuide").click();   /* 껐다 켜기 — 켜면 첫 스텝부터 */
+      const reOn = S.guideOn === true && S.guideCur === PBx.GUIDE_FLOW[0];
       document.getElementById("btnGuide").click();
       const offEnds = S.guideOn === false && S.guideCur === null;
-      return { greyByDefault, noneAtStart, duringFront, afterFront, atLit, duringInner, afterInner,
-               archPairsArchV, afterArch, tailPairsOuter, endsAfterTail, offEnds };
+      return { startsAtFirst, flowIs, greyByDefault, litFirst, order, endsAfterTail, marked, reOn, offEnds };
     });
     await ctx.close();
-    check("101. 가이드 플로우 — 이너→앞두께→앞머리→아치+아치선→아치두께→꼬리+아우터 · 끄면 종료",
-      g101.greyByDefault && g101.noneAtStart && g101.duringFront && g101.afterFront && g101.atLit
-        && g101.duringInner && g101.afterInner && g101.endsAfterTail && g101.offEnds,
+    check("101. 가이드 플로우 — 앞머리→앞두께→아치엣지→아치두께→꼬리아우터→꼬리높이 · 끄면 종료",
+      g101.startsAtFirst && g101.flowIs && g101.greyByDefault && g101.litFirst
+        && g101.order === "frontThickness,h2,archThickness,v4,h3," && g101.endsAfterTail
+        && g101.marked && g101.reOn && g101.offEnds,
       Object.entries(g101).map(([k, v]) => `${k}=${v}`).join(" "));
   }
 
@@ -2777,7 +2910,7 @@ console.log("\n[밸런스 판정]");
         return { c: thick.getAttribute("stroke"), op: +(thick.getAttribute("stroke-opacity") || 1),
                  w: +thick.getAttribute("stroke-width") };
       };
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };   /* v1.60.0 중립값 (회귀 112 참고) */
       S.guideOn = true; S.guideCur = null; S.multi = false; S.selSet = [];   /* v1.80.0 — 「조용=회색」은 **가이드 ON** 일 때의 규칙 (가이드를 끄면 전부 고유색 · 회귀 132) */
       S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
@@ -2848,15 +2981,16 @@ console.log("\n[밸런스 판정]");
         }
         return out;
       };
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.multi = false; S.selSet = [];
-      S.guideOn = true; S.guideCur = "v2"; S.sel = "v2"; S.selLR = "v2"; S.selUD = "front"; S.hMode = "line";
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE }; S.multi = false; S.selSet = [];
+      /* v1.81.0 — 새 플로우의 첫 스텝은 **앞머리**다 (이너는 기본 순서에서 빠졌다) */
+      S.guideOn = true; S.guideCur = "front"; S.sel = "front"; S.selUD = "front"; S.selLR = "v1"; S.hMode = "line";
       PBx.render();
       const start = litKeys();
-      /* 이너를 슬라이더로 움직이고 손을 뗀다 → 다음 차례(앞두께)로 */
-      const sh = document.getElementById("posSliderH");
-      sh.value = String(S.g.v2 + 0.02);
-      sh.dispatchEvent(new Event("input", { bubbles: true }));
-      sh.dispatchEvent(new Event("change", { bubbles: true }));
+      /* 앞머리를 슬라이더로 움직이고 손을 뗀다 → 다음 차례(앞두께)로 */
+      const sv = document.getElementById("posSliderV");
+      sv.value = String(1 - (S.g.front + 0.02));
+      sv.dispatchEvent(new Event("input", { bubbles: true }));
+      sv.dispatchEvent(new Event("change", { bubbles: true }));
       PBx.render();
       const afterStep = litKeys();
       const selMoved = S.selUD === "frontThickness";      /* 조절 바도 다음 선을 잡는다 */
@@ -2888,7 +3022,7 @@ console.log("\n[밸런스 판정]");
         const thick = ls.slice().sort((a, b) => +b.getAttribute("stroke-width") - +a.getAttribute("stroke-width"))[0];
         return { c: thick.getAttribute("stroke"), op: +(thick.getAttribute("stroke-opacity") || 1) };
       };
-      S.g = { ...PBx.DEFAULT_GUIDE }; S.guideOn = true; S.guideCur = null;   /* v1.80.0 — 「조용=회색」은 **가이드 ON** 일 때의 규칙 (가이드를 끄면 전부 고유색 · 회귀 132) */
+      S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE }; S.guideOn = true; S.guideCur = null;   /* v1.80.0 — 「조용=회색」은 **가이드 ON** 일 때의 규칙 (가이드를 끄면 전부 고유색 · 회귀 132) */
       S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };   /* v1.60.0 중립값 */
       S.multi = false; S.selSet = []; S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line";
       PBx.render();
@@ -2903,8 +3037,8 @@ console.log("\n[밸런스 판정]");
     await ctx.close();
 
     check("103. 가이드 플로우 — 밝은 선은 언제나 **하나** · 다음 차례로 선택도 함께 이동",
-      g103.start.join() === "v2"
-        && g103.afterStep.join() === "frontThickness"      /* 이전 선(v2)이 남아 있으면 실패 */
+      g103.start.join() === "front"
+        && g103.afterStep.join() === "frontThickness"      /* 이전 선(앞머리)이 남아 있으면 실패 */
         && g103.selMoved
         && g103.outside.lit.join() === "v1" && g103.outside.cur === null
         && g103.resume.lit.join() === "h2" && g103.resume.cur === "h2",
@@ -3001,7 +3135,7 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1000);
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       S.guideOn = true; S.guideCur = null; S.multi = false; S.selSet = []; S.sel = "h1";   /* v1.80.0 — 「조용=회색」은 **가이드 ON** 일 때의 규칙 (가이드를 끄면 전부 고유색 · 회귀 132) */
       PBx.render();
       const all = [...document.getElementById("guides").querySelectorAll("line")].map((l) => ({
@@ -3096,7 +3230,7 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, W = S.dim.W;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       /* v1.60.0 — 기본값이 얇게/75%·잡은선 테두리 없음이라, 이 검사는 중립값으로 고정 (회귀 112) */
       S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1,
                  dragCore: "#14161B", dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
@@ -3165,7 +3299,7 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, W = S.dim.W, H = S.dim.H;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       S.guideOn = false; S.guideCur = null; S.multi = false; S.selSet = [];
       const segsAt = (y) => [...document.getElementById("guides").querySelectorAll("line")]
         .map((l) => ({ x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2"),
@@ -3183,19 +3317,26 @@ console.log("\n[밸런스 판정]");
       const NEU = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };
       S.look = { ...NEU }; S.sel = "front"; PBx.render();
       const pal = PBx.PALETTE.map((x) => x.hex);
-      const palOk = pal.length === 7 && new Set(pal).size === 7;
+      /* v1.81.0 — 흰색이 더해져 **8색** (원장님 지시 2026-08-27). 세로선은 따로 3색(V_PALETTE) */
+      const vpal = PBx.V_PALETTE.map((x) => x.hex);
+      const palOk = pal.length === 8 && new Set(pal).size === 8 && pal.includes("#FFFFFF")
+                 && vpal.join() === "#5EEAD4,#14161B,#FFFFFF";
       const base = front()[0], baseRail = railColor(), baseW = base.w, baseLen = lenOf();
 
       /* ② 색을 바꾸면 선과 레일 띠가 함께 바뀐다 */
       S.look.inner = "#FF4D94"; PBx.render();
       const changed = front()[0], changedRail = railColor();
 
-      /* ③ 테두리 — 대비색이 한 겹 더, 색 선보다 굵게. 자동은 밝은 색엔 먹 / 짙은 색엔 흰색 */
-      S.look.inner = "#5EEAD4"; S.look.edge = 70; S.look.edgeC = "auto"; PBx.render();
-      const eLight = front();                       /* 민트(밝음) → 먹 테두리 */
-      S.look.inner = "#14161B"; PBx.render();
-      const eDark = front();                        /* 먹(짙음) → 흰 테두리 */
+      /* ③ 테두리 — v1.81.0: 색은 **없음/흰색/검정/먹색**. 옛 저장값 `auto` 는 대비색으로 환산된다 */
+      S.look.inner = "#5EEAD4"; S.look.edge = 70; S.look.edgeC = "dark"; PBx.render();
+      const eLight = front();                       /* 먹 테두리 */
+      S.look.inner = "#14161B"; S.look.edgeC = "light"; PBx.render();
+      const eDark = front();                        /* 흰 테두리 */
+      S.look.edgeC = "auto";
       const autoLight = PBx.edgeColorFor("#5EEAD4"), autoDark = PBx.edgeColorFor("#14161B");
+      /* 「없음」이면 굵기가 얼마든 테두리를 그리지 않는다 (v1.81.0) */
+      S.look = { ...NEU, edge: 70, edgeC: "none" }; PBx.render();
+      const edgeNone = front().length;
 
       /* ④ 굵기 · 가로 길이 · 투명도 */
       S.look = { ...NEU, weight: 1.35 }; PBx.render();
@@ -3206,8 +3347,13 @@ console.log("\n[밸런스 판정]");
       const longLen = lenOf();
       S.look = { ...NEU, hlen: 0.14 }; PBx.render();
       const shortLen = lenOf();
-      S.look = { ...NEU, alpha: 0.6 }; PBx.render();
+      /* ⚠️ v1.81.0 — **선택된 선은 조금 밝아집니다.** 투명도를 잴 때는 선택을 비켜 둡니다 */
+      S.look = { ...NEU, alpha: 0.6 }; S.sel = "h1"; PBx.render();
       const dimOp = front()[0].o;
+      S.sel = "front"; PBx.render();
+      const selOp = front()[0].o, selW = front()[0].w;
+      S.sel = "h1"; PBx.render();
+      const plainW = front()[0].w;
 
       /* ⑤ 잡은 선(드래그) — 기본 선과 **완전 분리** (v1.59.0: 심·테두리·굵기·투명도·없음) */
       S.look = { ...NEU, dragCore: "#FFFFFF", dragEdge: "#2E8BFF" };
@@ -3248,25 +3394,29 @@ console.log("\n[밸런스 판정]");
         autoLight, autoDark,
         baseW, thickW, thinW, baseLen, longLen, shortLen, dimOp,
         comboN, swN, dragSwN, dragRing, dragCore, backOk,
-        dragNoneOk: grabNone.length === 1 && grabNone[0].c === "#FFFFFF",
+        dragNoneOk: grabNone.length === 1 && grabNone[0].c === "#FFFFFF", edgeNone, selOp, selW, plainW,
         dragWOk, dragOpOk,
         tabsOk: !!document.getElementById("tabBase") && !!document.getElementById("tabGrab")
-             && !!document.getElementById("segDragW") && !!document.getElementById("rngDragOp"),
+             && !!document.getElementById("segDragW") && !!document.getElementById("rngDragOp")
+             && !!document.getElementById("tabOrder") && !!document.getElementById("rngW")
+             && !!document.getElementById("rngEdge") && !document.getElementById("segW")
+             && !document.getElementById("segEdge") && !!document.getElementById("swVAll"),
         brightEdge: brightApplied.edge, brightEdgeC: brightApplied.edgeC,
         allSame, storedInner: stored.inner, resetOk: afterReset.inner === PBx.LOOK_DEF.inner && afterReset.edge === 0,
       };
     });
     await ctx.close();
-    check("109. 설정 — 기본 선/잡은 선 탭 분리 · 잡은 선 심/테두리(없음)/굵기/투명도 · 이전 설정으로",
+    check("109. 설정 — 색상표 8색 · 세로선 목록 · 굵기/테두리 슬라이더 · 테두리 없음/흰색/검정/먹색 · 선택 강조",
       r.palOk
         && r.baseC === "#5EEAD4" && r.baseRail === "#5EEAD4"
         && r.changedC === "#FF4D94" && r.changedRail === "#FF4D94"
-        && r.edgeThicker && r.edgeLightPair[0] === "#0A0D14" && r.edgeDarkPair[0] === "#FFFFFF"
-        && r.autoLight === "#0A0D14" && r.autoDark === "#FFFFFF"
+        && r.edgeThicker && r.edgeLightPair[0] === "#14161B" && r.edgeDarkPair[0] === "#FFFFFF"
+        && r.autoLight === "#14161B" && r.autoDark === "#FFFFFF"
         && r.thickW > r.baseW && r.thinW < r.baseW
         && r.longLen > r.baseLen && r.shortLen < r.baseLen
-        && Math.abs(r.dimOp - 0.6) < 0.01
-        && r.comboN === 3 && r.swN === 7 && r.dragSwN === 9
+        && Math.abs(r.dimOp - 0.6) < 0.01 && r.selOp > r.dimOp + 0.2 && r.selW > r.plainW * 1.2
+        && r.edgeNone === 1
+        && r.comboN === 3 && r.swN === 8 && r.dragSwN === 10
         && r.dragRing === "#2E8BFF" && r.dragCore === "#FFFFFF" && r.backOk
         && r.dragNoneOk && r.dragWOk && r.dragOpOk && r.tabsOk
         && r.brightEdge === 70 && r.brightEdgeC === "light"
@@ -3274,7 +3424,7 @@ console.log("\n[밸런스 판정]");
       `색상표 ${r.pal.length}개 · 선 ${r.baseC}→${r.changedC} / 띠 ${r.baseRail}→${r.changedRail} · `
       + `테두리 밝은색→${r.edgeLightPair[0]} 짙은색→${r.edgeDarkPair[0]} 더굵음=${r.edgeThicker} · `
       + `굵기 ${r.thinW}/${r.baseW}/${r.thickW} · 길이 ${Math.round(r.shortLen)}/${Math.round(r.baseLen)}/${Math.round(r.longLen)} · `
-      + `투명도 ${r.dimOp} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(9칸 ${r.dragSwN === 9}) · 없음=심만 ${r.dragNoneOk} · 굵기분리 ${r.dragWOk}/투명도분리 ${r.dragOpOk} · 탭 ${r.tabsOk} · `
+      + `투명도 ${r.dimOp}→선택 ${r.selOp} · 굵기 ${r.plainW}→선택 ${r.selW} · 테두리없음=한줄 ${r.edgeNone === 1} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(10칸 ${r.dragSwN === 10}) · 없음=심만 ${r.dragNoneOk} · 굵기분리 ${r.dragWOk}/투명도분리 ${r.dragOpOk} · 탭 ${r.tabsOk} · `
       + `이전설정복귀 ${r.backOk} · 모두같은색 ${r.allSame} · 저장 ${r.storedInner} · 기본으로 ${r.resetOk}`);
   }
 
@@ -3352,9 +3502,16 @@ console.log("\n[밸런스 판정]");
      원장님이 실제 시술 화면에서 눈으로 맞춘 값입니다. 이 테스트가 그 값을 통째로 잠급니다.
      ⛔ 값을 바꾸려면 **원장님 확인을 먼저** 받으세요. 이 테스트를 고쳐서 통과시키지 마세요. */
   {
+    /* ⚠️ v1.81.0 갱신 — **누가·언제·왜** (BASELINE 1-26 규칙대로 기록합니다):
+       원장님 지시 2026-08-27 「세로색 목록 추가 — 이너: 기본 민트 / 아치선: 먹색 / 꼬리선: 먹색」
+       + 「가이드가 꺼진상태에서 이너라인은 제외한 세로색상은 기본적으로 먹색을 유지」
+       + 테두리 색 목록을 「없음·흰색·검정·먹색」으로 정하셔서 기본이 `auto` → `none` 이 됐습니다.
+       ⛔ 나머지 값(얇게 0.8 · 짧게 0.14 · 75% · 잡은 선)은 v1.60.0 그대로입니다 — 바꾸려면
+          원장님 확인을 먼저 받으세요. 이 테스트를 고쳐서 통과시키지 마세요. */
     const LOCKED = {
       inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
-      edge: 0, edgeC: "auto", weight: 0.8, hlen: 0.14, alpha: 0.75,
+      vInner: "#5EEAD4", vArch: "#14161B", vTail: "#14161B",
+      edge: 0, edgeC: "none", weight: 0.8, hlen: 0.14, alpha: 0.75,
       dragCore: "#14161B", dragEdge: "none", dragW: 0.8, dragOp: 0.95,
     };
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
@@ -3375,7 +3532,7 @@ console.log("\n[밸런스 판정]");
       return { same, extra, freshSame, keepsGeom, got: D };
     }, LOCKED);
     await ctx.close();
-    check("112. 원장님 확정 기본 세팅 — 얇게·짧게·75% · 테두리 없음/자동 · 잡은 선 먹 심·테두리 없음·95%",
+    check("112. 원장님 확정 기본 세팅 — 얇게·짧게·75% · 테두리 없음 · 세로선 이너 민트/아치선·아우터 먹색",
       r.same && r.extra.length === 0 && r.freshSame && r.keepsGeom,
       `LOOK_DEF 일치=${r.same} · 예상 밖 항목 [${r.extra}] · 새 기기 시작값 일치=${r.freshSame} · 추천조합이 굵기/길이/투명도 안 건드림=${r.keepsGeom} · `
       + `굵기 ${r.got.weight} 길이 ${r.got.hlen} 투명도 ${r.got.alpha} 테두리 ${r.got.edge}/${r.got.edgeC} · 잡은선 ${r.got.dragCore}/${r.got.dragEdge}/${r.got.dragW}/${r.got.dragOp}`);
@@ -3394,7 +3551,7 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       S.g.h3Visible = true; S.g.v4Visible = true;
       S.multi = false; S.selSet = []; S.locked = true; S.guideOn = false; S.guideCur = null;
       PBx.render();
@@ -3447,12 +3604,11 @@ console.log("\n[밸런스 판정]");
       + `앞머리자는 위아래만=${frontMoved}/${v2Still}`);
   }
 
-  /* 117. ⚠️ v1.67.0 — 아치·아치선 사선 이동 + 아치두께 동반 (원장님 지시 2026-08-24)
-     「아치선 세로선도 꼬리와 마찬가지로 아치 가로선을 움직일 때 함께 사방으로 움직이도록.
-       아치선을 움직일 때 아치세로선이 따라 움직이고, **아치두께 가로선도 이에 따라 함께 따라온다.**
-       대신 아치두께선을 움직일 땐 양방향 아니고 **위아래만** 움직이는 것 유지한다」
-     산꼭대기 = (아치선 x, 아치 y) **한 점**. 그 점을 한 손짓으로 놓고, 두께는 그대로 따라온다.
-     ⛔ 아치두께에 사선을 퍼뜨리지 마세요 — 두께를 재는 선이라 x 가 흔들리면 잰 값이 무너집니다. */
+  /* 117. ⭐ v1.81.0 — **아치는 혼자 움직인다** (원장님 지시 2026-08-27)
+     「지금은 아치가로선과 아치세로선이 동시움직였는데 **따로 움직이도록 되돌린다**」
+     + 원장님 확인: 아치두께 동반도 함께 해제 → 아치 · 아치두께 · 아치선이 **전부 따로**.
+     ⛔ v1.67.0 의 ARCH_PAIR(사선 동반 · 두께 동반)를 되살리지 마세요.
+     ⚠️ 꼬리·아우터의 사선 동시 이동(BASELINE 1-27)은 **그대로**입니다 — 회귀 113 이 지킵니다. */
   {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -3462,8 +3618,9 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     const reset = () => p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       S.multi = false; S.selSet = []; S.locked = true; S.guideOn = false; S.guideCur = null;
+      S.doneSet = [];
       PBx.render();
     });
     await reset();
@@ -3478,25 +3635,26 @@ console.log("\n[밸런스 판정]");
     };
     const g = () => p.evaluate(() => { const q = window.PB.S.g;
       return { h2: q.h2, v6: q.v6, at: q.archThickness, h3: q.h3, front: q.front }; });
-    /* ① 아치 자를 사선으로 → 아치(h2)는 아래로, 아치선(v6)은 코 쪽으로, 아치두께는 **같은 만큼** 따라온다 */
+    /* ① 아치 자를 **사선으로** 끌어도 위아래만 — 아치선·아치두께는 그대로 */
     const p1 = await p.evaluate(() => { const S = window.PB.S;
       const q = window.PB.segPx(window.PB.H_SPECS.find((x) => x.key === "h2"))[0];
       return { x: (q[0] + q[1]) / 2, y: S.g.h2 * S.dim.H }; });
     const b1 = await g();
     await drag(p1.x, p1.y, -24, 30);
     const a1 = await g();
-    const d1y = (a1.h2 - b1.h2) * dim.H, d1x = (a1.v6 - b1.v6) * dim.W;
-    const d1t = (a1.at - b1.at) * dim.H;                       /* 아치두께가 따라온 양 */
-    const tailStill = Math.abs(a1.h3 - b1.h3) < 1e-9;
-    /* ② 오른쪽(거울) 아치선 세로선을 사선으로 → dx 부호 반전 · 아치·아치두께도 함께 */
+    const archUD = Math.abs((a1.h2 - b1.h2) * dim.H - 30) < 4;
+    const archKeepsV6 = Math.abs(a1.v6 - b1.v6) < 1e-9;
+    const archKeepsAT = Math.abs(a1.at - b1.at) < 1e-9;
+    /* ② 아치선(세로)을 끌어도 좌우만 — 아치·아치두께는 그대로 */
     await reset();
     const p2 = await p.evaluate(() => { const S = window.PB.S;
-      return { x: (2 * S.g.v1 - S.g.v6) * S.dim.W, y: (S.g.h2 + 0.06) * S.dim.H }; });
+      return { x: S.g.v6 * S.dim.W, y: (S.g.h2 + 0.06) * S.dim.H }; });
     const b2 = await g();
-    await drag(p2.x, p2.y, 26, -18);
+    await drag(p2.x, p2.y, -26, -18);
     const a2 = await g();
-    const d2x = (a2.v6 - b2.v6) * dim.W, d2y = (a2.h2 - b2.h2) * dim.H, d2t = (a2.at - b2.at) * dim.H;
-    /* ③ 아치두께는 **위아래만** — 사선으로 끌어도 아치선(v6)·아치(h2)는 그대로 */
+    const v6LR = Math.abs((a2.v6 - b2.v6) * dim.W - (-26)) < 4;
+    const v6KeepsArch = Math.abs(a2.h2 - b2.h2) < 1e-9 && Math.abs(a2.at - b2.at) < 1e-9;
+    /* ③ 아치두께도 그대로 위아래만 */
     await reset();
     const p3 = await p.evaluate(() => { const S = window.PB.S;
       const q = window.PB.segPx(window.PB.H_SPECS.find((x) => x.key === "archThickness"))[0];
@@ -3506,7 +3664,7 @@ console.log("\n[밸런스 판정]");
     const a3 = await g();
     const atMoved = Math.abs((a3.at - b3.at) * dim.H - 22) < 4;
     const atKeepsX = Math.abs(a3.v6 - b3.v6) < 1e-9 && Math.abs(a3.h2 - b3.h2) < 1e-9;
-    /* ④ 바·화살표로 아치를 움직여도 아치두께가 같은 만큼 따라온다 (손 사선과 같은 규칙) */
+    /* ④ 바·화살표로 아치를 올려도 아치두께는 **따라오지 않는다** */
     await reset();
     const b4 = await g();
     const a4 = await p.evaluate(() => {
@@ -3515,16 +3673,15 @@ console.log("\n[밸런스 판정]");
       document.getElementById("posPlusV").click();
       return { h2: S.g.h2, at: S.g.archThickness };
     });
-    const barD = (a4.h2 - b4.h2) * dim.H, barT = (a4.at - b4.at) * dim.H;
-    const barFollows = Math.abs(barD) > 0.05 && Math.abs(barT - barD) < 0.01;
+    const barMoved = Math.abs((a4.h2 - b4.h2) * dim.H) > 0.05;
+    const barNoFollow = Math.abs(a4.at - b4.at) < 1e-9;
     await ctx.close();
-    check("117. 아치·아치선 사선 — 산꼭대기 한 점 · 아치두께 동반 · 아치두께는 위아래만",
-      Math.abs(d1y - 30) < 4 && Math.abs(d1x - (-24)) < 4 && Math.abs(d1t - d1y) < 0.5 && tailStill
-        && Math.abs(d2x - (-26)) < 4 && Math.abs(d2y - (-18)) < 4 && Math.abs(d2t - d2y) < 0.5
-        && atMoved && atKeepsX && barFollows,
-      `아치자 사선 Δy=${d1y.toFixed(1)}(30) Δx=${d1x.toFixed(1)}(-24) 두께동반=${d1t.toFixed(1)} 꼬리그대로=${tailStill} · `
-      + `거울 아치선 사선 Δx=${d2x.toFixed(1)}(-26·반전) Δy=${d2y.toFixed(1)}(-18) 두께동반=${d2t.toFixed(1)} · `
-      + `아치두께 위아래만=${atMoved}/${atKeepsX} · 바 동반 ${barD.toFixed(2)}→${barT.toFixed(2)}=${barFollows}`);
+    check("117. 아치는 혼자 움직인다 — 아치·아치두께·아치선이 전부 따로 (v1.67.0 동반 폐지)",
+      archUD && archKeepsV6 && archKeepsAT && v6LR && v6KeepsArch
+        && atMoved && atKeepsX && barMoved && barNoFollow,
+      `아치 사선→위아래만 ${archUD}(아치선 그대로 ${archKeepsV6} · 두께 그대로 ${archKeepsAT}) · `
+      + `아치선→좌우만 ${v6LR}(아치·두께 그대로 ${v6KeepsArch}) · `
+      + `아치두께 위아래만 ${atMoved}/${atKeepsX} · 바로 아치 올려도 두께 안 따라옴 ${barNoFollow}`);
   }
 
   /* 118. ⚠️ v1.68.0 — 가로 길이 슬라이더 · 표식 테두리 없음 (원장님 지시 2026-08-24)
@@ -3542,16 +3699,20 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB;
-      S.g = { ...PBx.DEFAULT_GUIDE }; S.look = { ...PBx.LOOK_DEF };
+      S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE }; S.look = { ...PBx.LOOK_DEF };
       S.multi = false; S.selSet = []; S.guideOn = false; S.guideCur = null;
       PBx.buildLookUI(); PBx.render();
       const rng = document.getElementById("rngLen");
       const hasSeg = !!document.getElementById("segLen");
-      /* 미리보기 자 한 줄의 길이(px) */
+      /* 미리보기 자 한 줄의 길이(px)
+         ⚠️ v1.81.0 — 미리보기가 **눈썹 그림 위에 올린 선**으로 바뀌어 y 가 고정이 아닙니다.
+            자에는 `pv-ruler` 클래스가 붙습니다 — 그중 **가장 긴 가로 토막**을 잽니다.
+            ⛔ y 좌표를 다시 하드코딩하지 마세요 (BASELINE 「선 좌표를 하드코딩하지 마라」). */
       const prevLen = () => {
-        const ls = [...document.getElementById("lookPrev").querySelectorAll("line")]
-          .filter((l) => Math.abs(+l.getAttribute("y1") - 18) < 0.6);
-        return ls.length ? Math.abs(+ls[0].getAttribute("x2") - +ls[0].getAttribute("x1")) : 0;
+        const ls = [...document.getElementById("lookPrev").querySelectorAll("line.pv-ruler")]
+          .filter((l) => Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5)
+          .map((l) => Math.abs(+l.getAttribute("x2") - +l.getAttribute("x1")));
+        return ls.length ? Math.max(...ls) : 0;
       };
       /* 실제 화면의 앞머리 자 길이(px) */
       const realLen = () => {
@@ -3573,7 +3734,8 @@ console.log("\n[밸런스 판정]");
         .filter((q) => /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+$/.test(q.getAttribute("d") || ""));
       const noEdge = paths();
       const noEdgeDark = noEdge.some((q) => q.getAttribute("stroke") === "#0A0D14");
-      S.look = { ...PBx.LOOK_DEF, edge: 70 }; PBx.render();
+      /* v1.81.0 — 테두리는 **색을 골라야** 그려집니다 (기본은 「없음」) */
+      S.look = { ...PBx.LOOK_DEF, edge: 70, edgeC: "dark" }; PBx.render();
       const withEdge = paths();
       return { hasSeg, hasRng: !!rng, min: rng.min, max: rng.max,
                mn, mid, mx, back,
@@ -3607,7 +3769,7 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       /* ① 화살표 이동량 — 실제로 버튼을 눌러 사진이 얼마나 움직이는지 잰다 */
       const arrow = (mode) => {
         document.querySelector(`#photoModes button[data-mode="${mode}"]`).click();
@@ -3635,7 +3797,9 @@ console.log("\n[밸런스 판정]");
         return !tipEl.hidden && tipEl.textContent.trim().length > 4;
       });
       S.guideOn = false; S.guideCur = null; PBx.render();
-      const tipHiddenOff = tipEl.hidden;
+      /* ⚠️ v1.81.0 — **화면에서 실제로 사라졌는지**를 봅니다. `hidden` 속성만 보면
+         `.guidetip .chip{display:block}` 이 그것을 이겨 칩이 남아 있어도 통과합니다 (실제로 그랬습니다). */
+      const tipHiddenOff = tipEl.hidden && getComputedStyle(tipEl).display === "none";
 
       /* ③ 십자 안쪽 모서리 표식 — **쌍 스텝(꼬리·아치)에만**, 좌우 2개, 교점에서 시작.
          ⚠️ v1.67.0 — 팔 방향이 스텝마다 다르다: 꼬리 = 안쪽+아래 / 아치 = 안쪽+**위**
@@ -3645,7 +3809,7 @@ console.log("\n[밸런스 판정]");
         .filter((d) => d && /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+$/.test(d));
       const W = S.dim.W, H = S.dim.H;
       S.guideOn = true; S.guideCur = "archThickness"; PBx.render();
-      const noneAtPlain = corners().length === 0;      /* 쌍이 아닌 스텝엔 표식이 없다 */
+      const noneAtPlain = corners().length === 0;      /* 꼬리가 아닌 스텝엔 표식이 없다 */
       const at = (step, vk, hk, wantUp) => {
         S.guideCur = step; PBx.render();
         const cs2 = corners();
@@ -3658,25 +3822,28 @@ console.log("\n[밸런스 판정]");
         });
         return { n: cs2.length, ok };
       };
-      /* ⚠️ v1.68.0 — **꼬리도 안쪽 + 위** (원장님 지시 2026-08-24 · 민트 펜)
-         「플로우 적용 시 꼬리와 아우터 지점은 내부쪽과 위다」 */
-      const arch = at("h2", "v6", "h2", true);         /* 아치 = 안쪽 + 위 */
-      const tail = at("h3", "v4", "h3", true);         /* 꼬리 = 안쪽 + 위 */
+      /* ⚠️ v1.81.0 — **아치에는 표식이 없습니다** (원장님 지시 2026-08-27 「아치가로선과 아치세로선을
+         따로 움직이도록 되돌린다」). 한 점이 아니게 됐으므로 십자를 그리면 거짓말이 됩니다.
+         꼬리는 여전히 한 점이라 **아우터 차례·꼬리 높이 차례 둘 다**에 그립니다 (안쪽 + 위). */
+      S.guideCur = "h2"; PBx.render();
+      const archNone = corners().length === 0;
+      const tail = at("h3", "v4", "h3", true);         /* 꼬리 높이 = 안쪽 + 위 */
+      const tailV = at("v4", "v4", "h3", true);        /* 꼬리 아우터 차례에도 같은 표식 */
       return { zoomPct, dv: av.d, dh: ah.d, upIsRight, rightIsRight, tipAtInner, tipAtTail,
-               everyStep, tipHiddenOff, noneAtPlain,
-               archN: arch.n, archOk: arch.ok, tailN: tail.n, tailOk: tail.ok };
+               everyStep, tipHiddenOff, noneAtPlain, archNone,
+               tailN: tail.n, tailOk: tail.ok, tailVN: tailV.n, tailVOk: tailV.ok };
     });
     await ctx.close();
-    check("114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 십자 모서리(꼬리·아치 모두 안쪽+위)",
+    check("114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 십자 모서리는 **꼬리에만** (안쪽+위)",
       r.zoomPct > 0 && r.zoomPct < 0.018                /* 줌 한 칸 1.8% 미만 */
         && r.dv > 0 && r.dv < 0.003 && r.dh > 0 && r.dh < 0.003   /* v1.65.0 — 캔버스의 0.3% 미만 ≈ 1px */
         && r.upIsRight && r.rightIsRight                          /* ▶ = 위로 / 오른쪽 */
         && r.tipAtInner && r.tipAtTail && r.everyStep && r.tipHiddenOff
-        && r.noneAtPlain && r.archN >= 2 && r.archOk && r.tailN >= 2 && r.tailOk,
+        && r.noneAtPlain && r.archNone && r.tailN >= 2 && r.tailOk && r.tailVN >= 2 && r.tailVOk,
       `줌 한 칸 ${(r.zoomPct * 100).toFixed(2)}%(<1.8%) · 위아래 ${r.dv.toFixed(4)} / 좌우 ${r.dh.toFixed(4)}(<0.003) · `
       + `▶=위로 ${r.upIsRight} / ▶=오른쪽 ${r.rightIsRight} · `
       + `프롬프트 이너=${r.tipAtInner} 꼬리강조=${r.tipAtTail} 전스텝=${r.everyStep} 끄면숨김=${r.tipHiddenOff} · `
-      + `십자표식 쌍아닌스텝없음=${r.noneAtPlain} · 아치 ${r.archN}개 위+안쪽=${r.archOk} · 꼬리 ${r.tailN}개 위+안쪽=${r.tailOk}`);
+      + `십자표식 아치없음=${r.archNone} · 꼬리높이 ${r.tailN}개 위+안쪽=${r.tailOk} · 꼬리아우터 ${r.tailVN}개=${r.tailVOk}`);
   }
 
   /* 115. ⚠️ v1.66.0 — **관자놀이 머리카락 방어** (원장님 지시 2026-08-23)
@@ -3740,7 +3907,7 @@ console.log("\n[밸런스 판정]");
     await p.waitForTimeout(1000);
     const vl = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB, H = S.dim.H;
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = [];
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE }; S.sel = null; S.selSet = [];
       S.guideOn = true; S.guideCur = null;   /* v1.52.0 — 조용한 상태를 재야 한다. v1.80.0 부터는 **가이드를 켜야** 조용해진다 */
       PBx.render();
       const g = S.g, eyeY = g.h1 * H;
@@ -3800,7 +3967,7 @@ console.log("\n[밸런스 판정]");
       const vspec = (k) => PBx.V_SPECS.find((x) => x.key === k);
       const mid = (k) => { const s = PBx.segPx(spec(k))[0]; return (s[0] + s[1]) / 2; };
       const snap = () => ({ front: mid("front"), ft: mid("frontThickness"), arch: mid("h2"), at: mid("archThickness"), tail: mid("h3") });
-      S.landmarks = null; S.g = { ...PBx.DEFAULT_GUIDE }; PBx.render();
+      S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE }; PBx.render();
       const a = snap();
       S.g.v4 -= 0.05; S.g.v5 = 2 * S.g.v1 - S.g.v4; PBx.render();     // 아우터만 옮긴다
       const b = snap();

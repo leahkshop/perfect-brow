@@ -179,6 +179,11 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
    ⛔ 밝은 쪽(0%·100%)은 반드시 1 이어야 합니다: 저장본은 애니메이션 없이 이 값으로 찍힙니다. */
 @keyframes pbBlink{0%{stroke-opacity:1}10%{stroke-opacity:.45}20%{stroke-opacity:1}100%{stroke-opacity:1}}
 #guides line.blink{animation:pbBlink 4s ease-in-out infinite}
+/* ⭐ v1.81.0 — 사진을 넣은 직후 **전체 라인이 한 번** 가볍게 깜빡인다 (원장님 지시 2026-08-27).
+   ⛔ 밝은 쪽(0%·100%)은 여기서도 1 이어야 합니다 — 저장본은 애니메이션 없이 그 값으로 찍힙니다. */
+@keyframes pbBlink1{0%{stroke-opacity:1}45%{stroke-opacity:.38}100%{stroke-opacity:1}}
+#guides line.blink1{animation:pbBlink1 1.4s ease-in-out 1}
+@media (prefers-reduced-motion:reduce){#guides line.blink1{animation:none}}
 @media (prefers-reduced-motion:reduce){#guides line.blink{animation:none}}
 #touch{position:absolute;inset:0;touch-action:none;z-index:3}
 
@@ -251,6 +256,11 @@ body.land.compact .rgap{height:11px}
 .guidetip{position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:22;max-width:64%}
 .guidetip .chip{font-size:10.5px;padding:6px 11px;line-height:1.3;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block}
+/* ⚠️ v1.81.0 버그 수정 — `display:block` 이 브라우저 기본 `[hidden]{display:none}` 을 이겨서,
+   **가이드를 꺼도 마지막 안내 칩이 화면에 그대로 남아 있었습니다** (v1.64.0부터).
+   `el.hidden = true` 는 잘 걸려 있었기에 회귀 114 도 못 잡았습니다 — 이제 화면 표시로 검사합니다.
+   ⛔ 이 한 줄을 지우지 마세요. */
+.guidetip .chip[hidden]{display:none}
 .guidetip .chip b{color:var(--a2);font-weight:800}
 body.land.compact #editor .guidetip .chip{font-size:9.5px;padding:5px 9px}
 
@@ -454,17 +464,19 @@ body:not(.land) #railExtra{display:none}
 .sheet{position:fixed;inset:0;display:none;z-index:60;background:rgba(4,6,10,.72);
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:10px}
 .sheet.on{display:flex}
-.sheet-in{width:min(820px,97%);max-height:96%;overflow:auto;background:var(--surface);  /* %-단위: rot90 회전 컨테이너 기준 (vw/vh 는 기기 세로 기준이라 좁아짐) */
-  border:1px solid var(--hair);border-radius:14px;padding:9px 11px;color:var(--fg);
+.sheet-in{width:min(880px,98%);max-height:97%;overflow:auto;background:var(--surface);  /* %-단위: rot90 회전 컨테이너 기준 (vw/vh 는 기기 세로 기준이라 좁아짐) */
+  border:1px solid var(--hair);border-radius:14px;padding:8px 10px;color:var(--fg);
   box-shadow:0 24px 60px rgba(0,0,0,.55)}
 .sheet-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .sheet-hd h3{margin:0;font-size:13px;font-weight:800}
 .sheet-x{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.06);
   border:1px solid var(--hair);color:var(--fg);font-size:13px}
-/* 가로 화면(390px 높이)에 한 화면으로 들어가야 하므로 아래쪽은 **2단**으로 나눈다 */
-.setcols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.setrow{display:flex;align-items:center;gap:5px;margin:4px 0;flex-wrap:nowrap}
-.setrow>.lb{width:56px;flex:none;font-size:10px;font-weight:700;color:var(--faint)}
+/* 가로 화면(390px 높이)에 한 화면으로 들어가야 하므로 아래쪽은 **2단**으로 나눈다
+   ⚠️ v1.81.0 — 미리보기가 「눈썹 위에 올라간 선」을 보여주게 되면서 왼쪽 칸을 넓혔습니다
+   (원장님 지시 2026-08-27 「미리보기를 더 크게」). ⛔ 1fr 1fr 로 되돌리지 마세요 — 이름표가 겹칩니다. */
+.setcols{display:grid;grid-template-columns:1.35fr 1fr;gap:10px}
+.setrow{display:flex;align-items:center;gap:5px;margin:1px 0;flex-wrap:nowrap}
+.setrow>.lb{width:52px;flex:none;font-size:10px;font-weight:700;color:var(--faint)}
 .seg{display:flex;gap:3px}
 .seg button{height:24px;padding:0 8px;border-radius:8px;font-size:10px;font-weight:700;
   background:rgba(255,255,255,.05);border:1px solid var(--hair);color:rgba(255,255,255,.62)}
@@ -472,11 +484,25 @@ body:not(.land) #railExtra{display:none}
 .pal{display:flex;gap:5px}
 .pal button.sw{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.18);flex:none;padding:0}
 .pal button.sw.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35),0 0 10px var(--glow)}
-.setsep{height:1px;background:var(--hair);margin:5px 0}
-#lookPrev{width:100%;height:58px;border-radius:10px;display:block;background:#000}
+/* 세로선 색 — 한 줄에 세 묶음(이너·아치엣지·아우터)을 작은 이름표와 함께 (v1.81.0) */
+.vpal{display:flex;gap:9px;align-items:center;flex-wrap:nowrap}
+.vpal .vgrp{display:flex;align-items:center;gap:4px}
+.vpal .vgrp>b{font-size:9px;font-weight:800;color:var(--faint);white-space:nowrap}
+.vpal .vgrp button.sw{width:19px;height:19px}
+/* 「모두 이 색」이 **눌렸다는 것이 보여야** 합니다 (원장님 지시 2026-08-27) */
+#lookAll.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800;
+  box-shadow:0 0 12px var(--glow)}
+.setsep{height:1px;background:var(--hair);margin:3px 0}
+/* 시트 안 슬라이더는 낮게 — 전역 40px 을 그대로 쓰면 세 줄만으로 시트가 화면을 넘습니다 (v1.81.0) */
+.sheet input[type=range]{height:26px}
+.sheet input[type=range]::-webkit-slider-thumb{width:20px;height:20px;margin-top:-8px}
+.sheet input[type=range]::-moz-range-thumb{width:18px;height:18px}
+/* v1.81.0 — 미리보기는 **눈썹 그림 위에 선이 올라간 그림**이라 세로가 필요합니다.
+   height:auto + meet 이라 검은 여백 없이 칸을 채웁니다 (원장님: 「빈 공간을 가득 채우도록」) */
+#lookPrev{width:100%;height:auto;border-radius:10px;display:block;background:#000}
 .setnote{font-size:9px;color:var(--faint);line-height:1.4;margin:3px 0 0}
 .combo{display:flex;gap:5px}
-.combo button{flex:1;min-height:36px;border-radius:10px;padding:5px 7px;text-align:left;
+.combo button{flex:1;min-height:32px;border-radius:10px;padding:5px 7px;text-align:left;
   background:rgba(255,255,255,.05);border:1px solid var(--hair);color:var(--fg)}
 .combo button.on{border-color:var(--a1);box-shadow:0 0 14px var(--glow);background:rgba(255,255,255,.10)}
 .combo b{display:block;font-size:10.5px;font-weight:800}
@@ -485,13 +511,28 @@ body:not(.land) #railExtra{display:none}
 .combo em s{width:10px;height:10px;border-radius:50%;display:block;text-decoration:none}
 #lookAll{height:24px;padding:0 8px;border-radius:8px;font-size:10px;font-weight:700;
   background:rgba(255,255,255,.05);border:1px solid var(--hair);color:rgba(255,255,255,.72)}
-.sheet .modal-row button{height:32px;font-size:12px}
+.sheet .modal-row button{height:30px;font-size:12px}
+.combo button{min-height:30px;padding:4px 6px}
+body.land.compact .combo i{display:none}
 input[type=range].slim{flex:1;min-width:90px;accent-color:var(--a1)}
 .rngval{font-size:10px;font-weight:700;width:34px}
-.tabbar{display:flex;gap:4px;margin-bottom:7px}
-.tabbar button{flex:1;height:28px;border-radius:9px;font-size:11px;font-weight:800;
+.tabbar{display:flex;gap:4px;margin-bottom:5px}
+.tabbar button{flex:1;height:26px;border-radius:9px;font-size:11px;font-weight:800;
   background:rgba(255,255,255,.04);border:1px solid var(--hair);color:rgba(255,255,255,.55)}
 .tabbar button.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);box-shadow:0 0 14px var(--glow)}
+/* 가이드 순서 편집 (v1.81.0) — 한 줄에 [번호][이름][▲][▼]. 꺼진 단계는 아래에 흐리게 */
+.orderlist{display:flex;flex-direction:column;gap:2px}
+.orow{display:flex;align-items:center;gap:4px;height:24px}
+.orow>i{width:16px;flex:none;font-style:normal;font-size:10px;font-weight:800;color:var(--a2);text-align:center}
+.orow>.onm{flex:1;height:22px;border-radius:7px;border:1px solid var(--hair);background:rgba(255,255,255,.05);
+  color:var(--fg);font-size:10.5px;font-weight:700;text-align:left;padding:0 8px;
+  position:relative;overflow:hidden}
+.orow>.onm::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3.5px;background:var(--dot,#8B94A6)}
+.orow.off>.onm{opacity:.42;text-decoration:line-through}
+.orow.off>i{color:var(--faint)}
+.orow>.omv{width:22px;height:22px;flex:none;border-radius:7px;border:1px solid var(--hair);
+  background:rgba(255,255,255,.05);color:var(--a2);font-size:11px;font-weight:800;padding:0}
+.orow>.omv:disabled{opacity:.25}
 /* 「없음」 스와치 — 사선 표시 */
 .pal button.sw.none{background:rgba(255,255,255,.05);position:relative}
 .pal button.sw.none::after{content:"";position:absolute;left:2px;right:2px;top:50%;height:2px;
@@ -766,28 +807,38 @@ body:not(.land) #railLang{display:none}
     <div class="setcols">
       <!-- ② 왼쪽 — 미리보기 (위 3줄 = 기본 선 · 맨 아래 = 잡은 선) -->
       <div>
-        <svg id="lookPrev" viewBox="0 0 720 96" preserveAspectRatio="none"></svg>
-        <p class="setnote" data-i18n="set_prev_note">왼쪽 = 밝은 피부 · 오른쪽 = 어두운 눈썹 위. 맨 아랫줄이 잡은 선입니다.</p>
+        <svg id="lookPrev" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="setnote" data-i18n="set_prev_note">왼쪽 = 밝은 피부 · 오른쪽 = 어두운 피부. 선 이름이 그 선이 눈썹에서 놓이는 자리에 붙어 있습니다.</p>
       </div>
       <!-- ③ 오른쪽 — 탭: 기본 선 / 잡은 선 -->
       <div>
         <div class="tabbar">
           <button id="tabBase" class="on" data-i18n="set_tab_base">기본 선 · 차례</button>
           <button id="tabGrab" data-i18n="set_tab_grab">잡은 선 · 움직일 때</button>
+          <!-- v1.81.0 — 「가이드 - 순서 변경가능 기능 추가」 (원장님 지시 2026-08-27).
+               시트를 세로로 늘리지 않으려고 **탭**으로 넣습니다 — 시술 중 스크롤이 없어야 합니다. -->
+          <button id="tabOrder" data-i18n="set_order">가이드 순서</button>
         </div>
         <div id="lookTabBase">
           <div class="setrow"><span class="lb" data-i18n="set_inner">이너 묶음</span><span class="pal" id="swInner"></span></div>
           <div class="setrow"><span class="lb" data-i18n="set_arch">아치 묶음</span><span class="pal" id="swArch"></span></div>
           <div class="setrow"><span class="lb" data-i18n="set_tail">꼬리 묶음</span><span class="pal" id="swTail"></span>
             <button id="lookAll" data-i18n="set_all">모두 이 색</button></div>
-          <div class="setrow"><span class="lb" data-i18n="set_edge">테두리</span><span class="seg" id="segEdge"></span><span class="seg" id="segEdgeC"></span></div>
-          <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span><span class="seg" id="segW"></span></div>
-          <!-- v1.68.0 — 「가로 길이」는 슬라이더 (아주 짧은 자까지 · 끄는 동안 미리보기가 같이 변한다).
-               투명도와 한 줄에 둔다 — 설정 시트가 더 길어지면 스크롤해야 해서 손이 더 갑니다. -->
-          <div class="setrow"><span class="lb" data-i18n="set_hlen">가로 길이</span>
+          <!-- v1.81.0 — **세로선 색은 따로** (원장님 지시 2026-08-27 「세로색 목록 추가」).
+               세 가지(민트·먹색·흰색)만 — 세로선은 얼굴을 가로지르므로 색이 많으면 시끄럽습니다. -->
+          <div class="setrow"><span class="lb" data-i18n="set_vlines">세로선</span><span class="pal vpal" id="swVAll"></span></div>
+          <!-- v1.81.0 — 선 굵기도 **슬라이더** (원장님 지시 「선 굵기 - 드레그 조정으로 변경」) -->
+          <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span>
+            <input type="range" class="slim" id="rngW" min="60" max="180" step="5" value="80">
+            <span id="wVal" class="rngval">80%</span>
+            <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_hlen">가로 길이</span>
             <input type="range" class="slim" id="rngLen" min="8" max="60" step="2" value="28">
-            <span id="lenVal" class="rngval">28%</span>
-            <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_alpha">투명도</span>
+            <span id="lenVal" class="rngval">28%</span></div>
+          <!-- v1.81.0 — 테두리: 색은 **없음/흰색/검정/먹색**, 굵기는 **슬라이더** -->
+          <div class="setrow"><span class="lb" data-i18n="set_edge">테두리</span><span class="seg" id="segEdgeC"></span>
+            <input type="range" class="slim" id="rngEdge" min="0" max="120" step="10" value="0">
+            <span id="edgeVal" class="rngval">0%</span></div>
+          <div class="setrow"><span class="lb" data-i18n="set_alpha">투명도</span>
             <input type="range" class="slim" id="rngAlpha" min="50" max="100" step="5" value="100">
             <span id="alphaVal" class="rngval">100%</span></div>
         </div>
@@ -799,6 +850,11 @@ body:not(.land) #railLang{display:none}
             <input type="range" class="slim" id="rngDragOp" min="50" max="100" step="5" value="100">
             <span id="dragOpVal" class="rngval">100%</span></div>
           <p class="setnote" data-i18n="set_grab_note">잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.</p>
+        </div>
+        <!-- v1.81.0 가이드 순서 편집 (원장님 지시 2026-08-27) -->
+        <div id="lookTabOrder" hidden>
+          <div id="orderList" class="orderlist"></div>
+          <p class="setnote" data-i18n="set_order_note">▲▼ 로 순서를 바꾸고, 이름을 눌러 그 단계를 켜고 끕니다.</p>
         </div>
       </div>
     </div>
