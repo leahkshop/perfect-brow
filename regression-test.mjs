@@ -2596,7 +2596,7 @@ console.log("\n[밸런스 판정]");
       document.getElementById("tabOrder").click();
       const rows = () => [...document.querySelectorAll("#orderList .orow")];
       const keys = () => rows().map((r2) => r2.dataset.key);
-      const listed = keys().join(",");                     /* 켜진 것 + 꺼진 것(이너) */
+      const listed = keys().join(",");                     /* v1.83.0 — 이너까지 **일곱 개 모두 켜짐** */
       const flow0 = PBx.GUIDE_FLOW.join(",");
       /* 첫 줄을 ▼ 로 한 칸 내린다 */
       rows()[0].querySelectorAll(".omv")[1].click();
@@ -2604,28 +2604,143 @@ console.log("\n[밸런스 판정]");
       /* 프롬프트 번호가 새 순서를 따라간다 */
       S.guideOn = true; S.guideCur = PBx.GUIDE_FLOW[1]; PBx.updateGuideTip();
       const num2 = document.getElementById("guideTip").textContent.trim().slice(0, 1);
-      /* 꺼져 있던 이너를 눌러 켠다 → 맨 뒤에 붙는다 */
+      /* v1.83.0 — 이너는 **처음부터 켜져 있다**. 눌러서 끄면 목록 아래로 내려가고, 다시 누르면 맨 뒤에 붙는다 */
       const innerRow = rows().find((r2) => r2.dataset.key === "v2");
-      const innerWasOff = innerRow.classList.contains("off");
-      innerRow.querySelector(".onm").click();
+      const innerWasOn = !innerRow.classList.contains("off");
+      innerRow.querySelector(".onm").click();                /* 끈다 */
       const flow2 = PBx.GUIDE_FLOW.join(",");
-      const saved = JSON.parse(localStorage.getItem("pb_flow_v1") || "[]").join(",");
-      /* 다시 눌러 끈다 */
+      const saved = JSON.parse(localStorage.getItem("pb_flow_v2") || "[]").join(",");
+      /* 다시 눌러 켠다 → 맨 뒤 */
       rows().find((r2) => r2.dataset.key === "v2").querySelector(".onm").click();
       const flow3 = PBx.GUIDE_FLOW.join(",");
       document.getElementById("mLook").classList.remove("on");
-      return { listed, flow0, flow1, num2, innerWasOff, flow2, flow3, saved };
+      return { listed, flow0, flow1, num2, innerWasOn, flow2, flow3, saved };
     });
     await ctx.close();
     check("135. 가이드 순서 — ▲▼ 로 바꾸고 이름을 눌러 켜고 끈다 · 번호가 새 순서를 따라간다",
-      r.listed === "front,frontThickness,h2,archThickness,v4,h3,v2"
-        && r.flow0 === "front,frontThickness,h2,archThickness,v4,h3"
-        && r.flow1 === "frontThickness,front,h2,archThickness,v4,h3"
-        && r.num2 === "②" && r.innerWasOff
-        && r.flow2 === "frontThickness,front,h2,archThickness,v4,h3,v2"
+      r.listed === "v2,front,frontThickness,h2,archThickness,v4,h3"
+        && r.flow0 === "v2,front,frontThickness,h2,archThickness,v4,h3"
+        && r.flow1 === "front,v2,frontThickness,h2,archThickness,v4,h3"
+        && r.num2 === "②" && r.innerWasOn
+        && r.flow2 === "front,frontThickness,h2,archThickness,v4,h3"
         && r.saved === r.flow2
-        && r.flow3 === "frontThickness,front,h2,archThickness,v4,h3",
-      `목록 [${r.listed}] · ${r.flow0} → ▼ ${r.flow1} (2번째 번호 ${r.num2}) → 이너 켬 ${r.flow2} → 끔 ${r.flow3} · 저장=${r.saved === r.flow2}`);
+        && r.flow3 === "front,frontThickness,h2,archThickness,v4,h3,v2",
+      `목록 [${r.listed}] · ${r.flow0} → ▼ ${r.flow1} (2번째 번호 ${r.num2}) → 이너 끔 ${r.flow2} → 다시 켬 ${r.flow3} · 저장=${r.saved === r.flow2}`);
+  }
+
+  /* 136. ⭐ v1.83.0 — **설정 시트 배치** (원장님 지시 2026-08-27
+       「현재 세트·밝은 사진·어두운 사진 카드 세 개를 눈썹 미리보기 밑으로 작은 카드로 옮겨 ·
+        선 굵기와 가로 길이를 같은 행에 두지 말고 굵기를 개별 행으로, 그 밑 투명도, 그 밑 선 길이 ·
+        테두리는 따로 배경색 블록으로 별도의 추가 작업이라고 느낄 수 있게」)
+     · 조합 카드는 **미리보기 다음**에 온다 (시트 맨 위가 아니다)
+     · 굵기 · 투명도 · 길이는 **각각 자기 줄** — 한 줄에 슬라이더 둘을 다시 합치면 여기서 걸린다
+     · 테두리는 `.setblock` 안에서 **다른 배경색**을 갖는다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(() => {
+      document.getElementById("btnLook").click();
+      const prev = document.getElementById("lookPrev");
+      const combo = document.getElementById("lookCombo");
+      const comboN = combo.querySelectorAll("button").length;
+      /* 미리보기 **밑**에 있는가 — 같은 칸 안에서 미리보기 다음, 그리고 화면상 아래 */
+      const sameCol = prev.parentElement === combo.parentElement;
+      const after = !!(prev.compareDocumentPosition(combo) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const pr = prev.getBoundingClientRect(), cr = combo.getBoundingClientRect();
+      const below = cr.top >= pr.bottom - 1;
+      const smaller = cr.height < pr.height / 2;                 /* 「작은 카드」 */
+      /* 굵기 · 투명도 · 길이가 각각 다른 줄 */
+      const rowOf = (id) => document.getElementById(id).closest(".setrow");
+      const rw = rowOf("rngW"), ra = rowOf("rngAlpha"), rl = rowOf("rngLen"), re = rowOf("rngEdge");
+      const oneEach = [rw, ra, rl].every((x) => x.querySelectorAll("input[type=range]").length === 1);
+      const distinct = rw !== ra && ra !== rl && rw !== rl;
+      const order = (!!(rw.compareDocumentPosition(ra) & Node.DOCUMENT_POSITION_FOLLOWING))
+                 && (!!(ra.compareDocumentPosition(rl) & Node.DOCUMENT_POSITION_FOLLOWING));
+      /* 테두리 = 별도 배경 블록 */
+      const blk = re.closest(".setblock");
+      const bg = blk && getComputedStyle(blk).backgroundColor;
+      const bgOther = getComputedStyle(rw).backgroundColor;
+      const blockOk = !!blk && bg !== bgOther && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg);
+      const hdOk = !!blk && !!blk.querySelector(".setblock-hd") && blk.querySelector(".setblock-hd").textContent.trim().length > 0;
+      const last = !!(rl.compareDocumentPosition(blk) & Node.DOCUMENT_POSITION_FOLLOWING);
+      /* 시트가 여전히 한 화면에 (스크롤 없이) */
+      const sh = document.querySelector("#mLook .sheet-in");
+      const fits = sh.scrollHeight <= sh.clientHeight + 2;
+      document.getElementById("mLook").classList.remove("on");
+      return { comboN, sameCol, after, below, smaller, oneEach, distinct, order, blockOk, hdOk, last, fits,
+               shH: sh.scrollHeight, clH: sh.clientHeight };
+    });
+    await ctx.close();
+    check("136. 설정 배치 — 조합 카드는 미리보기 밑 작은 카드 · 굵기/투명도/길이 각 한 줄 · 테두리는 별도 블록",
+      r.comboN === 3 && r.sameCol && r.after && r.below && r.smaller
+        && r.oneEach && r.distinct && r.order && r.blockOk && r.hdOk && r.last && r.fits,
+      `조합 ${r.comboN}개 · 미리보기 밑=${r.below}(같은 칸 ${r.sameCol}/다음 ${r.after}) · 작은 카드=${r.smaller} · `
+      + `한 줄에 하나=${r.oneEach}/서로 다른 줄=${r.distinct}/굵기→투명도→길이=${r.order} · `
+      + `테두리 별도 배경=${r.blockOk} 머리말=${r.hdOk} 맨 아래=${r.last} · 스크롤 없음=${r.fits}(${r.shH}/${r.clH})`);
+  }
+
+  /* 137. ⭐ v1.83.0 — **고르면 선이 되살아난다** (원장님 지시 2026-08-27
+       「선을 선택시 그 선 고유의 선색이 조금더 굵어지고 조금더 밝아지게 …
+         선이 죽어있다 다시 선택될경우 고유의 색이 생성. 선택했다는 것을 표기한다」)
+     · 가이드 꺼짐 + 이미 움직여 「죽은」 선(잡은 선 색)을 다시 고르면 **고유색**으로 돌아온다
+     · 고른 선은 안 고른 선보다 **굵고 밝다**
+     · 고른 **그 순간** 한 번 반짝인다(blink1) — 반복 깜빡임(blink)이 아니다
+     · 손으로 잡고 있는 동안에는 **잡은 선 색**이 이긴다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, H = S.dim.H;
+      S.intro = false; S.multi = false; S.selSet = [];
+      S.look = { ...PBx.LOOK_DEF, weight: 1, alpha: 1, dragCore: "#14161B", dragEdge: "none", dragW: 1, dragOp: 1 };
+      const seg = (key) => {
+        const y = S.g[key] * H;
+        const ls = [...document.getElementById("guides").querySelectorAll("line")].filter((l) => {
+          const y1 = +l.getAttribute("y1"), y2 = +l.getAttribute("y2");
+          if (+(l.getAttribute("stroke-opacity") || 1) <= 0.3) return false;
+          return Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - y) < 1 && Math.abs(+l.getAttribute("x2") - +l.getAttribute("x1")) > 4;
+        }).sort((a, b) => +b.getAttribute("stroke-width") - +a.getAttribute("stroke-width"));
+        return ls[0] ? { c: ls[0].getAttribute("stroke"), w: +ls[0].getAttribute("stroke-width"),
+                         o: +(ls[0].getAttribute("stroke-opacity") || 1),
+                         cls: ls[0].getAttribute("class") || "" } : null;
+      };
+      /* 가이드를 끄고, 앞머리는 이미 한 번 움직인 것으로 둔다 → 잡은 선 색으로 죽어 있다 */
+      S.guideOn = false; S.guideCur = null; S.doneSet = ["front"];
+      document.querySelector('.lbtn[data-key="h2"]').click();          /* 다른 선을 고른 상태 */
+      PBx.render();
+      const dead = seg("front"), plain = seg("archThickness");
+      /* 죽은 앞머리를 다시 고른다 → 고유색 · 더 굵게 · 더 밝게 · 한 번 반짝 */
+      document.querySelector('.lbtn[data-key="front"]').click();
+      PBx.render();
+      const picked = seg("front");
+      const pulseOnce = picked && /\bblink1\b/.test(picked.cls) && !/\bblink\b(?!1)/.test(picked.cls);
+      /* 잡고 있는 동안은 잡은 선 색이 이긴다 */
+      S.dragOn = true; PBx.render();
+      const held = seg("front");
+      S.dragOn = false;
+      /* 다른 선으로 옮기면 앞머리는 다시 죽는다 */
+      document.querySelector('.lbtn[data-key="h2"]').click();
+      PBx.render();
+      const backDead = seg("front");
+      return { dead, plain, picked, pulseOnce, held, backDead, own: S.look.inner, grab: S.look.dragCore };
+    });
+    await ctx.close();
+    const okRevive = r.dead && r.picked && r.dead.c === r.grab && r.picked.c === r.own;
+    const okLouder = r.picked && r.plain && r.picked.w > r.plain.w + 0.01 && r.picked.o >= r.plain.o;
+    check("137. 고르면 되살아난다 — 죽은 선도 고르면 고유색·더 굵게·한 번 반짝 · 잡는 동안은 잡은 선 색",
+      okRevive && okLouder && r.pulseOnce
+        && r.held && r.held.c === r.grab && r.backDead && r.backDead.c === r.grab,
+      `죽은 앞머리 ${r.dead && r.dead.c} → 고르면 ${r.picked && r.picked.c}(고유 ${r.own}) · `
+      + `굵기 ${r.plain && r.plain.w.toFixed(2)}→${r.picked && r.picked.w.toFixed(2)} 투명도 ${r.plain && r.plain.o}→${r.picked && r.picked.o} · `
+      + `한 번 반짝=${r.pulseOnce}(${r.picked && r.picked.cls}) · 잡는 중 ${r.held && r.held.c} · 놓고 다른 선 고르면 ${r.backDead && r.backDead.c}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
@@ -2723,8 +2838,8 @@ console.log("\n[밸런스 판정]");
     });
     await ctx.close();
     const noCut = fits.every((q) => !q.cut);
-    const numsOk = r.nums.join("") === "①②③④⑤⑥";
-    check("119. 드로잉 맞춤 뒤 교정 안내 — ① 이너부터 다시 · 프롬프트 ①~⑥ · 좁은 폰에서도 안 잘림",
+    const numsOk = r.nums.join("") === "①②③④⑤⑥⑦";   /* v1.83.0 — 이너가 들어와 일곱 스텝 */
+    check("119. 드로잉 맞춤 뒤 교정 안내 — ① 이너부터 다시 · 프롬프트 ①~⑦ · 좁은 폰에서도 안 잘림",
       r.restarted && numsOk && noCut,
       `맞춘 뒤 ①로 복귀=${r.restarted} · 번호 ${r.nums.join("")} · 좁은폰에서 안잘림=${noCut}`
       + (noCut ? "" : ` [잘림: ${fits.filter((q) => q.cut).map((q) => q.k).join(",")}]`));
@@ -2816,11 +2931,11 @@ console.log("\n[밸런스 판정]");
                  dragEdge: "#FFC9A3", dragW: 1, dragOp: 1 };
       /* 인사가 끝나면 **첫 스텝(앞머리)** 이 켜져 있어야 한다 */
       const startsAtFirst = S.guideOn === true && S.intro === false
-                         && S.guideCur === PBx.GUIDE_FLOW[0] && PBx.GUIDE_FLOW[0] === "front";
-      const flowIs = PBx.GUIDE_FLOW.join(",") === "front,frontThickness,h2,archThickness,v4,h3";
+                         && S.guideCur === PBx.GUIDE_FLOW[0] && PBx.GUIDE_FLOW[0] === "v2";
+      const flowIs = PBx.GUIDE_FLOW.join(",") === "v2,front,frontThickness,h2,archThickness,v4,h3";
       S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE };
       S.doneSet = []; S.multi = false; S.selSet = [];
-      S.guideOn = true; S.guideCur = "front"; S.sel = "front"; S.selUD = "front"; S.selLR = "v1";
+      S.guideOn = true; S.guideCur = "v2"; S.sel = "v2"; S.selUD = "v2"; S.selLR = "v2";
       S.hMode = "line"; PBx.render();
       const lineColorOf = (key) => {
         const sp = PBx.H_SPECS.concat(PBx.V_SPECS).find((x) => x.key === key);
@@ -2835,7 +2950,7 @@ console.log("\n[밸런스 판정]");
       };
       /* 차례가 아닌 선은 조용한 회색 */
       const greyByDefault = lineColorOf("h2").greyAll && lineColorOf("h3").greyAll;
-      const litFirst = lineColorOf("front").own;
+      const litFirst = lineColorOf("v2").own;
       const sl = document.getElementById("posSliderV");
       const sh = document.getElementById("posSliderH");
       const stepUD = (key) => { S.selUD = key; S.hMode = "line";
@@ -2845,6 +2960,8 @@ console.log("\n[밸런스 판정]");
         sh.dispatchEvent(new Event("input", { bubbles: true }));
         sh.dispatchEvent(new Event("change", { bubbles: true })); return S.guideCur; };
       const seq = [];
+      seq.push(stepLR("v2"));                  /* v1.83.0 — 이너가 첫 스텝 → 앞머리 */
+      S.sel = "front"; S.selUD = "front";
       seq.push(stepUD("front"));               /* 앞머리 끝 → 앞두께 */
       seq.push(stepUD("frontThickness"));      /* → 아치엣지 */
       seq.push(stepUD("h2"));                  /* → 아치두께 */
@@ -2854,7 +2971,7 @@ console.log("\n[밸런스 판정]");
       const order = seq.join(",");
       const endsAfterTail = S.guideCur === null && S.guideOn === true;
       /* ⭐ v1.81.0 — 움직임이 끝난 선은 「끝냄」으로 기록된다 (가이드 꺼진 상태의 표시에 쓰인다) */
-      const marked = ["front", "frontThickness", "h2", "archThickness", "v4", "h3"]
+      const marked = ["v2", "front", "frontThickness", "h2", "archThickness", "v4", "h3"]
         .every((k) => S.doneSet.includes(k));
       document.getElementById("btnGuide").click();
       document.getElementById("btnGuide").click();   /* 껐다 켜기 — 켜면 첫 스텝부터 */
@@ -2864,9 +2981,9 @@ console.log("\n[밸런스 판정]");
       return { startsAtFirst, flowIs, greyByDefault, litFirst, order, endsAfterTail, marked, reOn, offEnds };
     });
     await ctx.close();
-    check("101. 가이드 플로우 — 앞머리→앞두께→아치엣지→아치두께→꼬리아우터→꼬리높이 · 끄면 종료",
+    check("101. 가이드 플로우 — 이너→앞머리→앞두께→아치엣지→아치두께→꼬리아우터→꼬리높이 · 끄면 종료",
       g101.startsAtFirst && g101.flowIs && g101.greyByDefault && g101.litFirst
-        && g101.order === "frontThickness,h2,archThickness,v4,h3," && g101.endsAfterTail
+        && g101.order === "front,frontThickness,h2,archThickness,v4,h3," && g101.endsAfterTail
         && g101.marked && g101.reOn && g101.offEnds,
       Object.entries(g101).map(([k, v]) => `${k}=${v}`).join(" "));
   }
@@ -2982,7 +3099,7 @@ console.log("\n[밸런스 판정]");
         return out;
       };
       S.landmarks = null; S.intro = false; S.g = { ...PBx.DEFAULT_GUIDE }; S.multi = false; S.selSet = [];
-      /* v1.81.0 — 새 플로우의 첫 스텝은 **앞머리**다 (이너는 기본 순서에서 빠졌다) */
+      /* v1.83.0 — 첫 스텝은 **이너**지만, 이 검사는 「밝은 선이 하나뿐인가」라 앞머리에서 시작해도 된다 */
       S.guideOn = true; S.guideCur = "front"; S.sel = "front"; S.selUD = "front"; S.selLR = "v1"; S.hMode = "line";
       PBx.render();
       const start = litKeys();

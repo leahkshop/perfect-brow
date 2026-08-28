@@ -64,6 +64,7 @@ const I18N = {
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
+    set_edge_hd: "테두리 — 없어도 되는 덤",
     set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
     set_vlines: "세로선",
     set_prev_note: "왼쪽 = 밝은 피부 · 오른쪽 = 어두운 피부. 선 이름이 그 선이 눈썹에서 놓이는 자리에 붙어 있습니다.",
@@ -220,6 +221,7 @@ const I18N = {
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
+    set_edge_hd: "Outline — optional extra",
     set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
     set_vlines: "Verticals",
     set_prev_note: "Left = light skin · Right = dark skin. Each name sits where that line lands on the brow.",
@@ -349,7 +351,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.82.0";
+const APP_VERSION = "v1.83.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -376,15 +378,19 @@ const APP_VERSION = "v1.82.0";
 /* ⭐ v1.81.0 — **새 플로우 순서 · 사용자가 순서를 바꿀 수 있다** (원장님 지시 2026-08-27)
    「가이드 - 순서 변경가능 기능 추가 —
      앞머리 · 앞두께 · 아치(아치엣지) · 아치두께 · 꼬리 아우터 · 꼬리 높이」
-   · 이너(v2)는 **기본 순서에서 빠졌습니다.** 지우지는 않았습니다 —
-     설정 → 가이드 순서에서 켜면 다시 플로우에 들어옵니다.
+   · ⭐ v1.83.0 — **이너(v2)가 기본 순서에 들어왔습니다** (원장님 지시 2026-08-27
+     「설정서 가이드 순서 정할때 이너가 빠져있다. 이너도 포함하라」).
+     이너는 **모든 자의 기준점**(BASELINE 1-7)이라 맨 앞입니다 — 이너가 흔들리면 뒤의 여섯 스텝이
+     전부 다시 흔들립니다. 필요 없으면 설정 → 가이드 순서에서 이름을 눌러 끄면 됩니다.
+     ⛔ 옛 기기에 저장된 순서(pb_flow_v1)는 이너가 빠져 있으므로 **한 번 옮겨 담습니다**(FLOW_KEY v2).
    · 꼬리는 **두 스텝으로 나뉩니다** — 아우터(좌우)로 끝점의 x, 꼬리 높이로 y.
      ⚠️ 손으로 사선을 끄는 규칙(BASELINE 1-27)은 그대로입니다 — 스텝만 나뉜 것입니다.
    ⛔ 순서를 코드에 다시 박지 마세요. GUIDE_FLOW 는 **배열 내용만 바꿔** 씁니다
       (window.PB.GUIDE_FLOW 가 같은 배열을 가리키고 있어 재대입하면 회귀 테스트가 옛 순서를 봅니다). */
-const FLOW_KEY = "pb_flow_v1";
+const FLOW_KEY = "pb_flow_v2";        /* v1.83.0 — 이너 포함 순서. 옛 키(pb_flow_v1)는 아래에서 옮겨 담는다 */
+const FLOW_KEY_OLD = "pb_flow_v1";
 const FLOW_ALL = ["v2", "front", "frontThickness", "h2", "archThickness", "v4", "h3"];
-const FLOW_DEF = ["front", "frontThickness", "h2", "archThickness", "v4", "h3"];
+const FLOW_DEF = ["v2", "front", "frontThickness", "h2", "archThickness", "v4", "h3"];
 const GUIDE_FLOW = [];
 function setFlow(list) {
   const seen = new Set();
@@ -393,7 +399,16 @@ function setFlow(list) {
   GUIDE_FLOW.push(...(clean.length ? clean : FLOW_DEF));
 }
 function saveFlow() { try { localStorage.setItem(FLOW_KEY, JSON.stringify(GUIDE_FLOW)); } catch (e) {} }
-setFlow((() => { try { return JSON.parse(localStorage.getItem(FLOW_KEY)); } catch (e) { return null; } })());
+setFlow((() => {
+  try {
+    const cur = JSON.parse(localStorage.getItem(FLOW_KEY));
+    if (Array.isArray(cur) && cur.length) return cur;
+    /* 옛 기기 — v1.81~82 에서 저장된 순서에는 이너가 없다. 맨 앞에 넣어 옮겨 담는다 */
+    const old = JSON.parse(localStorage.getItem(FLOW_KEY_OLD));
+    if (Array.isArray(old) && old.length) return old.includes("v2") ? old : ["v2", ...old];
+  } catch (e) {}
+  return null;
+})());
 
 /* ⚠️ v1.81.0 — **아치는 이제 혼자 움직입니다** (원장님 지시 2026-08-27:
      「지금은 아치가로선과 아치세로선이 동시움직였는데 **따로 움직이도록 되돌린다**」
@@ -662,6 +677,8 @@ const S = {
        가이드가 자동으로 없더라도 사용자가 체크를 한 선과 남아있는 선을 직관적으로 볼수있다」
      ⛔ 되돌리기 스냅샷에 넣지 마세요 — 선택 상태와 같은 이유입니다 (BASELINE 1-9). */
   doneSet: [],
+  /* v1.83.0 — 방금 **고른 선**(1.5초). 고른 순간 한 번 반짝여 「이 선을 골랐다」를 알린다 */
+  pulseKey: null,
   /* v1.81.0 — 사진을 넣은 직후의 **전체라인 인사**: 모든 선이 고유색으로 한 번 깜빡인 뒤
      첫 플로우가 시작됩니다 (원장님: 「이너 라인만 색이 있고 나머지는 검정색이라 이게 뭐지? 한다」) */
   intro: false,
@@ -869,14 +886,20 @@ function renderGuides() {
   const grabbed = (sp) => !!S.dragOn
     && (gDrag && gDrag.keys && gDrag.keys.length ? gDrag.keys.includes(sp.key) : isSelected(sp.key));
   /* 깜빡임(지시등)은 **플로우 차례 선**에만 — 가이드를 끄면 아무것도 깜빡이지 않는다 */
-  const blinkOf = (sp) => (S.intro ? "blink1" : (S.guideOn && S.guideCur === sp.key ? "blink" : null));
+  const blinkOf = (sp) => (S.intro ? "blink1"
+    : (S.guideOn && S.guideCur === sp.key ? "blink"
+    : (S.pulseKey === sp.key ? "blink1" : null)));   /* v1.83.0 — 고른 순간 한 번 */
   /* ⭐ v1.81.0 — **선택된 선은 조금 더 굵고 조금 더 밝다** (원장님 지시 2026-08-27:
        「선을 선택시 지금은 아무런 액션이 없다 … 그 선 고유의 선색이 조금더 굵어지고
          조금더 밝아지게 해서 선이 선택되었음을 표시한다」)
      ⛔ 이 신호를 빼지 마세요 — 왼쪽 버튼만 밝아지면 사진 위에서는 무엇을 잡았는지 알 수 없습니다. */
   const boost = (sp) => (S.intro || isSelected(sp.key) ? 1 : 0);
-  /* ⭐ v1.81.0 — 가이드가 꺼져 있을 때, **한 번 움직인 선**은 잡은 선 색으로 남는다 (S.doneSet) */
-  const settled = (sp) => !S.guideOn && !S.intro && S.doneSet.includes(sp.key);
+  /* ⭐ v1.81.0 — 가이드가 꺼져 있을 때, **한 번 움직인 선**은 잡은 선 색으로 남는다 (S.doneSet)
+     ⭐ v1.83.0 — 다만 **다시 고르면 고유색으로 되살아난다** (원장님 지시 2026-08-27:
+        「선이 죽어있다 다시 선택될경우 고유의 색이 생성. 선택했다는 것을 표기한다」)
+     ⛔ settled 를 isSelected 보다 먼저 검사하지 마세요 — 죽은 선을 골라도 먹색 그대로라
+        무엇을 골랐는지 사진 위에서 알 수 없게 됩니다. */
+  const settled = (sp) => !S.guideOn && !S.intro && S.doneSet.includes(sp.key) && !isSelected(sp.key);
   /* v1.56.0 — 고유색은 **설정에서 고른 묶음 색**이 먼저. 설정에 없는 선(눈·센터)만 스펙 색 */
   const liveColor = (sp) => groupColor(sp.key) || sp.color;
   /* ⚠️ v1.48.0 — 연한 상태를 **알파로 만들지 않는다** (원장님 지시 2026-08-22).
@@ -1551,8 +1574,23 @@ function dragManyBy(keys, baseAll, dxN, dyN, mirroredKey) {
   for (const k of lr) dragLineBy(k, baseAll[k], dxN, 0, k === mirroredKey);
 }
 
+/* ⭐ v1.83.0 — **고른 순간 한 번 반짝** (원장님 지시 2026-08-27 「선택했다는 것을 표기한다」)
+   굵기·밝기만으로는 이미 굵은 선(꼬리)이나 밝은 사진에서 변화가 눈에 잘 안 들어옵니다.
+   고르는 **그 순간에만** 1.4초짜리 한 번 깜빡임(pbBlink1)을 붙여 눈이 그 선을 따라가게 합니다.
+   ⛔ 반복 깜빡임(blink)으로 바꾸지 마세요 — 시술 중 계속 깜빡이면 눈이 피로합니다.
+   ⚠️ 가이드 차례 선(blink)과 겹치면 차례 깜빡임이 이깁니다 — 신호가 둘이면 아무 뜻이 없습니다. */
+const SEL_PULSE_MS = 1500;
+let selPulseTimer = null;
+function pulseSel(key) {
+  S.pulseKey = key || null;
+  if (selPulseTimer) clearTimeout(selPulseTimer);
+  if (!key) return;
+  selPulseTimer = setTimeout(() => { selPulseTimer = null; S.pulseKey = null; render(); }, SEL_PULSE_MS);
+}
+
 /* 선택 기록 — S.sel(드래그 대상) 과 축별 조절자 대상을 함께 갱신 */
 function noteSel(key) {
+  if (key !== S.sel) pulseSel(key);
   S.sel = key;
   /* 세로선(좌우 이동)을 고르면 아래 가로 바를 선 조절로 되돌린다 (v1.11.0) */
   if (axisOf(key) === "v") S.selUD = key;
@@ -1569,6 +1607,7 @@ function noteSel(key) {
 function setSel(key) {
   noteSel(key);
   updatePanels();
+  render();                 /* v1.83.0 — 고른 순간의 반짝임·굵기 변화를 바로 그린다 */
 }
 
 function buildLineButtons() {
