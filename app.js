@@ -64,6 +64,7 @@ const I18N = {
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     line_hidden: "숨김 — 다시 누르면 나옵니다",
+    line_step_keep: "지금 차례라 숨기지 않습니다",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_edge_hd: "테두리 — 없어도 되는 덤",
     set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
@@ -222,6 +223,7 @@ const I18N = {
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     line_hidden: "hidden — tap again to show",
+    line_step_keep: "kept — this is the current step",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_edge_hd: "Outline — optional extra",
     set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
@@ -353,7 +355,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.85.0";
+const APP_VERSION = "v1.87.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1651,12 +1653,16 @@ function buildLineButtons() {
            눌러도 「두 번째 탭」으로 취급돼 **선이 사라졌습니다.**
            → 앱이 고른 선은 숨김의 근거가 되지 않습니다. **직전 탭이 같은 버튼일 때만** 숨깁니다.
            ⛔ `S.sel === spec.key` 조건으로 되돌리지 마세요 — 회귀 139 가 잡습니다. */
-        const twoTaps = lastTapKey === spec.key && S.hMode === "line";
-        let hidNow = false;
+        /* ⭐ v1.86.0 — **지금 차례인 선은 숨길 수 없다** (원장님 지시 2026-08-28 「예전에 쓰던 이너 라인 되돌려놔」)
+           앱이 「이 선을 놓으세요」라고 시켜 놓고 그 선을 숨겨 버리면 시술이 그 자리에서 멈춥니다. */
+        const isStep = S.guideOn && S.guideCur === spec.key;
+        const twoTaps = lastTapKey === spec.key && S.hMode === "line" && !isStep;
+        let hidNow = false, blockedHide = false;
         step(() => {
           const wasOn = S.g[spec.vis];
           if (twoTaps) S.g[spec.vis] = !S.g[spec.vis];
           else S.g[spec.vis] = true;
+          blockedHide = isStep && lastTapKey === spec.key && wasOn;
           hidNow = wasOn && !S.g[spec.vis];
           /* 꺼져 있던 선을 켤 때는 **그 고객 사진에서 측정한 자리**로 올린다 (v1.22.0).
              랜드마크가 없으면(얼굴 인식 실패) 마지막 값 그대로 — 조용히 실패한다. */
@@ -1666,6 +1672,7 @@ function buildLineButtons() {
         lastTapKey = spec.key;          /* noteSel 이 지운 뒤에 찍는다 — 다음 탭이 「두 번째」 */
         /* 숨겼다는 것을 말로 알린다 — 선이 조용히 사라지면 고장으로 보입니다 */
         if (hidNow) showHud(`${t(spec.i18n)} · ${t("line_hidden")}`, 1800);
+        else if (blockedHide) showHud(`${t(spec.i18n)} · ${t("line_step_keep")}`, 1600);
       }
       render();
       if (aiSnapped) showHud(`${t(spec.i18n)} · ${t("ai_placed")}`, 1400);
@@ -3088,9 +3095,25 @@ async function exportImage() {
 }
 
 /* ═══════════ 화면 전환 · 사진 로드 ═══════════ */
-/* 전체라인 인사가 유지되는 시간 — CSS `pbBlink1` 한 바퀴(1.4s)보다 조금 길게 */
-const INTRO_MS = 1600;
+/* ⭐ v1.87.0 — **「초기화셋팅」** (원장님 지시 2026-08-28 · 이름도 원장님이 붙였습니다)
+   블링킹 + 모든 선 전체 색 보임 → 가이드 첫 스텝 시작.
+   「블링킹이 너무 짧다 — 세로에서 가로로 돌리는 사용자의 액션 때문에 첫 셋팅 전체 색 보임이
+    더 길어져야 한다」 → 1.6초 → **4초**. 폰을 돌리는 동안 지나가 버리지 않게.
+   작동하는 네 곳: ① 앱을 처음 열어 사진을 불러왔을 때 ② 사진을 다시 불러왔을 때
+   ③ 초기화 버튼 ④ 가이드를 껐다가 다시 켰을 때.
+   ⛔ 시간을 줄이거나 트리거를 빼지 마세요 — 회귀 141 이 잡습니다. */
+const INTRO_MS = 4000;
 let introTimer = null;
+function startIntro() {
+  S.intro = true;
+  S.guideCur = null;
+  clearTimeout(introTimer);
+  introTimer = setTimeout(() => {
+    S.intro = false;
+    if (S.guideOn) { S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
+    render();
+  }, INTRO_MS);
+}
 /* 화면을 바꾸면 방향 판정도 다시 한다 (v1.27.0)
    홈 = 기기 방향 그대로(세로) / 편집기 = 가로 강제. applyLayout() 참고. */
 function show(id) {
@@ -3124,16 +3147,8 @@ function loadPhoto(file) {
        검정색이라 사용자가 이게 뭐지? 한다」
        ⚠️ 이 타이머는 **한 번만** 도는 플래그 전환입니다 — v1.54.0 처럼 매 프레임 render() 를
           돌리는 깜빡임이 아닙니다 (BASELINE 1-24 의 ⛔ 는 그쪽을 막는 것입니다). */
-    S.intro = true;
-    S.guideCur = null;
     S.doneSet = [];
-    clearTimeout(introTimer);
-    introTimer = setTimeout(() => {
-      S.intro = false;
-      S.guideCur = GUIDE_FLOW[0];
-      noteSel(GUIDE_FLOW[0]);
-      render();
-    }, INTRO_MS);
+    startIntro();               /* 초기화셋팅 ①② — 처음 열었을 때 · 사진을 다시 불러왔을 때 */
     clearHist();                 /* 새 사진 = 되돌리기 기록 초기화 */
     show("editor");
     requestAnimationFrame(() => {
@@ -3648,6 +3663,7 @@ $("btnReset").onclick = () => {
     S.doneSet = [];             /* v1.81.0 — 「체크한 선」 표시도 함께 처음으로 */
     if (S.landmarks) { if (keepPhoto) placeLines(S.landmarks); else autoAlign(S.landmarks); }
   });
+  startIntro();                 /* 초기화셋팅 ③ — 초기화 버튼 (원장님 지시 2026-08-28) */
   render();
   toast(t("reset_done"));
 };
@@ -3838,7 +3854,14 @@ function setRefSide(side) {
 /* 그린 선에 다시 맞추기 — 드로잉을 더 그리거나 지운 뒤 다시 올릴 때 (v1.30.0) */
 $("btnSnap").onclick = () => {
   let ok = false;
-  step(() => { ok = autoFromDrawing(); });
+  step(() => {
+    ok = autoFromDrawing();
+    /* ⭐ v1.86.0 — 맞춘 뒤에는 **가이드 순서에 있는 선이 하나도 숨어 있지 않게** 되돌립니다
+       (원장님 지시 2026-08-28 「예전에 쓰던 이너 라인 되돌려놔」).
+       드로잉 맞춤은 「이 사진에 다시 맞춘다」는 뜻이므로, 숨긴 채로 두면 맞춘 결과가 안 보입니다.
+       ⛔ 「모든 라인 숨김」으로 일부러 숨긴 상태까지 되살리지는 않습니다 — 그건 원장님 선택입니다. */
+    if (ok) for (const k of GUIDE_FLOW) { const sp = specOf(k); if (sp) S.g[sp.vis] = true; }
+  });
   /* v1.69.0 — 맞춘 뒤에는 **가이드를 처음(① 이너)부터** 다시 돕니다.
      드로잉 맞춤이 놓는 것은 앞두께·아치 둘뿐이므로, 나머지를 손으로 놓는 순서가 곧 다음 할 일입니다. */
   if (ok && S.guideOn) { S.intro = false; clearTimeout(introTimer); S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
@@ -3849,11 +3872,10 @@ $("btnSnap").onclick = () => {
    **처음 움직이는 선**이 플로우의 시작이다 (원장님 지시 2026-08-21) */
 $("btnGuide").onclick = () => {
   S.guideOn = !S.guideOn;
-  /* 켜는 순간 **이너부터** 굵게 시작한다 (v1.44.0 원장님 지시 2026-08-21 —
-     「시작 시 가이드 켜진 상태로 시작, 시작의 이너가 먼저 굵은 표시로」).
-     끄면 즉시 종료. */
-  S.guideCur = S.guideOn ? GUIDE_FLOW[0] : null;
-  if (S.guideOn) { S.intro = false; clearTimeout(introTimer); noteSel(GUIDE_FLOW[0]); }
+  /* ⭐ v1.87.0 — 다시 켜면 **초기화셋팅 ④**: 블링킹 + 전체 색을 보여 준 뒤 첫 스텝
+     (원장님 지시 2026-08-28. v1.44.0 의 「켜는 순간 이너부터」는 초기화셋팅 **뒤에** 이어집니다) */
+  if (S.guideOn) startIntro();
+  else { S.guideCur = null; S.intro = false; clearTimeout(introTimer); }
   updateButtons();
   render();
 };
@@ -4122,4 +4144,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
-  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge };
+  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS };

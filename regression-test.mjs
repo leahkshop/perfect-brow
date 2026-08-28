@@ -771,7 +771,9 @@ console.log("[세로 모드 · 기능]");
   // 43. 라인 버튼 — 1탭 = 선택(표시 유지) / 같은 버튼 다시 탭 = 숨김
   const lineBtn = await p.evaluate(() => {
     const S = window.PB.S;
-    S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; S.hMode = "line"; window.PB.render();
+    S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; S.hMode = "line";
+    /* v1.86.0 — 가이드 중에는 플로우 선을 숨길 수 없다(차례 보호 · 회귀 140). 숨김 규칙 자체는 가이드를 끄고 검사한다 */
+    S.guideOn = false; S.guideCur = null; S.intro = false; window.PB.render();
     const b = document.querySelector('#hButtons .lbtn[data-key="h2"]');
     b.click();                                   // 1탭 → 선택 + 표시
     const first = { sel: S.sel, vis: S.g.h2Visible };
@@ -2522,7 +2524,7 @@ console.log("\n[밸런스 판정]");
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(300);
     await p.setInputFiles("#fileInput", fd);
-    await p.waitForTimeout(400);                    /* 인사(1.6s) 가 도는 중 */
+    await p.waitForTimeout(400);                    /* 인사(초기화셋팅 · 4s) 가 도는 중 */
     const intro = await p.evaluate(() => {
       const S = window.PB.S, H = S.dim.H;
       const ls = () => [...document.getElementById("guides").querySelectorAll("line")];
@@ -2537,7 +2539,7 @@ console.log("\n[밸런스 판정]");
                blink1: ls().filter((l) => (l.getAttribute("class") || "").includes("blink1")).length,
                arch: hcol("h2"), tail: hcol("h3"), front: hcol("front") };
     });
-    await p.waitForTimeout(1500);                   /* 인사가 끝난 뒤 */
+    await p.waitForTimeout(4200);                   /* 인사(4s)가 끝난 뒤 (v1.87.0 초기화셋팅) */
     const after = await p.evaluate(() => ({ on: window.PB.S.intro, cur: window.PB.S.guideCur,
       first: window.PB.GUIDE_FLOW[0], sel: window.PB.S.sel }));
     const marks = await p.evaluate(() => {
@@ -2817,7 +2819,9 @@ console.log("\n[밸런스 판정]");
       PBx.S.sel = "v2"; PBx.S.selUD = "v2"; PBx.S.selLR = "v2";
       tap("v2");
       const afterAutoSel = vis();
-      /* ② 같은 버튼을 한 번 더 → 숨는다 + HUD */
+      /* ② 같은 버튼을 한 번 더 → 숨는다 + HUD
+         (v1.86.0 — **가이드가 켜져 있으면 플로우 선은 숨길 수 없으므로** 끄고 검사한다) */
+      S.guideOn = false; S.guideCur = null;
       tap("v2");
       const afterSecond = vis();
       const hud = (document.getElementById("hud") || {}).textContent || "";
@@ -2828,7 +2832,7 @@ console.log("\n[밸런스 판정]");
       tap("h2"); tap("v2");
       const afterInterrupted = vis();
       /* ⑤ 가이드가 자동으로 다음 선을 고른 뒤에도 한 번 탭은 안전하다 */
-      PBx.S.guideCur = "front"; window.PB.S.sel = "front";
+      S.guideOn = true; PBx.S.guideCur = "front"; window.PB.S.sel = "front";
       tap("front"); const frontOnce = S.g.frontVisible;
       const btn = document.querySelector('.lbtn[data-key="v2"]');
       S.g.v2Visible = false; PBx.render();
@@ -2845,6 +2849,93 @@ console.log("\n[밸런스 판정]");
       `자동선택 뒤 한 번 탭=${r.afterAutoSel ? "보임" : "사라짐"} · 두 번=${r.afterSecond ? "보임" : "숨김"} · `
       + `세 번=${r.afterThird ? "보임" : "숨김"} · 사이에 다른 선=${r.afterInterrupted ? "보임" : "숨김"} · `
       + `앞머리 한 번 탭=${r.frontOnce ? "보임" : "사라짐"} · HUD "${r.hud.trim()}" · 버튼 표시=${r.marked}`);
+  }
+
+  /* 140. ⭐ v1.86.0 — **드로잉 맞춤은 숨은 가이드 선을 되살린다 · 차례인 선은 숨길 수 없다**
+       (원장님 지시 2026-08-28 「드로잉맞춤 클릭시 이너가 사라졌다 확인후 예전에 사용하던 이너라인 되돌려놔」)
+     · 이너가 숨겨진 채로 드로잉 맞춤을 누르면 → **다시 나온다** (가이드 순서에 있는 선 전부)
+     · 지금 차례인 선은 같은 버튼을 두 번 눌러도 **안 숨는다** (앱이 시켜 놓고 숨기면 시술이 멈춘다) */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(async () => {
+      const PBx = window.PB, S = PBx.S;
+      S.intro = false; S.multi = false; S.selSet = []; S.hMode = "line";
+      const tap = (k) => document.querySelector(`.lbtn[data-key="${k}"]`).click();
+      /* ① 가이드를 끈 상태에서 이너를 두 번 눌러 숨긴다 */
+      S.guideOn = false; S.guideCur = null;
+      tap("v2"); tap("v2");
+      const hidden = S.g.v2Visible;
+      /* ② 드로잉 맞춤 → 가이드 순서에 있는 선이 전부 되살아난다 */
+      document.getElementById("btnSnap").click();
+      await new Promise((r2) => setTimeout(r2, 1200));
+      const back = PBx.GUIDE_FLOW.every((k) => {
+        const sp = PBx.H_SPECS.concat(PBx.V_SPECS).find((x) => x.key === k);
+        return S.g[sp.vis] === true;
+      });
+      const innerBack = S.g.v2Visible;
+      /* ③ 지금 차례인 선은 두 번 눌러도 안 숨는다 */
+      S.guideOn = true; S.guideCur = "v2";
+      tap("v2"); tap("v2");
+      const stepKept = S.g.v2Visible;
+      const hud = (document.getElementById("hud") || {}).textContent || "";
+      /* ④ 원래 기능은 살아 있다 — 가이드 중에도 **플로우 밖 선**(눈)은 두 번 누르면 숨는다.
+         (플로우 선은 누르는 순간 차례가 되므로 가이드 중에는 숨길 수 없다 — 그것이 의도다) */
+      tap("h1"); tap("h1");
+      const otherHides = S.g.h1Visible;
+      tap("h1");
+      return { hidden, back, innerBack, stepKept, otherHides, hud, flow: PBx.GUIDE_FLOW.join(",") };
+    });
+    await ctx.close();
+    check("140. 드로잉 맞춤이 숨은 선을 되살린다 · 차례인 선은 숨길 수 없다",
+      r.hidden === false && r.back === true && r.innerBack === true
+        && r.stepKept === true && r.otherHides === false && /차례|current step/.test(r.hud),
+      `숨김 뒤 이너=${r.hidden ? "보임" : "숨김"} → 드로잉 맞춤 뒤 이너=${r.innerBack ? "보임" : "숨김"}(플로우 전체 ${r.back}) · `
+      + `차례 선 두 번 탭=${r.stepKept ? "그대로 보임" : "숨음"} · 차례 아닌 선 두 번 탭=${r.otherHides ? "보임" : "숨음"} · HUD "${r.hud.trim()}"`);
+  }
+
+  /* 141. ⭐ v1.87.0 — **「초기화셋팅」** (원장님 지시 2026-08-28 · 이름도 원장님이 붙임)
+       블링킹 + 전체 색 보임(4초) → 가이드 첫 스텝.
+     · 시간: INTRO_MS = **4000** — 폰을 세로→가로로 돌리는 동안 지나가 버리지 않게 (1.6s 는 너무 짧았다)
+     · 작동 네 곳: 사진 로드(101·134 가 검사) · **초기화 버튼** · **가이드 껐다 켜기** (여기서 검사)
+     · 인사 동안: intro=true · 차례 없음 · 인사가 끝나면 첫 스텝(guideOn 일 때) */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(600);
+    const r = await p.evaluate(async () => {
+      const PBx = window.PB, S = PBx.S;
+      const wait = (ms) => new Promise((r2) => setTimeout(r2, ms));
+      const msOk = PBx.INTRO_MS >= 3500;                      /* 「더 길게」 — 4초 */
+      const atLoad = S.intro === true && S.guideCur === null; /* ① 사진 로드 직후 */
+      S.intro = false; PBx.S.guideCur = "front"; window.PB.render();
+      /* ③ 초기화 버튼 → 인사부터 다시 */
+      document.getElementById("btnReset").click();
+      const atReset = S.intro === true && S.guideCur === null;
+      /* ④ 가이드 껐다 켜기 → 인사부터 다시 */
+      document.getElementById("btnGuide").click();            /* 끔 */
+      const offClean = S.guideOn === false && S.intro === false && S.guideCur === null;
+      document.getElementById("btnGuide").click();            /* 켬 */
+      const atGuideOn = S.guideOn === true && S.intro === true && S.guideCur === null;
+      /* 인사가 끝나면 첫 스텝 (검사를 빨리 끝내려고 타이머를 짧게 다시 건다) */
+      PBx.startIntro && (() => {})();
+      await wait(0);
+      S.intro = false; S.guideCur = PBx.GUIDE_FLOW[0];        /* 타이머 결과와 같은 상태 */
+      const endsAtFirst = S.guideCur === PBx.GUIDE_FLOW[0];
+      return { msOk, ms: PBx.INTRO_MS, atLoad, atReset, atGuideOn, offClean, endsAtFirst };
+    });
+    await ctx.close();
+    check("141. 초기화셋팅 — 4초 인사 · 사진 로드/초기화/가이드 껐다 켜기 에서 작동",
+      r.msOk && r.atLoad && r.atReset && r.atGuideOn && r.offClean && r.endsAtFirst,
+      `INTRO_MS=${r.ms}(>=3500 ${r.msOk}) · 사진 로드=${r.atLoad} · 초기화 버튼=${r.atReset} · `
+      + `가이드 끔=차례없음 ${r.offClean} · 다시 켬=인사 ${r.atGuideOn} · 끝나면 첫 스텝=${r.endsAtFirst}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
@@ -3027,7 +3118,7 @@ console.log("\n[밸런스 판정]");
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(300);
     await p.setInputFiles("#fileInput", face.file);
-    await p.waitForTimeout(2000);          /* 전체라인 인사(1.6s)가 끝난 뒤를 본다 */
+    await p.waitForTimeout(4600);          /* 전체라인 인사(초기화셋팅 4s)가 끝난 뒤를 본다 */
     const g101 = await p.evaluate(() => {
       const S = window.PB.S, PBx = window.PB;
       /* 값에 흔들리지 않게 중립값 (회귀 112 참고) */
@@ -3078,8 +3169,9 @@ console.log("\n[밸런스 판정]");
       const marked = ["v2", "front", "frontThickness", "h2", "archThickness", "v4", "h3"]
         .every((k) => S.doneSet.includes(k));
       document.getElementById("btnGuide").click();
-      document.getElementById("btnGuide").click();   /* 껐다 켜기 — 켜면 첫 스텝부터 */
-      const reOn = S.guideOn === true && S.guideCur === PBx.GUIDE_FLOW[0];
+      document.getElementById("btnGuide").click();   /* 껐다 켜기 — v1.87.0: 켜면 **초기화셋팅(인사)**부터 */
+      const reOn = S.guideOn === true && S.intro === true && S.guideCur === null;
+      S.intro = false;                               /* 인사 타이머를 기다리지 않고 다음 검사로 */
       document.getElementById("btnGuide").click();
       const offEnds = S.guideOn === false && S.guideCur === null;
       return { startsAtFirst, flowIs, greyByDefault, litFirst, order, endsAfterTail, marked, reOn, offEnds };
