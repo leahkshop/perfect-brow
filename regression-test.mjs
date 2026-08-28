@@ -1696,7 +1696,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
 
   check(`40. ${dev.n} — 왼쪽 아래는 프리셋(+즐겨찾기) · 좌우 바와 겹치지 않음`,
     menuPos.leftBottom && menuPos.noOverlap && menuPos.gone
-      && menuPos.ids === "btnExport,btnChange,btnGuide,btnLookCycle"   /* v1.89.0 새 배치 */
+      && menuPos.ids === "btnExport,btnChange,btnGuide,btnTip,btnLookCycle"   /* v1.90.0 — 안내 토글 포함 */
       && menuPos.presetHidden,                                          /* 프리셋 숨김 — 시스템은 유지 */
     `왼쪽아래=${menuPos.leftBottom} 겹침없음=${menuPos.noOverlap} 눈가이드제거=${menuPos.gone} [${menuPos.ids}]`);
 
@@ -3003,6 +3003,70 @@ console.log("\n[밸런스 판정]");
       + `눈 5px=${r.eyeNear}/15px=${r.eyeFar} · 앞머리 15px=${r.frontFar} · 인사 켜짐=${r.introOn}→움직이자 꺼짐=${r.introOffNow}`);
   }
 
+  /* 143. ⭐ v1.90.0 — **안내는 중앙 위 · 끌 수 있다 · 가이드가 켜져 있는 동안은 사라지지 않는다**
+       (원장님 지시 2026-08-28)
+     · 가이드 안내와 AI 눈썹정렬 알림은 **중앙 위 같은 자리**(.guidetip)
+     · 「안내」 토글(가이드 버튼 옆)로 끄고 켤 수 있다 — 끄면 프롬프트만 사라지고 플로우는 그대로
+     · 인사(초기화셋팅) 중에도 첫 스텝 안내가 미리 나온다 — 껐다 켠 직후 비어 보이지 않게
+     · 플로우 밖 선(눈)을 골라도 안내가 유지된다
+     · AI 버튼은 「AI / 눈썹정렬」 두 줄 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      S.intro = false; S.tipOn = true;
+      const tipEl = document.getElementById("guideTip"), noteEl = document.getElementById("topNote");
+      const stW = document.getElementById("stage").getBoundingClientRect();
+      /* ① 자리 — 중앙 위 (가이드 안내 · AI 알림 같은 컨테이너) */
+      S.guideOn = true; S.guideCur = "v2"; PBx.updateGuideTip();
+      const tr = tipEl.getBoundingClientRect();
+      const centred = Math.abs((tr.left + tr.right) / 2 - (stW.left + stW.width / 2)) < stW.width * 0.12;
+      const topArea = tr.top - stW.top < 60;
+      const sameBox = tipEl.parentElement === noteEl.parentElement;
+      /* ② 인사 중에도 첫 스텝 안내 */
+      S.intro = true; S.guideCur = null; PBx.updateGuideTip();
+      const duringIntro = !tipEl.hidden && tipEl.textContent.includes("①");
+      S.intro = false;
+      /* ③ 플로우 밖 선(눈)을 골라도 유지 */
+      S.guideCur = "front"; PBx.updateGuideTip();          /* tipKey = front */
+      S.guideCur = null; S.sel = "h1"; PBx.updateGuideTip();
+      const keptOffFlow = !tipEl.hidden;
+      /* ④ 토글 — 끄면 숨고 플로우는 그대로 · 다시 켜면 나온다 · 저장된다 */
+      document.getElementById("btnTip").click();
+      const offHidden = tipEl.hidden === true || getComputedStyle(tipEl).display === "none";
+      const flowAlive = S.guideOn === true;
+      const saved0 = localStorage.getItem("pb_tip_v1");
+      document.getElementById("btnTip").click();
+      PBx.updateGuideTip();
+      const backOn = !tipEl.hidden;
+      /* ⑤ AI 알림 — showNote 가 중앙 위 칩으로 */
+      S.guideOn = true; S.guideCur = "v2";
+      document.getElementById("btnSnap").click();
+      const noteShown = !noteEl.hidden && noteEl.textContent.length > 0;
+      const nr = noteEl.getBoundingClientRect();
+      const noteTop = nr.top - stW.top < 90;
+      /* ⑥ AI 버튼 두 줄 「AI / 눈썹정렬」 */
+      const snap = document.getElementById("btnSnap");
+      const twoLine = (snap.querySelector(".aihead") || {}).textContent === "AI"
+        && /눈썹정렬|Brow Align/.test(snap.textContent)
+        && (snap.querySelector(".ailock") || {}).textContent === "🔒";
+      return { centred, topArea, sameBox, duringIntro, keptOffFlow,
+               offHidden, flowAlive, saved0, backOn, noteShown, noteTop, twoLine };
+    });
+    await ctx.close();
+    check("143. 안내 — 중앙 위 · 토글로 끄고 켬 · 가이드 켜짐 중 유지 · AI/눈썹정렬 두 줄",
+      r.centred && r.topArea && r.sameBox && r.duringIntro && r.keptOffFlow
+        && r.offHidden && r.flowAlive && r.saved0 === "0" && r.backOn
+        && r.noteShown && r.noteTop && r.twoLine,
+      `중앙위=${r.centred}/${r.topArea} 같은자리=${r.sameBox} · 인사중 ①=${r.duringIntro} · 플로우밖 유지=${r.keptOffFlow} · `
+      + `토글 끔=${r.offHidden}(플로우 유지 ${r.flowAlive}, 저장 ${r.saved0}) 켬=${r.backOn} · AI알림 위=${r.noteShown}/${r.noteTop} · 두 줄=${r.twoLine}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.
@@ -3838,7 +3902,10 @@ console.log("\n[밸런스 판정]");
       const label = () => document.getElementById("lookCycleName").textContent;
       const snap = () => ({ inner: S.look.inner, arch: S.look.arch, edge: S.look.edge, edgeC: S.look.edgeC });
       const guideBtn = document.getElementById("btnGuide");
-      const rightOfGuide = btn.previousElementSibling === guideBtn;
+      /* v1.90.0 — 가이드와 조합 순환 사이에 「안내」 토글이 들어왔다 (원장님 지시 2026-08-28).
+         「가이드 묶음의 오른쪽」이라는 뜻은 그대로다 — 가이드보다 뒤, 같은 줄이면 된다 */
+      const rightOfGuide = !!(guideBtn.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING)
+        && btn.parentElement === guideBtn.parentElement;
       const s0 = snap();
       btn.click(); const s1 = snap(), l1 = label();
       btn.click(); const s2 = snap(), l2 = label();

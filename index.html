@@ -258,7 +258,9 @@ body.land.compact .rgap{height:11px}
 .aistatus{position:absolute;top:44px;left:8px;bottom:auto;transform:none;z-index:22;max-width:52%}
 /* ⚠️ v1.64.0 가이드 프롬프트 칩 — 캔버스 위쪽 가운데. 밝은 이마 위에서도 읽히게 어두운 판.
    ⛔ 시술 화면을 가리지 않도록 **한 줄**로 유지하세요. */
-.guidetip{position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:22;max-width:64%}
+/* v1.90.0 — 안내는 **중앙 위쪽** (원장님 지시 2026-08-28). AI 눈썹정렬 알림(#topNote)도 같은 자리 */
+.guidetip{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:22;max-width:64%;
+  display:flex;flex-direction:column;align-items:center;gap:4px}
 .guidetip .chip{font-size:10.5px;padding:6px 11px;line-height:1.3;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block}
 /* ⚠️ v1.81.0 버그 수정 — `display:block` 이 브라우저 기본 `[hidden]{display:none}` 을 이겨서,
@@ -343,6 +345,8 @@ body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
 /* v1.58.0 — 조합 순환 버튼은 **좁게**: 왼쪽 도크가 넓어지면 가운데 도크(잠금=센터선)를
    밀어내므로, 아이폰 compact 에서도 세 도크가 공존할 폭이어야 합니다 (회귀 83 도크간격) */
 .menurow button#btnLookCycle{min-width:46px;padding:0 4px}
+.menurow button#btnTip{min-width:44px;padding:0 4px}
+#btnTip.on{border-color:var(--a1);color:var(--on-accent);background:var(--grad)}
 /* `.menurow button` 이 뒤에 선언되므로 특이도를 한 단계 올립니다 */
 /* v1.50.0 — 「가이드 색상 조금 더 온, 이것이 켜져있다는 신호가 보여야 한다」 (원장님 지시) */
 #btnGuide.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800;
@@ -374,6 +378,8 @@ body.land.compact #editor .favrow button i, body.land.compact #editor .favrow bu
   box-shadow:0 0 16px rgba(168,85,247,.5),0 1px 0 rgba(255,255,255,.18) inset}
 #btnSnap:active{filter:brightness(1.15)}
 #btnSnap .ailock{position:absolute;top:2px;right:4px;font-size:8px;line-height:1;text-decoration:none;opacity:.95}
+#btnSnap .aihead{font-size:11.5px;font-weight:900;letter-spacing:.6px;line-height:1.1}
+#btnSnap em{display:block}
 .posctl.axis-h{flex-direction:row-reverse;width:100%;min-width:0;height:46px}
 .posctl.axis-h .pslot{flex:1;height:34px;min-width:0}
 .posctl.axis-h input[type=range]{width:100%;height:34px}
@@ -768,7 +774,7 @@ body:not(.land) #railLang{display:none}
       <div class="barrow">
       <!-- v1.89.0 — AI 눈썹 맞춤 (구 「드로잉 맞춤」 · 원장님 지시 2026-08-28).
            좌우 바 왼쪽 · 특별한 색 · 오른쪽 위 아주 작은 잠금 이모지(나중에 프리미엄 잠금 자리). -->
-      <button id="btnSnap"><s class="ailock">🔒</s><em data-i18n="ai_redraw">AI 눈썹 맞춤</em></button>
+      <button id="btnSnap"><s class="ailock">🔒</s><em class="aihead">AI</em><em data-i18n="ai_name">눈썹정렬</em></button>
       <div class="posctl axis-h" id="posCtlH">
         <div class="plabel"><span id="selNameH">Center</span><b id="posValH">50</b></div>
         <button class="pbtn" id="posPlusH">▶</button>
@@ -793,6 +799,9 @@ body:not(.land) #railLang{display:none}
         <!-- 가이드 플로우 (v1.42.0) — 켜면 이너→앞두께→앞머리→아치두께→아치→꼬리 순서로
              "지금 차례"인 선만 고유색으로 켜진다. 스킵 가능(안 켜면 이전과 동일) -->
         <button id="btnGuide"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h10M14 12l-4-4M14 12l-4 4M18 5v14"/></svg></i><em data-i18n="editor_guide">가이드</em></button>
+        <!-- v1.90.0 — 안내 켜기/끄기 (원장님 지시 2026-08-28 「안내 받을 수도 없을 수도」).
+             가이드 안내(중앙 위 프롬프트)만 끕니다 — 가이드 플로우 자체는 그대로 돕니다. -->
+        <button id="btnTip"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v.01M12 13.5c0-2.2 3-2.3 3-4.7a3 3 0 1 0-6 0"/><circle cx="12" cy="12" r="9"/></svg></i><em data-i18n="editor_tip">안내</em></button>
         <!-- v1.58.0 — 조합 순환 버튼 (원장님 지시 2026-08-23: 「가이드 오른쪽에 선 색변경 버튼,
              클릭 시 다른 추천 조합으로, 또 클릭 시 다른 조합」). 순서: 내 세트 → 밝은 사진 → 어두운 사진 → 다시 내 세트 -->
         <button id="btnLookCycle"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17c2.5-2 3.8-5.2 3.8-8.5S14.5 5.5 12 3.5z" fill="currentColor" stroke="none" opacity=".45"/></svg></i><em id="lookCycleName" data-i18n="set_cycle">선 색</em></button>
@@ -812,7 +821,9 @@ body:not(.land) #railLang{display:none}
     <div class="hud" id="hud"></div>
     <div class="ov aistatus"><span class="chip" id="aiStatus" hidden></span></div>
     <!-- v1.64.0 가이드 프롬프트 — 지금 차례인 선을 무엇에 맞추는지 한 줄로 (원장님 지시 2026-08-23) -->
-    <div class="ov guidetip"><span class="chip" id="guideTip" hidden></span></div>
+    <div class="ov guidetip"><span class="chip" id="guideTip" hidden></span>
+      <!-- v1.90.0 — AI 눈썹정렬 결과 알림. 화면 한가운데 HUD 대신 가이드 안내와 같은 자리 -->
+      <span class="chip" id="topNote" hidden></span></div>
   </div>
 
   <aside id="lineRail">

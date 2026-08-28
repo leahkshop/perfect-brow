@@ -64,6 +64,7 @@ const I18N = {
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     line_hidden: "숨김 — 다시 누르면 나옵니다",
+    editor_tip: "안내", ai_name: "눈썹정렬",
     line_step_keep: "지금 차례라 숨기지 않습니다",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_edge_hd: "테두리 — 없어도 되는 덤",
@@ -223,6 +224,7 @@ const I18N = {
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     line_hidden: "hidden — tap again to show",
+    editor_tip: "Tips", ai_name: "Brow Align",
     line_step_keep: "kept — this is the current step",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_edge_hd: "Outline — optional extra",
@@ -355,7 +357,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.89.0";
+const APP_VERSION = "v1.90.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -688,6 +690,11 @@ const S = {
   activePreset: null,    // 지금 적용 중인 프리셋 id (v1.25.0)
   balOn: false,          // 밸런스 표시 중 (v1.26.0)
   refSide: localStorage.getItem("pb_refside") === "R" ? "R" : "L",   // 기준 쪽 — 다음에도 유지
+  /* v1.90.0 — 가이드 안내(중앙 위 프롬프트) 켜기/끄기. 기본 켜짐 · 다음에도 유지 */
+  tipOn: localStorage.getItem("pb_tip_v1") !== "0",
+  /* v1.90.0 — 마지막으로 안내를 띄운 플로우 선. 플로우 밖 선(눈·센터)을 골라도
+     가이드가 켜져 있는 동안 안내가 사라지지 않게 붙잡아 둔다 (원장님 지시 2026-08-28) */
+  tipKey: null,
   balance: null,         // { off: {key: 차이px}, skipped: [key] }
   multi: false,          // 여러라인 모드 (v1.18.0)
   selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
@@ -735,6 +742,15 @@ function toast(msg) {
   el.classList.add("on");
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove("on"), 1900);
+}
+/* v1.90.0 — 중앙 위 알림 (가이드 안내와 같은 자리 · 원장님 지시 2026-08-28).
+   AI 눈썹정렬 결과처럼 「읽고 지나가는 말」은 화면 한가운데(HUD)가 아니라 여기로. */
+function showNote(html, ms) {
+  const el = $("topNote"); if (!el) { showHud(html, ms); return; }
+  el.innerHTML = html;
+  el.hidden = false;
+  clearTimeout(showNote._t);
+  showNote._t = setTimeout(() => { el.hidden = true; }, ms || 2200);
 }
 function showHud(html, ms) {
   hud.innerHTML = html;
@@ -1153,7 +1169,13 @@ function renderGuides() {
 const STEP_NUM = ["①", "②", "③", "④", "⑤", "⑥", "⑦"];
 function updateGuideTip() {
   const el = $("guideTip"); if (!el) return;
-  const key = S.guideOn ? S.guideCur : null;
+  /* ⭐ v1.90.0 (원장님 지시 2026-08-28 「가이드가 켜져 있는 상태에서는 안내가 나오도록」)
+     · 인사(초기화셋팅) 중에도 **첫 스텝 안내**를 미리 띄운다 — 껐다 켠 직후 3.2초가 비어 보였다
+     · 플로우 밖 선(눈·센터 등)을 골라 차례가 잠시 내려가도 **마지막 안내를 유지**한다 (S.tipKey)
+     · 「안내」 토글(S.tipOn)이 꺼져 있으면 숨긴다 */
+  if (S.guideOn && S.guideCur) S.tipKey = S.guideCur;
+  const key = S.guideOn && S.tipOn
+    ? (S.guideCur || (S.intro ? GUIDE_FLOW[0] : S.tipKey) || GUIDE_FLOW[0]) : null;
   const msg = key ? t("tip_" + key) : "";
   if (!key || msg === "tip_" + key) { el.hidden = true; return; }
   /* 번호는 **지금 순서**에서 계산한다 — 원장님이 순서를 바꾸면 번호도 따라 바뀐다 (v1.81.0) */
@@ -1714,6 +1736,7 @@ function updateButtons() {
     b.classList.toggle("sel", isSelected(spec.key));
   });
   $("btnMulti").classList.toggle("on", S.multi);
+  { const bt = $("btnTip"); if (bt) bt.classList.toggle("on", S.tipOn); }   /* v1.90.0 */
   /* 전체라인 = 여러라인의 후속 버튼 — 여러라인이 꺼져 있으면 아예 보이지 않는다 (v1.19.0) */
   const allSel = $("btnAllSel");
   allSel.hidden = !S.multi;
@@ -3894,7 +3917,7 @@ $("btnSnap").onclick = () => {
      드로잉 맞춤이 놓는 것은 앞두께·아치 둘뿐이므로, 나머지를 손으로 놓는 순서가 곧 다음 할 일입니다. */
   if (ok && S.guideOn) { S.intro = false; clearTimeout(introTimer); S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
   render(); updateButtons();
-  showHud(ok ? t("ai_drawn") : t("ai_redraw_fail"), 2200);
+  showNote(ok ? t("ai_drawn") : t("ai_redraw_fail"), 2600);   /* v1.90.0 — 중앙 위, 가이드 안내와 같은 자리 */
 };
 /* 가이드 켜고 끄기 — 끄면 플로우 즉시 종료. 켠 직후엔 아무 선도 켜지 않는다:
    **처음 움직이는 선**이 플로우의 시작이다 (원장님 지시 2026-08-21) */
@@ -3906,6 +3929,12 @@ $("btnGuide").onclick = () => {
   else { S.guideCur = null; S.intro = false; clearTimeout(introTimer); }
   updateButtons();
   render();
+};
+/* v1.90.0 — 안내 켜기/끄기 (가이드 플로우 자체는 그대로) */
+$("btnTip").onclick = () => {
+  S.tipOn = !S.tipOn;
+  try { localStorage.setItem("pb_tip_v1", S.tipOn ? "1" : "0"); } catch (e) {}
+  updateButtons(); updateGuideTip();
 };
 $("btnRefL").onclick = () => setRefSide("L");
 $("btnRefR").onclick = () => setRefSide("R");
