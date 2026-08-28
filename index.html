@@ -845,10 +845,14 @@ body:not(.land) #railLang{display:none}
         <div id="lookTabGrab" hidden>
           <div class="setrow"><span class="lb" data-i18n="set_dragc">심 색</span><span class="pal" id="swDragC"></span></div>
           <div class="setrow"><span class="lb" data-i18n="set_drage">테두리 색</span><span class="pal" id="swDragE"></span></div>
-          <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span><span class="seg" id="segDragW"></span></div>
-          <div class="setrow"><span class="lb" data-i18n="set_alpha">투명도</span>
-            <input type="range" class="slim" id="rngDragOp" min="50" max="100" step="5" value="100">
-            <span id="dragOpVal" class="rngval">100%</span></div>
+          <!-- v1.82.0 — 잡은 선 굵기도 **슬라이더** (원장님 지시 2026-08-27 · 기본 선과 손에 익는 것을 맞춤).
+               ⛔ 3단 세그먼트로 되돌리지 마세요 — 기본 선과 조작이 달라 손이 헷갈립니다. -->
+          <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span>
+            <input type="range" class="slim" id="rngDragW" min="60" max="180" step="5" value="80">
+            <span id="dragWVal" class="rngval">80%</span>
+            <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_alpha">투명도</span>
+            <input type="range" class="slim" id="rngDragOp" min="50" max="100" step="5" value="95">
+            <span id="dragOpVal" class="rngval">95%</span></div>
           <p class="setnote" data-i18n="set_grab_note">잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.</p>
         </div>
         <!-- v1.81.0 가이드 순서 편집 (원장님 지시 2026-08-27) -->

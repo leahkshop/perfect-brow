@@ -3368,6 +3368,14 @@ console.log("\n[밸런스 판정]");
       const grabBig = segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
       const dragWOk = grabBig[1] && Math.abs(grabBig[1].w - (2.95 * 1.35)) < 0.01;
       const dragOpOk = grabBig[1] && Math.abs(grabBig[1].o - 0.6) < 0.01;
+      /* v1.82.0 — 슬라이더를 끌면 잡은 선이 실제로 굵어진다 (기본 선 굵기와는 따로) */
+      S.look = { ...NEU, weight: 0.8, dragEdge: "none" }; PBx.buildLookUI();
+      const rw = document.getElementById("rngDragW");
+      const wAt = (v) => { rw.value = String(v); rw.dispatchEvent(new Event("input", { bubbles: true }));
+        const q = segsAt(S.g.front * H).filter((l) => l.w > 1.2).sort((a, b) => b.w - a.w);
+        return q[0] ? q[0].w : 0; };
+      const dragThin = wAt(60), dragThick = wAt(180);
+      const dragSliderOk = dragThick > dragThin * 2.5 && Math.abs(S.look.weight - 0.8) < 1e-9;
       S.dragOn = false;
 
       /* ⑥ 조합 3개 · 「모두 이 색」 · 저장 · 이전 설정으로 */
@@ -3395,9 +3403,11 @@ console.log("\n[밸런스 판정]");
         baseW, thickW, thinW, baseLen, longLen, shortLen, dimOp,
         comboN, swN, dragSwN, dragRing, dragCore, backOk,
         dragNoneOk: grabNone.length === 1 && grabNone[0].c === "#FFFFFF", edgeNone, selOp, selW, plainW,
+        dragSliderOk, dragThin, dragThick,
         dragWOk, dragOpOk,
         tabsOk: !!document.getElementById("tabBase") && !!document.getElementById("tabGrab")
-             && !!document.getElementById("segDragW") && !!document.getElementById("rngDragOp")
+             && !!document.getElementById("rngDragW") && !!document.getElementById("rngDragOp")
+             && !document.getElementById("segDragW")   /* v1.82.0 — 잡은 선 굵기도 슬라이더 */
              && !!document.getElementById("tabOrder") && !!document.getElementById("rngW")
              && !!document.getElementById("rngEdge") && !document.getElementById("segW")
              && !document.getElementById("segEdge") && !!document.getElementById("swVAll"),
@@ -3406,7 +3416,7 @@ console.log("\n[밸런스 판정]");
       };
     });
     await ctx.close();
-    check("109. 설정 — 색상표 8색 · 세로선 목록 · 굵기/테두리 슬라이더 · 테두리 없음/흰색/검정/먹색 · 선택 강조",
+    check("109. 설정 — 색상표 8색 · 세로선 목록 · 굵기/테두리/잡은선 굵기 슬라이더 · 테두리 4종 · 선택 강조",
       r.palOk
         && r.baseC === "#5EEAD4" && r.baseRail === "#5EEAD4"
         && r.changedC === "#FF4D94" && r.changedRail === "#FF4D94"
@@ -3418,13 +3428,13 @@ console.log("\n[밸런스 판정]");
         && r.edgeNone === 1
         && r.comboN === 3 && r.swN === 8 && r.dragSwN === 10
         && r.dragRing === "#2E8BFF" && r.dragCore === "#FFFFFF" && r.backOk
-        && r.dragNoneOk && r.dragWOk && r.dragOpOk && r.tabsOk
+        && r.dragNoneOk && r.dragWOk && r.dragOpOk && r.dragSliderOk && r.tabsOk
         && r.brightEdge === 70 && r.brightEdgeC === "light"
         && r.allSame && r.storedInner && r.resetOk,
       `색상표 ${r.pal.length}개 · 선 ${r.baseC}→${r.changedC} / 띠 ${r.baseRail}→${r.changedRail} · `
       + `테두리 밝은색→${r.edgeLightPair[0]} 짙은색→${r.edgeDarkPair[0]} 더굵음=${r.edgeThicker} · `
       + `굵기 ${r.thinW}/${r.baseW}/${r.thickW} · 길이 ${Math.round(r.shortLen)}/${Math.round(r.baseLen)}/${Math.round(r.longLen)} · `
-      + `투명도 ${r.dimOp}→선택 ${r.selOp} · 굵기 ${r.plainW}→선택 ${r.selW} · 테두리없음=한줄 ${r.edgeNone === 1} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(10칸 ${r.dragSwN === 10}) · 없음=심만 ${r.dragNoneOk} · 굵기분리 ${r.dragWOk}/투명도분리 ${r.dragOpOk} · 탭 ${r.tabsOk} · `
+      + `투명도 ${r.dimOp}→선택 ${r.selOp} · 굵기 ${r.plainW}→선택 ${r.selW} · 테두리없음=한줄 ${r.edgeNone === 1} · 조합 ${r.comboN}개 · 잡은선 심 ${r.dragCore}/테두리 ${r.dragRing}(10칸 ${r.dragSwN === 10}) · 없음=심만 ${r.dragNoneOk} · 굵기분리 ${r.dragWOk}/투명도분리 ${r.dragOpOk} · 잡은선 굵기 슬라이더 ${r.dragThin.toFixed(1)}→${r.dragThick.toFixed(1)}(${r.dragSliderOk}) · 탭 ${r.tabsOk} · `
       + `이전설정복귀 ${r.backOk} · 모두같은색 ${r.allSame} · 저장 ${r.storedInner} · 기본으로 ${r.resetOk}`);
   }
 

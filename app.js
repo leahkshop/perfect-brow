@@ -45,7 +45,7 @@ const I18N = {
     editor_preset_save: "현재 설정 저장",
     /* v1.56.0 설정 시트 */
     set_title: "설정 — 선 모양", set_badge: "설정",
-    set_dragc: "잡은 선 심", set_drage: "잡은 선 테두리", set_back: "이전 설정으로",
+    set_dragc: "심 색", set_drage: "테두리 색", set_back: "이전 설정으로",
     set_cycle: "선 색", set_c_mine: "내 세트",
     /* v1.64.0 가이드 스텝 프롬프트 — 지금 무엇을 맞추는지 한 줄로 */
     /* ⚠️ v1.69.0 — 「드로잉 맞춤시 맞아지는 라인은 오직 앞두께·아치만. 나머지 교정 프롬프트
@@ -207,7 +207,7 @@ const I18N = {
     editor_preset: "Presets",
     editor_preset_save: "Save current",
     set_title: "Settings — Line look", set_badge: "Set",
-    set_dragc: "Grab core", set_drage: "Grab outline", set_back: "Undo changes",
+    set_dragc: "Core", set_drage: "Outline", set_back: "Undo changes",
     set_cycle: "Colors", set_c_mine: "My set",
     tip_v2: "Inner — align the vertical to the nostril / inner-canthus line",
     tip_front: "Front — put it on the <b>lower</b> edge of the front",
@@ -349,7 +349,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.81.0";
+const APP_VERSION = "v1.82.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3175,12 +3175,11 @@ function buildLookUI() {
   /* 「모두 이 색」이 **눌렸다는 것이 보여야 한다** (원장님 지시 2026-08-27).
      상태로 표시합니다 — 세 묶음이 같은 색인 동안 계속 켜져 있어 눌렀는지 되짚을 필요가 없습니다. */
   { const b = $("lookAll"); if (b) b.classList.toggle("on", L.inner === L.arch && L.arch === L.tail); }
-  /* v1.59.0 — 잡은 선 전용 굵기·투명도 (기본 선과 완전 분리) */
-  const sdw = $("segDragW");
-  if (sdw) {
-    sdw.innerHTML = "";
-    [[0.8, t("set_thin")], [1, t("set_mid")], [1.35, t("set_thick")]]
-      .forEach(([v, lb]) => sdw.appendChild(segBtn(lb, L.dragW === v, () => lookSet({ dragW: v }))));
+  /* v1.59.0 — 잡은 선 전용 굵기·투명도 (기본 선과 **값은** 완전 분리).
+     v1.82.0 — 굵기도 **슬라이더**로 (원장님 지시 2026-08-27). 값은 따로, 조작 방식만 같습니다. */
+  if ($("rngDragW")) {
+    $("rngDragW").value = Math.round((L.dragW != null ? L.dragW : 1) * 100);
+    $("dragWVal").textContent = Math.round((L.dragW != null ? L.dragW : 1) * 100) + "%";
     $("rngDragOp").value = Math.round((L.dragOp != null ? L.dragOp : 1) * 100);
     $("dragOpVal").textContent = Math.round((L.dragOp != null ? L.dragOp : 1) * 100) + "%";
   }
@@ -3410,6 +3409,13 @@ $("rngAlpha").addEventListener("input", (e) => {
   lookPreview(); render();
 });
 $("rngAlpha").addEventListener("change", () => { saveLook(); buildLookUI(); });
+/* v1.82.0 — 잡은 선 굵기 슬라이더. 끄는 동안 미리보기(잡은 선 탭)와 화면이 같이 변합니다 */
+$("rngDragW").addEventListener("input", (e) => {
+  S.look.dragW = clamp(+e.target.value / 100, 0.6, 1.8);
+  $("dragWVal").textContent = e.target.value + "%";
+  lookPreview(); render();
+});
+$("rngDragW").addEventListener("change", () => { saveLook(); buildLookUI(); });
 $("rngDragOp").addEventListener("input", (e) => {
   S.look.dragOp = +e.target.value / 100;
   $("dragOpVal").textContent = e.target.value + "%";
