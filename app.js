@@ -351,7 +351,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.83.0";
+const APP_VERSION = "v1.84.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -640,8 +640,17 @@ const hasEdge = () => S.look.edgeC !== "none" && S.look.edge > 0;
 /* boost = 1 이면 **선택된 선** — 조금 더 굵고 조금 더 밝게 (v1.81.0 · 원장님 지시 2026-08-27).
    ⚠️ 값을 키우지 마세요: 크게 하면 「잡은 선」과 구분이 안 되고, 자가 눈썹을 덮습니다. */
 const SEL_W = 1.3, SEL_OP = 0.25;
+/* ⭐ v1.84.0 — **고른 선 말고는 한 단계 물러난다** (원장님 확인 2026-08-27 · B안)
+   · 고른 선은 지금 그대로(고유색 · 굵기 ×1.3 · 밝기 +0.25 · 고른 순간 한 번 반짝)
+   · 나머지는 **자기 색 그대로 옅게** — 회색으로 바꾸지 않습니다. 색이 곧 이름표이기 때문입니다(1-46.2)
+   · **가이드가 꺼졌을 때만** 적용합니다. 가이드가 켜져 있으면 이미 차례 선 하나만 색이 있어
+     더 죽일 것이 없고, 두 신호가 겹치면 무엇이 차례인지 흐려집니다
+   ⛔ 값을 더 내리지 마세요(0.55). 더 내리면 「가이드를 끄면 전부 보인다」(1-40)가 무너집니다.
+   ⛔ 고른 선의 색을 바꾸는 방식(A안)으로 되돌리지 마세요 — 사진 위에서 선 이름을 잃습니다. */
+const SEL_FADE = 0.55;
 function drawLive(frag, x1, y1, x2, y2, hex, w, cls, boost) {
-  const op = boost ? Math.min(1, S.look.alpha + SEL_OP) : S.look.alpha;
+  const fade = (!S.guideOn && !S.intro && !boost) ? SEL_FADE : 1;
+  const op = (boost ? Math.min(1, S.look.alpha + SEL_OP) : S.look.alpha) * fade;
   const ww = boost ? w * SEL_W : w;
   if (hasEdge()) drawLine(frag, x1, y1, x2, y2, edgeColorFor(hex),
                           ww * (1 + 2 * S.look.edge / 100), op * 0.9, cls);

@@ -2743,6 +2743,55 @@ console.log("\n[밸런스 판정]");
       + `한 번 반짝=${r.pulseOnce}(${r.picked && r.picked.cls}) · 잡는 중 ${r.held && r.held.c} · 놓고 다른 선 고르면 ${r.backDead && r.backDead.c}`);
   }
 
+  /* 138. ⭐ v1.84.0 — **고른 선 말고는 한 단계 물러난다** (원장님 확인 2026-08-27 · B안)
+     · 가이드 **꺼짐**: 고른 선은 그대로, 나머지는 **자기 색 그대로 옅게**(0.55) — 회색으로 바꾸지 않는다
+     · 가이드 **켜짐**: 아무것도 죽이지 않는다 (이미 차례 선 하나만 색이 있다)
+     ⛔ 나머지 선의 **색**이 바뀌면 실패한다 — 색이 곧 이름표다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, H = S.dim.H;
+      S.intro = false; S.multi = false; S.selSet = []; S.doneSet = []; S.dragOn = false;
+      S.look = { ...PBx.LOOK_DEF, weight: 1, alpha: 0.8 };
+      const seg = (key) => {
+        const y = S.g[key] * H;
+        const ls = [...document.getElementById("guides").querySelectorAll("line")].filter((l) => {
+          const y1 = +l.getAttribute("y1"), y2 = +l.getAttribute("y2");
+          if (+(l.getAttribute("stroke-opacity") || 1) <= 0.3) return false;
+          return Math.abs(y1 - y2) < 0.5 && Math.abs(y1 - y) < 1 && Math.abs(+l.getAttribute("x2") - +l.getAttribute("x1")) > 4;
+        }).sort((a, b) => +b.getAttribute("stroke-width") - +a.getAttribute("stroke-width"));
+        return ls[0] ? { c: ls[0].getAttribute("stroke"), o: +(ls[0].getAttribute("stroke-opacity") || 1) } : null;
+      };
+      /* 가이드 꺼짐 — 아치엣지를 고른다 */
+      S.guideOn = false; S.guideCur = null;
+      document.querySelector('.lbtn[data-key="h2"]').click();
+      PBx.render();
+      const picked = seg("h2"), other = seg("h3"), otherFront = seg("front");
+      /* 가이드 켜짐 — 죽이지 않는다 (차례 선만 색이 있다) */
+      S.guideOn = true; S.guideCur = "h3"; S.sel = "h3"; S.selUD = "h3";
+      PBx.render();
+      const onCur = seg("h3");
+      return { picked, other, otherFront, onCur, alpha: S.look.alpha,
+               tailOwn: S.look.tail, innerOwn: S.look.inner };
+    });
+    await ctx.close();
+    const fadeOk = r.other && Math.abs(r.other.o - 0.8 * 0.55) < 0.02
+                && r.otherFront && Math.abs(r.otherFront.o - 0.8 * 0.55) < 0.02;
+    const keepColor = r.other && r.other.c === r.tailOwn && r.otherFront && r.otherFront.c === r.innerOwn;
+    const pickedOk = r.picked && Math.abs(r.picked.o - Math.min(1, 0.8 + 0.25)) < 0.02;
+    const guideOnOk = r.onCur && Math.abs(r.onCur.o - Math.min(1, 0.8 + 0.25)) < 0.02;
+    check("138. 고른 선 말고는 한 단계 물러난다 — 가이드 꺼짐에서만 · 색은 그대로 옅게",
+      fadeOk && keepColor && pickedOk && guideOnOk,
+      `고른 선 ${r.picked && r.picked.o.toFixed(2)}(기대 ${Math.min(1, r.alpha + 0.25)}) · `
+      + `나머지 ${r.other && r.other.o.toFixed(2)}/${r.otherFront && r.otherFront.o.toFixed(2)}(기대 ${(0.8 * 0.55).toFixed(2)}) · `
+      + `색 유지=${keepColor}(${r.other && r.other.c}/${r.otherFront && r.otherFront.c}) · 가이드 켜짐 차례선 ${r.onCur && r.onCur.o.toFixed(2)}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.
@@ -3464,7 +3513,8 @@ console.log("\n[밸런스 판정]");
       const longLen = lenOf();
       S.look = { ...NEU, hlen: 0.14 }; PBx.render();
       const shortLen = lenOf();
-      /* ⚠️ v1.81.0 — **선택된 선은 조금 밝아집니다.** 투명도를 잴 때는 선택을 비켜 둡니다 */
+      /* ⚠️ v1.81.0 — **선택된 선은 조금 밝아집니다.** 투명도를 잴 때는 선택을 비켜 둡니다
+         ⚠️ v1.84.0 — 비켜 둔 선은 **한 단계 물러난 선**(×0.55 · 회귀 138)입니다 */
       S.look = { ...NEU, alpha: 0.6 }; S.sel = "h1"; PBx.render();
       const dimOp = front()[0].o;
       S.sel = "front"; PBx.render();
@@ -3541,7 +3591,7 @@ console.log("\n[밸런스 판정]");
         && r.autoLight === "#14161B" && r.autoDark === "#FFFFFF"
         && r.thickW > r.baseW && r.thinW < r.baseW
         && r.longLen > r.baseLen && r.shortLen < r.baseLen
-        && Math.abs(r.dimOp - 0.6) < 0.01 && r.selOp > r.dimOp + 0.2 && r.selW > r.plainW * 1.2
+        && Math.abs(r.dimOp - 0.6 * 0.55) < 0.01 && r.selOp > r.dimOp + 0.2 && r.selW > r.plainW * 1.2
         && r.edgeNone === 1
         && r.comboN === 3 && r.swN === 8 && r.dragSwN === 10
         && r.dragRing === "#2E8BFF" && r.dragCore === "#FFFFFF" && r.backOk
