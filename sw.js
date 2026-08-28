@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v83";  /* v1.84.0 — 고른 선 말고는 한 단계 물러난다(가이드 꺼짐에서만) */
+const VERSION = "pb-v84";  /* v1.84.1 — 명령서 §0-X 「통찰 규칙」 신설 (문서) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
