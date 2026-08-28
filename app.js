@@ -355,7 +355,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.87.0";
+const APP_VERSION = "v1.88.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -524,6 +524,16 @@ const ZOOM_MIN = 0.5, ZOOM_MAX = 20;   /* v1.25.0 — 작은 사진도 목표 �
 const OFFSET_MAX = 1.0;   // 사진 좌우/위아래 이동 한계 (캔버스 비율)
 const SLIDER_OFFSET = 0.5;// 좌우/위아래 슬라이더 범위 (드래그는 OFFSET_MAX 까지)
 const HIT_PX = 28;        // 화면에서 선을 탭/드래그로 잡는 인식 반경
+/* ⭐ v1.88.0 — 잡는 범위 섬세 교정 (원장님 지시 2026-08-28)
+   ① EYE_HIT_PX: 눈 가로선(h1)은 **아주 가까이(9px)에서만** 잡힌다 — 화면을 가로지르는 긴 선이라
+      아치엣지·아치두께·꼬리를 만지려던 손이 자꾸 눈 선을 잡았습니다. 잡힌 **뒤의** 드래그는
+      다른 선과 똑같습니다(손이 멀어져도 잡은 선이 움직인다 — 기존 시스템 유지).
+   ② V6_HIT_GAP: 아치선(v6)은 **아치두께보다 아래로 내려온 구간에서만** 잡힌다 —
+      아치엣지·아치두께가 아치선 위(위쪽)에 올라와 있으므로, 그 높이에서의 탭은 언제나
+      가로 자(본인 선)로 간다. 아치선을 잡으려면 아치두께 아래 구간을 누른다.
+   ⛔ 이 두 상수를 지우거나 h1 을 HIT_PX 로 되돌리지 마세요 — 회귀 142 가 잡습니다. */
+const EYE_HIT_PX = 9;
+const V6_HIT_GAP = 8;
 const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭 (클수록 얼굴이 크게 잡힘)
 /* ── 메인 작업 영역 (v1.17.0) ──────────────────────────────────
    캔버스 왼쪽 끝 ~ **오른쪽 위아래 드래그 바 왼쪽 끝**까지가 실제 작업 공간이다.
@@ -1248,7 +1258,15 @@ function hitTest(x, y) {
       const inSeg = L.segs.some(([xa, xb]) => x >= xa - 12 && x <= xb + 12);
       if (!inSeg) continue;
       d = Math.abs(y - L.y);
+      /* v1.88.0 ① — 눈 선은 아주 가까이서만. 근처를 스쳐도 안 잡힌다 */
+      if (L.key === "h1" && d > EYE_HIT_PX) continue;
     } else {
+      /* v1.88.0 ② — 아치선은 아치두께 **아래 구간**에서만 잡힌다.
+         아치두께가 숨어 있으면 아치엣지 기준, 둘 다 숨어 있으면 제한 없음 */
+      if (L.key === "v6") {
+        const topKey = g.archThicknessVisible ? "archThickness" : (g.h2Visible ? "h2" : null);
+        if (topKey && y < g[topKey] * H + V6_HIT_GAP) continue;
+      }
       d = Math.abs(x - L.x);
     }
     if (d < bd) { bd = d; best = L; }
@@ -1388,6 +1406,7 @@ touch.addEventListener("pointermove", (e) => {
     if (!gDrag.moved) {
       if (Math.hypot(sp.x - gDrag.x0, sp.y - gDrag.y0) < 3) return;
       gDrag.moved = true;
+      endIntroEarly();   /* v1.88.0 — 인사 중에 선을 움직이면 인사는 즉시 끝난다 */
       S.dragOn = true;   /* 움직이는 동안 짙은 회색 + 살구색 테두리 (v1.55.0) */
       /* 끌기 시작 = 잡은 선을 선택에 합류 (여러라인 모드) */
       if (S.multi && gDrag.tapKey && !S.selSet.includes(gDrag.tapKey)) S.selSet.push(gDrag.tapKey);
@@ -3101,8 +3120,11 @@ async function exportImage() {
     더 길어져야 한다」 → 1.6초 → **4초**. 폰을 돌리는 동안 지나가 버리지 않게.
    작동하는 네 곳: ① 앱을 처음 열어 사진을 불러왔을 때 ② 사진을 다시 불러왔을 때
    ③ 초기화 버튼 ④ 가이드를 껐다가 다시 켰을 때.
-   ⛔ 시간을 줄이거나 트리거를 빼지 마세요 — 회귀 141 이 잡습니다. */
-const INTRO_MS = 4000;
+   ⭐ v1.88.0 (원장님 지시 2026-08-28) — ① 시간 4000 → **3200** (「아주 조금만 짧게」)
+   ② 사용자가 **선을 움직이기 시작하면 즉시 종료** (endIntroEarly — 이미 익숙해졌다는 뜻).
+   조기 종료 때는 첫 스텝을 강제로 켜지 않습니다 — 방금 잡은 선이 곧 차례가 됩니다.
+   ⛔ 트리거를 빼거나 시간을 크게 바꾸지 마세요 — 회귀 141 이 잡습니다. */
+const INTRO_MS = 3200;
 let introTimer = null;
 function startIntro() {
   S.intro = true;
@@ -3113,6 +3135,12 @@ function startIntro() {
     if (S.guideOn) { S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
     render();
   }, INTRO_MS);
+}
+/* 초기화셋팅 조기 종료 — 선을 움직이는 순간. 차례는 움직인 선 쪽 로직이 정한다 */
+function endIntroEarly() {
+  if (!S.intro) return;
+  S.intro = false;
+  clearTimeout(introTimer);
 }
 /* 화면을 바꾸면 방향 판정도 다시 한다 (v1.27.0)
    홈 = 기기 방향 그대로(세로) / 편집기 = 가로 강제. applyLayout() 참고. */
@@ -3904,24 +3932,24 @@ histSlider(posSliderV);
 histSlider(posSliderH);
 
 /* 세로 조절자 — 위아래로 움직이는 가로선(S.selUD) 전담 */
-posSliderV.addEventListener("input", (e) => { beginEdit(); noteSel(S.selUD);
+posSliderV.addEventListener("input", (e) => { endIntroEarly(); beginEdit(); noteSel(S.selUD);
   S.dragOn = true;                                                 /* v1.55.0 */
   if (S.guideOn && GUIDE_FLOW.includes(S.selUD)) S.guideCur = S.selUD;
   applyPos(parseFloat(e.target.value), S.selUD); });
 posSliderV.addEventListener("change", () => { const moved = S.dragOn; S.dragOn = false;
   if (moved) markDone(S.selUD); guideAdvance(S.selUD); });
-$("posMinusV").onclick = () => step(() => { noteSel(S.selUD); markDone(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); });
-$("posPlusV").onclick  = () => step(() => { noteSel(S.selUD); markDone(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); });
+$("posMinusV").onclick = () => step(() => { endIntroEarly(); noteSel(S.selUD); markDone(S.selUD); applyPos(parseFloat(posSliderV.value) - posConfig(S.selUD).step, S.selUD); });
+$("posPlusV").onclick  = () => step(() => { endIntroEarly(); noteSel(S.selUD); markDone(S.selUD); applyPos(parseFloat(posSliderV.value) + posConfig(S.selUD).step, S.selUD); });
 
 /* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
-posSliderH.addEventListener("input", (e) => { beginEdit(); if (!hIsPhoto()) noteSel(S.selLR);
+posSliderH.addEventListener("input", (e) => { if (!hIsPhoto()) endIntroEarly(); beginEdit(); if (!hIsPhoto()) noteSel(S.selLR);
   if (!hIsPhoto()) { S.dragOn = true; }                            /* v1.55.0 */
   if (!hIsPhoto() && S.guideOn && GUIDE_FLOW.includes(S.selLR)) S.guideCur = S.selLR;
   applyH(parseFloat(e.target.value)); });
 posSliderH.addEventListener("change", () => { const moved = S.dragOn; S.dragOn = false;
   if (!hIsPhoto()) { if (moved) markDone(S.selLR); guideAdvance(S.selLR); } });
-$("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) { noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) - hConfig().step); });
-$("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) { noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) + hConfig().step); });
+$("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) { endIntroEarly(); noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) - hConfig().step); });
+$("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) { endIntroEarly(); noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) + hConfig().step); });
 
 /* 사진 보정 모드 버튼 — 누르면 아래 가로 바가 사진 조절로 전환된다.
    같은 버튼을 다시 누르면 선 조절로 되돌아간다. */
@@ -4144,4 +4172,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
-  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS };
+  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly };

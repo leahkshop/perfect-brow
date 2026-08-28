@@ -2900,7 +2900,8 @@ console.log("\n[밸런스 판정]");
 
   /* 141. ⭐ v1.87.0 — **「초기화셋팅」** (원장님 지시 2026-08-28 · 이름도 원장님이 붙임)
        블링킹 + 전체 색 보임(4초) → 가이드 첫 스텝.
-     · 시간: INTRO_MS = **4000** — 폰을 세로→가로로 돌리는 동안 지나가 버리지 않게 (1.6s 는 너무 짧았다)
+     · 시간: INTRO_MS = **3200** — 4000 에서 「아주 조금만 짧게」(원장님 지시 2026-08-28).
+       1.6s(너무 짧음)와 4s(조금 김) 사이 · 선을 움직이면 **즉시 종료**된다(회귀 142)
      · 작동 네 곳: 사진 로드(101·134 가 검사) · **초기화 버튼** · **가이드 껐다 켜기** (여기서 검사)
      · 인사 동안: intro=true · 차례 없음 · 인사가 끝나면 첫 스텝(guideOn 일 때) */
   {
@@ -2913,7 +2914,7 @@ console.log("\n[밸런스 판정]");
     const r = await p.evaluate(async () => {
       const PBx = window.PB, S = PBx.S;
       const wait = (ms) => new Promise((r2) => setTimeout(r2, ms));
-      const msOk = PBx.INTRO_MS >= 3500;                      /* 「더 길게」 — 4초 */
+      const msOk = PBx.INTRO_MS >= 2500 && PBx.INTRO_MS <= 3500;   /* 3.2초 — 1.6s 와 4s 사이 */
       const atLoad = S.intro === true && S.guideCur === null; /* ① 사진 로드 직후 */
       S.intro = false; PBx.S.guideCur = "front"; window.PB.render();
       /* ③ 초기화 버튼 → 인사부터 다시 */
@@ -2934,8 +2935,56 @@ console.log("\n[밸런스 판정]");
     await ctx.close();
     check("141. 초기화셋팅 — 4초 인사 · 사진 로드/초기화/가이드 껐다 켜기 에서 작동",
       r.msOk && r.atLoad && r.atReset && r.atGuideOn && r.offClean && r.endsAtFirst,
-      `INTRO_MS=${r.ms}(>=3500 ${r.msOk}) · 사진 로드=${r.atLoad} · 초기화 버튼=${r.atReset} · `
+      `INTRO_MS=${r.ms}(2500~3500 ${r.msOk}) · 사진 로드=${r.atLoad} · 초기화 버튼=${r.atReset} · `
       + `가이드 끔=차례없음 ${r.offClean} · 다시 켬=인사 ${r.atGuideOn} · 끝나면 첫 스텝=${r.endsAtFirst}`);
+  }
+
+  /* 142. ⭐ v1.88.0 — **잡는 범위 섬세 교정 · 인사 조기 종료** (원장님 지시 2026-08-28)
+     · 아치엣지·아치두께는 아치선 **위에** 올라와 있다 — 그 자리를 누르면 언제나 가로 자가 잡힌다
+     · 아치선(v6)은 **아치두께 아래 구간**을 눌러야 잡힌다
+     · 눈 가로선(h1)은 **9px 안**에서만 잡힌다 — 근처를 스쳐도 안 잡힌다
+     · 초기화셋팅 중에 선을 움직이면 인사가 **즉시** 끝난다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H, g = S.g;
+      S.intro = false;
+      const hit = (x, y) => { const h = PBx.hitTest(x, y); return h ? h.key || h.type : null; };
+      /* 교차점 좌표: 아치선 x 에서 아치엣지·아치두께 높이 */
+      const vx = g.v6 * W;
+      const atH2   = hit(vx, g.h2 * H);              /* 아치엣지 위 (아치선과 교차) */
+      const atAT   = hit(vx, g.archThickness * H);   /* 아치두께 위 (아치선과 교차) */
+      const below  = hit(vx, g.archThickness * H + 30);  /* 아치두께보다 아래 → 아치선 */
+      const above  = hit(vx + 40, g.h2 * H - 20);        /* 아치두께 위쪽 빈 공간 → 아치선 안 잡힘 */
+      /* 눈 선 — 5px 는 잡히고 15px 는 안 잡힌다 (다른 선이 없는 x 에서) */
+      const ex = g.v1 * W + 6;                       /* 센터선 바로 옆 — 눈 선은 좌우 관통 */
+      const eyeNear = hit(ex + 60, g.h1 * H + 5);
+      const eyeFar  = hit(ex + 60, g.h1 * H + 15);
+      /* 다른 가로선은 기존 28px 그대로 — 앞머리 15px 는 잡힌다 */
+      const frontFar = hit(PBx.segPx(PBx.H_SPECS.find((q) => q.key === "front"))[0][0] + 5, g.front * H + 15);
+      /* 인사 조기 종료 — 슬라이더를 움직이면 intro 가 즉시 꺼진다 */
+      PBx.startIntro();
+      const introOn = S.intro === true;
+      S.selUD = "front"; S.hMode = "line";
+      const sl = document.getElementById("posSliderV");
+      sl.dispatchEvent(new Event("input", { bubbles: true }));
+      const introOffNow = S.intro === false;
+      sl.dispatchEvent(new Event("change", { bubbles: true }));
+      S.dragOn = false;
+      return { atH2, atAT, below, above, eyeNear, eyeFar, frontFar, introOn, introOffNow };
+    });
+    await ctx.close();
+    check("142. 잡는 범위 — 교차점은 가로 자 · 아치선은 아래 구간 · 눈 선은 9px · 인사 조기 종료",
+      r.atH2 === "h2" && r.atAT === "archThickness" && r.below === "v6"
+        && r.above !== "v6" && r.eyeNear === "h1" && r.eyeFar !== "h1" && r.frontFar === "front"
+        && r.introOn && r.introOffNow,
+      `아치엣지 교차점=${r.atH2} · 아치두께 교차점=${r.atAT} · 아래 구간=${r.below} · 위 빈 공간=${r.above} · `
+      + `눈 5px=${r.eyeNear}/15px=${r.eyeFar} · 앞머리 15px=${r.frontFar} · 인사 켜짐=${r.introOn}→움직이자 꺼짐=${r.introOffNow}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
@@ -3969,10 +4018,11 @@ console.log("\n[밸런스 판정]");
     const archUD = Math.abs((a1.h2 - b1.h2) * dim.H - 30) < 4;
     const archKeepsV6 = Math.abs(a1.v6 - b1.v6) < 1e-9;
     const archKeepsAT = Math.abs(a1.at - b1.at) < 1e-9;
-    /* ② 아치선(세로)을 끌어도 좌우만 — 아치·아치두께는 그대로 */
+    /* ② 아치선(세로)을 끌어도 좌우만 — 아치·아치두께는 그대로
+       v1.88.0 — 아치선은 이제 **아치두께 아래 구간**에서만 잡힌다(회귀 142). 그 구간을 누른다 */
     await reset();
     const p2 = await p.evaluate(() => { const S = window.PB.S;
-      return { x: S.g.v6 * S.dim.W, y: (S.g.h2 + 0.06) * S.dim.H }; });
+      return { x: S.g.v6 * S.dim.W, y: (S.g.archThickness + 0.06) * S.dim.H }; });
     const b2 = await g();
     await drag(p2.x, p2.y, -26, -18);
     const a2 = await g();
