@@ -357,7 +357,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.90.0";
+const APP_VERSION = "v1.90.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -690,8 +690,11 @@ const S = {
   activePreset: null,    // 지금 적용 중인 프리셋 id (v1.25.0)
   balOn: false,          // 밸런스 표시 중 (v1.26.0)
   refSide: localStorage.getItem("pb_refside") === "R" ? "R" : "L",   // 기준 쪽 — 다음에도 유지
-  /* v1.90.0 — 가이드 안내(중앙 위 프롬프트) 켜기/끄기. 기본 켜짐 · 다음에도 유지 */
-  tipOn: localStorage.getItem("pb_tip_v1") !== "0",
+  /* v1.90.0 — 가이드 안내(중앙 위 프롬프트) 켜기/끄기.
+     v1.90.1 (원장님 확정 2026-08-28) — **앱을 열 때는 언제나 켜진 채 시작**한다.
+     끈 것은 그 세션 동안만 유효하다. ⛔ localStorage 로 되살리지 마세요 —
+     지난주에 꺼 둔 것을 잊고 「안내가 고장났다」가 됩니다. */
+  tipOn: true,
   /* v1.90.0 — 마지막으로 안내를 띄운 플로우 선. 플로우 밖 선(눈·센터)을 골라도
      가이드가 켜져 있는 동안 안내가 사라지지 않게 붙잡아 둔다 (원장님 지시 2026-08-28) */
   tipKey: null,
@@ -3932,8 +3935,7 @@ $("btnGuide").onclick = () => {
 };
 /* v1.90.0 — 안내 켜기/끄기 (가이드 플로우 자체는 그대로) */
 $("btnTip").onclick = () => {
-  S.tipOn = !S.tipOn;
-  try { localStorage.setItem("pb_tip_v1", S.tipOn ? "1" : "0"); } catch (e) {}
+  S.tipOn = !S.tipOn;          /* v1.90.1 — 세션 동안만. 다음에 열면 다시 켜져 시작 */
   updateButtons(); updateGuideTip();
 };
 $("btnRefL").onclick = () => setRefSide("L");

@@ -3040,7 +3040,8 @@ console.log("\n[밸런스 판정]");
       document.getElementById("btnTip").click();
       const offHidden = tipEl.hidden === true || getComputedStyle(tipEl).display === "none";
       const flowAlive = S.guideOn === true;
-      const saved0 = localStorage.getItem("pb_tip_v1");
+      /* v1.90.1 — 끈 것은 세션 동안만. 저장하지 않아야 다음에 켜진 채 시작한다 (원장님 확정) */
+      const notSaved = localStorage.getItem("pb_tip_v1") === null;
       document.getElementById("btnTip").click();
       PBx.updateGuideTip();
       const backOn = !tipEl.hidden;
@@ -3056,15 +3057,15 @@ console.log("\n[밸런스 판정]");
         && /눈썹정렬|Brow Align/.test(snap.textContent)
         && (snap.querySelector(".ailock") || {}).textContent === "🔒";
       return { centred, topArea, sameBox, duringIntro, keptOffFlow,
-               offHidden, flowAlive, saved0, backOn, noteShown, noteTop, twoLine };
+               offHidden, flowAlive, notSaved, backOn, noteShown, noteTop, twoLine };
     });
     await ctx.close();
     check("143. 안내 — 중앙 위 · 토글로 끄고 켬 · 가이드 켜짐 중 유지 · AI/눈썹정렬 두 줄",
       r.centred && r.topArea && r.sameBox && r.duringIntro && r.keptOffFlow
-        && r.offHidden && r.flowAlive && r.saved0 === "0" && r.backOn
+        && r.offHidden && r.flowAlive && r.notSaved && r.backOn
         && r.noteShown && r.noteTop && r.twoLine,
       `중앙위=${r.centred}/${r.topArea} 같은자리=${r.sameBox} · 인사중 ①=${r.duringIntro} · 플로우밖 유지=${r.keptOffFlow} · `
-      + `토글 끔=${r.offHidden}(플로우 유지 ${r.flowAlive}, 저장 ${r.saved0}) 켬=${r.backOn} · AI알림 위=${r.noteShown}/${r.noteTop} · 두 줄=${r.twoLine}`);
+      + `토글 끔=${r.offHidden}(플로우 유지 ${r.flowAlive}, 세션한정 ${r.notSaved}) 켬=${r.backOn} · AI알림 위=${r.noteShown}/${r.noteTop} · 두 줄=${r.twoLine}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
