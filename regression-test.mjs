@@ -256,8 +256,11 @@ console.log("[세로 모드 · 기능]");
     `zoom=${sl.zoom.toFixed(2)}× rot=${sl.rot.toFixed(1)}°`);
 
   // 8. 프리셋 저장 · 영속성
+  /* v1.89.0 — 프리셋 버튼은 **숨김**(시스템은 유지 · BASELINE 1-52). Playwright click 은
+     보이는 요소만 누르므로 DOM click 으로 연다 — 기능이 살아 있는지가 이 검사의 목적이다. */
   await p.evaluate(() => localStorage.removeItem("pb_presets_v1"));
-  await p.click("#btnPresetLoad"); await p.waitForTimeout(200);
+  await p.evaluate(() => document.getElementById("btnPresetLoad").click());
+  await p.waitForTimeout(200);
   await p.click("#btnPresetSave");
   await p.fill("#saveName", "REGRESSION");
   await p.click("#doSave"); await p.waitForTimeout(300);
@@ -594,9 +597,10 @@ console.log("[세로 모드 · 기능]");
       rightEnd: st.right - h.right > st.width * 0.015 && st.right - h.right < st.width * 0.06
                 && Math.abs(m.right - h.right) < 2,
       bottomEnd: st.bottom - h.bottom < 20,
-      /* ⚠️ v1.64.0 — 바는 줌~밸런스 행보다 **10% 더 길다** (원장님 지시 2026-08-23).
-         오른쪽 끝은 그대로 맞추고 **왼쪽으로만** 늘어난다 (오른쪽으로 나가면 화면 밖). */
-      spansRow: Math.abs(h.width - m.width * 1.1) < 3 && Math.abs(m.right - h.right) < 2
+      /* ⚠️ v1.64.0 — 바는 줌~밸런스 행보다 길다 · 왼쪽으로만 늘어난다.
+         v1.89.0 — AI 눈썹 맞춤 버튼이 바 왼쪽에 들어오면서 barrow(=버튼+바)는 152% 가 됐고,
+         **바 자체**의 길이는 v1.64.0 의 「행보다 길게」를 유지한다 (바+버튼 합이 행×1.52) */
+      spansRow: h.width > m.width * 1.02 && Math.abs(m.right - h.right) < 2
                 && h.left < m.left - 2,
       /* 화살표 오폭 방지 — 버튼 행과 바 사이 갭 (원장님: 「위 버튼이 실수로 눌리지 않도록」) */
       gap: Math.round(h.top - m.bottom),
@@ -605,7 +609,7 @@ console.log("[세로 모드 · 기능]");
   check("38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 바 = 줌~밸런스 행과 같은 폭·정렬",
     dockOrder.order && dockOrder.rightEnd && dockOrder.bottomEnd && dockOrder.spansRow
       && dockOrder.gap >= 12,
-    `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd} 폭=행×1.1 ${dockOrder.spansRow} · 버튼행↔바 갭 ${dockOrder.gap}px(≥12)`);
+    `순서=${dockOrder.order} 오른쪽끝=${dockOrder.rightEnd} 맨아래=${dockOrder.bottomEnd} 폭=행보다 길게 ${dockOrder.spansRow} · 버튼행↔바 갭 ${dockOrder.gap}px(≥12)`);
 
   /* 39. 오른쪽 도크 순서 (v1.45.0 · 원장님 지시 2026-08-21)
      위에서부터 **초기화 → 위아래 조절 바 → 다시실행 → 되돌리기**. */
@@ -1593,7 +1597,9 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     const n = r("leftDock"), st = r("stage"), h = r("posCtlH");
     return {
       leftBottom: n.left - st.left < 20 && st.bottom - n.bottom < 24,
-      ids: [...document.querySelectorAll("#menuRow button")].map((b) => b.id).join(","),
+      ids: [...document.querySelectorAll("#menuRow button:not([hidden])")].map((b) => b.id).join(","),
+      presetHidden: (() => { const b2 = document.getElementById("btnPresetLoad");
+        return b2.hidden && getComputedStyle(b2).display === "none"; })(),
       gone: !document.getElementById("btnEyeGuide"),
       noOverlap: n.right < h.left,
     };
@@ -1690,7 +1696,8 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
 
   check(`40. ${dev.n} — 왼쪽 아래는 프리셋(+즐겨찾기) · 좌우 바와 겹치지 않음`,
     menuPos.leftBottom && menuPos.noOverlap && menuPos.gone
-      && menuPos.ids === "btnPresetLoad,btnGuide,btnLookCycle",   /* v1.58.0 — 가이드 오른쪽 조합 순환 */
+      && menuPos.ids === "btnExport,btnChange,btnGuide,btnLookCycle"   /* v1.89.0 새 배치 */
+      && menuPos.presetHidden,                                          /* 프리셋 숨김 — 시스템은 유지 */
     `왼쪽아래=${menuPos.leftBottom} 겹침없음=${menuPos.noOverlap} 눈가이드제거=${menuPos.gone} [${menuPos.ids}]`);
 
   /* 83. 버튼 자리 (v1.29.0) — 원장님이 정하신 자리
@@ -1712,10 +1719,10 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     const bal = r("btnBalance"), ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
     const cs = getComputedStyle(el("btnReset"));
     return {
-      /* v1.43.0 — 사진저장·사진잠금·사진변경이 **가운데 도크** 한 행 (저장-잠금-변경 순) */
-      photoInRDock: el("centerDock").contains(el("btnChange")) && el("centerDock").contains(el("btnExport")),
-      photoOrder: exp.right <= lock.left + 1 && lock.right <= chg.left + 1
-                  && Math.abs((exp.top + exp.bottom) / 2 - (lock.top + lock.bottom) / 2) < 12,
+      /* v1.89.0 — 사진저장·사진변경은 **왼쪽 끝**(leftDock) · 잠금만 가운데 (원장님 지시 2026-08-28) */
+      photoInRDock: el("leftDock").contains(el("btnChange")) && el("leftDock").contains(el("btnExport")),
+      photoOrder: exp.right <= chg.left + 1 && exp.left - st.left < 40
+                  && Math.abs((exp.top + exp.bottom) / 2 - (chg.top + chg.bottom) / 2) < 12,
       chgSameSize: Math.abs(chg.height - exp.height) < 1 && Math.abs(chg.width - exp.width) < 6,
       chgGrey: !/34, 211, 238|103, 232, 249/.test(getComputedStyle(el("btnChange")).borderTopColor),
       resetTop: rst.top <= rd.top + 2,   /* 도크 맨 위 또는 그보다 위 (v1.44.0 위로 올림) */
@@ -1723,19 +1730,27 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       /* v1.45.0 — 초기화 = 프리셋 버튼과 같은 크기 · 되돌리기·다시실행 더 크게 + 채움 배경
          v1.50.0 — **사진저장은 더 이상 채움이 아니다** (원장님 지시: 「시작시 사진저장에 색상 죽일것」).
          대신 **사진잠금이 채움**으로 시선을 잡는다. 되돌리지 마세요 — 105 번도 함께 잠급니다. */
-      resetPresetSize: Math.abs(rst.height - r("btnPresetLoad").height) < 2,
+      resetPresetSize: Math.abs(rst.height - r("btnGuide").height) < 2,   /* v1.89.0 — 프리셋 숨김 → 가이드와 비교 */
       exportQuiet: !getComputedStyle(el("btnExport")).backgroundImage.includes("gradient"),
       undoBigger: r("btnUndo").height > 34 && r("btnRedo").height > 34,
       undoFilled: getComputedStyle(el("btnUndo")).backgroundImage.includes("gradient")
                   || getComputedStyle(el("btnUndo")).backgroundColor !== "rgba(0, 0, 0, 0)",
-      lockAlone: el("centerDock").querySelectorAll("button").length === 3,
+      lockAlone: el("centerDock").querySelectorAll("button").length === 1,   /* v1.89.0 — 잠금 홀로 가운데 */
+      /* v1.89.0 — AI 눈썹 맞춤: 좌우 바 왼쪽 · 특별한 그라데이션 · 오른쪽 위 작은 잠금 이모지 */
+      aiInBarrow: !!el("btnSnap").closest(".barrow"),
+      aiLeftOfBar: r("btnSnap").right <= r("posCtlH").left + 1,
+      aiSpecial: getComputedStyle(el("btnSnap")).backgroundImage.includes("gradient"),
+      aiLockEmoji: (el("btnSnap").querySelector(".ailock") || {}).textContent === "🔒",
+      aiSize: Math.abs(r("btnSnap").height - chg.height) < 6,
+      /* v1.89.0 — 밸런스·왼쪽·오른쪽은 오른쪽 끝 정렬 (초기화 왼쪽까지) */
+      balRight: st.right - r("refWrap").right < 170 && r("refWrap").right < r("btnReset").left,
+      favHidden: el("favRow").hidden,
       /* v1.51.0 — 잠금 중심은 **캔버스 정중앙이 아니라 센터 세로선(v1)** 위에 온다 (원장님 지시) */
       lockOnCenterLine: Math.abs((lock.left + lock.right) / 2 - st.left
                         - window.PB.S.g.v1 * window.PB.S.dim.W) < 4,
       lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
       balLeftOfCentre: ((bal.left + bal.right) / 2 - st.left) / st.width,
-      favs: document.querySelectorAll("#favRow .favbtn").length,
-      favShorter: r("btnPresetLoad").height - document.querySelector("#favRow .favbtn").getBoundingClientRect().height,
+
       /* 세로선 라벨이 위쪽 오버레이(밸런스·기준 버튼) 위에 겹쳐 그려지지 않아야 한다 */
       labelHitsTop: (() => {
         /* ⚠️ 여기서는 **화면 실측(getBoundingClientRect)** 으로 잽니다.
@@ -1759,16 +1774,17 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       dockGaps: [Math.round(cd.left - ld.right), Math.round(bd.left - cd.right)],
     };
   });
-  check(`83. ${dev.n} — 사진 2버튼=오른쪽 도크 · 잠금 3버튼 정가운데 · 밸런스는 중앙보다 왼쪽`,
+  check(`83. ${dev.n} — 사진 2버튼=왼쪽 끝 · 잠금 홀로 가운데 · AI 눈썹 맞춤=좌우 바 왼쪽 · 밸런스=오른쪽 끝`,
     place.photoInRDock && place.photoOrder && place.chgSameSize && place.chgGrey
       /* v1.45.0 — 초기화 = 프리셋 크기 · 앱 컨셉 코랄(--danger #FF6B7A) 글자 (원장님: 「빨간색은 앱 컨셉과 비슷하게」) */
       && place.resetTop && /255, 107, 122/.test(place.resetDarkRed)
       && place.resetPresetSize && place.exportQuiet && place.undoBigger && place.undoFilled
       && place.lockAlone && place.lockOnCenterLine
-      && place.balLeftOfCentre < 0.48 && place.balLeftOfCentre > 0.25
-      && place.favs === 3 && place.favShorter > 6
+      && place.balLeftOfCentre > 0.6 && place.balRight     /* v1.89.0 — 오른쪽 끝 정렬 */
+      && place.aiInBarrow && place.aiLeftOfBar && place.aiSpecial && place.aiLockEmoji && place.aiSize
+      && place.favHidden
       && place.dockGaps.every((g) => g > 8) && place.labelHitsTop === false,
-    `사진2버튼=도크${place.photoInRDock}/순서${place.photoOrder} · 잠금단독=${place.lockAlone}/센터선일치=${place.lockOnCenterLine}(${(place.lockCentre * 100).toFixed(1)}%) · 밸런스 ${(place.balLeftOfCentre * 100).toFixed(1)}% · 즐겨찾기가 ${place.favShorter.toFixed(0)}px 낮음 · 도크간격=${place.dockGaps}px · 라벨겹침=${place.labelHitsTop}`);
+    `사진2버튼=왼쪽끝${place.photoInRDock}/순서${place.photoOrder} · 잠금단독=${place.lockAlone}/센터선일치=${place.lockOnCenterLine}(${(place.lockCentre * 100).toFixed(1)}%) · 밸런스 ${(place.balLeftOfCentre * 100).toFixed(1)}%/오른쪽끝=${place.balRight} · AI버튼 바로우=${place.aiInBarrow}/바왼쪽=${place.aiLeftOfBar}/특별색=${place.aiSpecial}/잠금이모지=${place.aiLockEmoji}/크기=${place.aiSize} · 프리셋숨김=${place.favHidden} · 도크간격=${place.dockGaps}px · 라벨겹침=${place.labelHitsTop}`);
   await ctx.close();
 }
 

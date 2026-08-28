@@ -120,7 +120,7 @@ const I18N = {
     ai_loading: "AI 얼굴 인식 중…",
     ai_ok: "AI 자동 정렬 완료",
     ai_drawn: "그린 선에 맞춰 배치했습니다 — 가이드 ①~⑥ 으로 확인하세요",
-    ai_redraw: "드로잉 맞춤",
+    ai_redraw: "AI 눈썹 맞춤",
     ai_redraw_fail: "그린 선을 못 찾았습니다",
     ai_fail: "AI 얼굴 인식 실패 · 사진을 손으로 맞춰 주세요",
     ai_noface: "얼굴 인식 실패 · [동공정렬]을 눌러 정렬하세요",
@@ -279,7 +279,7 @@ const I18N = {
     ai_loading: "Detecting face…",
     ai_ok: "Auto-aligned",
     ai_drawn: "Snapped to your drawing — check with guide ①~⑥",
-    ai_redraw: "Snap to drawing",
+    ai_redraw: "AI Brow Fit",
     ai_redraw_fail: "No drawing found",
     ai_fail: "Face detection failed · adjust the photo by hand",
     ai_noface: "No face found · use [Pupil Align]",
@@ -355,7 +355,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.88.0";
+const APP_VERSION = "v1.89.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나

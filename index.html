@@ -192,7 +192,8 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
 .ov-tr{top:8px;right:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 /* 밸런스 (v1.29.0) — 위쪽 **중앙에서 약간 왼쪽**. 왼쪽 칩 줄과 떨어뜨려
    "선을 다루는 것들"과 "판정"을 눈으로 구분합니다. */
-.ov-bal{top:8px;left:42%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+/* v1.89.0 — 오른쪽 끝 정렬 (원장님 지시). 초기화(오른쪽 도크 맨 위)와 겹치지 않게 그 왼쪽까지 */
+.ov-bal{top:8px;left:auto;right:calc(var(--redge,8px) + 82px);transform:none;display:flex;gap:6px;align-items:center;justify-content:flex-end}
 .refwrap{display:flex;gap:4px;align-items:center}
 /* 기준 쪽 — **왼쪽/오른쪽을 각각** 둡니다. 토글 하나면 지금 어느 쪽인지 눌러 보기 전엔 모릅니다 */
 .chip.ref{padding:5px 9px;font-size:10px;opacity:.92}
@@ -359,7 +360,20 @@ body.land.compact #editor .favrow button i, body.land.compact #editor .favrow bu
 /* v1.44.1 — width:0;min-width:100% : 바의 고유 폭이 .bdock 폭 계산에 끼어들지 않게 한다.
    이렇게 해야 .bdock 폭 = photoModes(줌~밸런스) 행 폭이 되고, 바가 그 폭에 정확히 맞는다.
    (width:100%만 주면 슬라이더 고유 폭 때문에 바가 행보다 더 길어져 칸이 어긋난다) */
-.barrow{width:0;min-width:110%}   /* v1.64.0 — 좌우 조정바 10% 더 길게 (원장님 지시). 왼쪽으로만 늘어난다 */
+.barrow{width:0;min-width:152%;display:flex;align-items:flex-end;gap:7px}   /* v1.89.0 — AI 버튼 몫만큼 왼쪽으로 더 늘려 바 길이 유지 */   /* v1.64.0 — 좌우 조정바 10% 더 길게 · v1.89.0 — AI 버튼과 한 행 */
+.barrow .posctl.axis-h{flex:1;width:auto;min-width:0}
+/* v1.89.0 — 도크 안 「간격」 (사진 묶음 ↔ 가이드 묶음) */
+.dgap{width:14px;flex:0 0 auto}
+/* v1.89.0 — AI 눈썹 맞춤: 앱에서 유일한 보라→핑크→금빛 그라데이션 (특별한 기능이라는 신호).
+   ⛔ 다른 버튼에 이 그라데이션을 쓰지 마세요 — 특별함은 하나일 때만 특별합니다.
+   .ailock = 오른쪽 위 아주 작은 잠금 (지금은 장식 · 나중에 프리미엄 잠금 자리) */
+#btnSnap{position:relative;height:50px;min-width:78px;border-radius:13px;flex:0 0 auto;
+  background:linear-gradient(135deg,#8B5CF6,#EC4899 55%,#F59E0B);border:1px solid #C084FC;
+  color:#fff;font-size:9.5px;font-weight:800;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:0 9px;
+  box-shadow:0 0 16px rgba(168,85,247,.5),0 1px 0 rgba(255,255,255,.18) inset}
+#btnSnap:active{filter:brightness(1.15)}
+#btnSnap .ailock{position:absolute;top:2px;right:4px;font-size:8px;line-height:1;text-decoration:none;opacity:.95}
 .posctl.axis-h{flex-direction:row-reverse;width:100%;min-width:0;height:46px}
 .posctl.axis-h .pslot{flex:1;height:34px;min-width:0}
 .posctl.axis-h input[type=range]{width:100%;height:34px}
@@ -384,6 +398,9 @@ body.land.compact #editor .favrow button i, body.land.compact #editor .favrow bu
 .dockbtn.big{height:48px;min-width:56px;font-size:10.5px;border-radius:14px;gap:3px}
 
 .menurow{display:flex;gap:5px}
+/* v1.89.0 — hidden 이 .menurow{display:flex} 에 지지 않게 (guidetip 칩과 같은 함정 · 1-41)
+   ⚠️ 행(favRow) 자체에도 필요합니다 — 행이 보이면 왼쪽 도크가 넓어져 잠금 도크를 밀어냅니다(회귀 83) */
+.menurow[hidden], .menurow button[hidden]{display:none}
 .menurow button{height:50px;min-width:68px;border-radius:13px;background:var(--glass);
   border:1px solid var(--hair);color:rgba(255,255,255,.80);font-size:9.5px;font-weight:700;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -707,9 +724,9 @@ body:not(.land) #railLang{display:none}
     <!-- 밸런스 (v1.26.0 · 자리 v1.29.0) — 위쪽 **중앙에서 약간 왼쪽**.
          기준 쪽은 후속 버튼이라 밸런스를 켜야 나오고, **왼쪽/오른쪽을 각각 눌러** 고릅니다
          (토글 하나면 지금 어느 쪽이 기준인지 눌러 보기 전엔 모릅니다). -->
+    <!-- v1.89.0 — 밸런스·왼쪽·오른쪽은 **오른쪽 끝 정렬** (원장님 지시 2026-08-28).
+         AI 눈썹 맞춤(구 드로잉 맞춤)은 아래 도크의 좌우 바 왼쪽으로 이사했습니다. -->
     <div class="ov ov-bal">
-      <!-- 그린 선에 다시 맞추기 (v1.30.0) — 드로잉을 더 그린 뒤 누르면 자가 다시 올라갑니다 -->
-      <button class="chip" id="btnSnap" data-i18n="ai_redraw">드로잉 맞춤</button>
       <button class="chip" id="btnBalance" data-i18n="editor_balance_check">밸런스</button>
       <span class="refwrap" id="refWrap" hidden>
         <button class="chip ref" id="btnRefL" data-i18n="bal_left">왼쪽</button>
@@ -749,6 +766,9 @@ body:not(.land) #railLang{display:none}
       <!-- 좌우 드래그 바 행 (v1.29.0) — 바 **왼쪽**에 `다시 실행` · `되돌리기`.
            되돌리기를 바에 가장 가깝게 둡니다(제일 자주 씁니다). -->
       <div class="barrow">
+      <!-- v1.89.0 — AI 눈썹 맞춤 (구 「드로잉 맞춤」 · 원장님 지시 2026-08-28).
+           좌우 바 왼쪽 · 특별한 색 · 오른쪽 위 아주 작은 잠금 이모지(나중에 프리미엄 잠금 자리). -->
+      <button id="btnSnap"><s class="ailock">🔒</s><em data-i18n="ai_redraw">AI 눈썹 맞춤</em></button>
       <div class="posctl axis-h" id="posCtlH">
         <div class="plabel"><span id="selNameH">Center</span><b id="posValH">50</b></div>
         <button class="pbtn" id="posPlusH">▶</button>
@@ -761,9 +781,15 @@ body:not(.land) #railLang{display:none}
     <!-- 왼쪽 아래 도크 — 프리셋 + 즐겨찾기 (v1.28.0)
          즐겨찾기(★)로 지정한 프리셋은 모달을 열지 않고 **바로 한 번에** 올릴 수 있게
          프리셋 버튼 바깥으로 꺼내 둡니다. 지정한 개수만큼만 나오고, 없으면 프리셋 버튼만 있습니다. -->
+    <!-- v1.89.0 배치 (원장님 지시 2026-08-28) —
+         왼쪽 끝: 사진저장·사진변경 · 간격 · 가이드·내 세트 / 가운데: 사진잠금 / 오른쪽 좌우 바 왼쪽: AI 눈썹 맞춤.
+         ⚠️ 프리셋은 **숨김**(hidden) — 시스템은 그대로 두고 버튼만 감춥니다. 나중에 다시 켤 수 있습니다. -->
     <div class="ldock" id="leftDock">
       <div class="menurow" id="menuRow">
-        <button id="btnPresetLoad"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"/></svg></i><em data-i18n="editor_preset">프리셋</em></button>
+        <button id="btnPresetLoad" hidden><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"/></svg></i><em data-i18n="editor_preset">프리셋</em></button>
+        <button class="dockbtn" id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
+        <button class="dockbtn" id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
+        <span class="dgap"></span>
         <!-- 가이드 플로우 (v1.42.0) — 켜면 이너→앞두께→앞머리→아치두께→아치→꼬리 순서로
              "지금 차례"인 선만 고유색으로 켜진다. 스킵 가능(안 켜면 이전과 동일) -->
         <button id="btnGuide"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h10M14 12l-4-4M14 12l-4 4M18 5v14"/></svg></i><em data-i18n="editor_guide">가이드</em></button>
@@ -771,7 +797,7 @@ body:not(.land) #railLang{display:none}
              클릭 시 다른 추천 조합으로, 또 클릭 시 다른 조합」). 순서: 내 세트 → 밝은 사진 → 어두운 사진 → 다시 내 세트 -->
         <button id="btnLookCycle"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17c2.5-2 3.8-5.2 3.8-8.5S14.5 5.5 12 3.5z" fill="currentColor" stroke="none" opacity=".45"/></svg></i><em id="lookCycleName" data-i18n="set_cycle">선 색</em></button>
       </div>
-      <div class="menurow favrow" id="favRow"></div>
+      <div class="menurow favrow" id="favRow" hidden></div>  <!-- v1.89.0 — 프리셋 숨김에 따라 즐겨찾기도 숨김 -->
     </div>
 
     <!-- 가운데 아래 도크 (v1.28.0) — `사진잠금` 이 화면 한가운데, 그 왼쪽에 `사진저장`.
@@ -779,9 +805,7 @@ body:not(.land) #railLang{display:none}
     <!-- 가운데 도크 (v1.43.0 · 원장님 지시 2026-08-21) — 사진저장 · 사진잠금 · 사진변경 -->
     <div class="cdock" id="centerDock">
       <div class="menurow">
-        <button class="dockbtn" id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
         <button id="btnLock"><i id="lockIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/></svg></i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
-        <button class="dockbtn" id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
       </div>
     </div>
 
