@@ -2792,6 +2792,61 @@ console.log("\n[밸런스 판정]");
       + `색 유지=${keepColor}(${r.other && r.other.c}/${r.otherFront && r.otherFront.c}) · 가이드 켜짐 차례선 ${r.onCur && r.onCur.o.toFixed(2)}`);
   }
 
+  /* 139. ⭐⭐ v1.85.0 — **한 번 탭에 선이 사라지면 안 된다** (원장님 신고 2026-08-28
+       「드로잉 맞춤 클릭시 이너가 사라졌다」)
+     원인: 숨김 조건이 `S.sel === 이 선` 이었는데, v1.83.0 에서 **이너가 플로우 첫 스텝**이 되면서
+     드로잉 맞춤·가이드 켜기가 이너를 자동 선택해 둡니다. 그 상태에서 이너를 **한 번만** 눌러도
+     「두 번째 탭」으로 취급돼 선이 숨겨졌습니다.
+     · 앱이 자동으로 고른 선을 한 번 눌러도 **절대 숨지 않는다**
+     · 같은 버튼을 **연달아 두 번** 누르면 숨는다 (원래 기능) · 세 번째면 다시 나온다
+     · 숨긴 순간에는 HUD 로 알린다 — 조용히 사라지면 고장으로 보입니다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(2000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      S.intro = false; S.multi = false; S.selSet = []; S.hMode = "line";
+      const tap = (k) => document.querySelector(`.lbtn[data-key="${k}"]`).click();
+      const vis = () => S.g.v2Visible;
+      /* ① 앱이 이너를 자동 선택한 상태(가이드 첫 스텝 = 이너)에서 한 번 탭 */
+      S.guideOn = true; S.guideCur = PBx.GUIDE_FLOW[0];
+      PBx.S.sel = "v2"; PBx.S.selUD = "v2"; PBx.S.selLR = "v2";
+      tap("v2");
+      const afterAutoSel = vis();
+      /* ② 같은 버튼을 한 번 더 → 숨는다 + HUD */
+      tap("v2");
+      const afterSecond = vis();
+      const hud = (document.getElementById("hud") || {}).textContent || "";
+      /* ③ 한 번 더 → 다시 나온다 */
+      tap("v2");
+      const afterThird = vis();
+      /* ④ 사이에 다른 선을 고르면 카운트가 끊긴다 — 이너를 한 번 눌러도 안 숨는다 */
+      tap("h2"); tap("v2");
+      const afterInterrupted = vis();
+      /* ⑤ 가이드가 자동으로 다음 선을 고른 뒤에도 한 번 탭은 안전하다 */
+      PBx.S.guideCur = "front"; window.PB.S.sel = "front";
+      tap("front"); const frontOnce = S.g.frontVisible;
+      const btn = document.querySelector('.lbtn[data-key="v2"]');
+      S.g.v2Visible = false; PBx.render();
+      const marked = (() => { const b = document.querySelector('.lbtn[data-key="v2"]');
+        return b.classList.contains("hidden-line"); })();
+      S.g.v2Visible = true; PBx.render();
+      return { afterAutoSel, afterSecond, afterThird, afterInterrupted, frontOnce, hud, marked };
+    });
+    await ctx.close();
+    check("139. 한 번 탭에 선이 사라지지 않는다 — 숨김은 같은 버튼 연속 두 번만",
+      r.afterAutoSel === true && r.afterSecond === false && r.afterThird === true
+        && r.afterInterrupted === true && r.frontOnce === true
+        && /숨김|hidden/.test(r.hud) && r.marked === true,
+      `자동선택 뒤 한 번 탭=${r.afterAutoSel ? "보임" : "사라짐"} · 두 번=${r.afterSecond ? "보임" : "숨김"} · `
+      + `세 번=${r.afterThird ? "보임" : "숨김"} · 사이에 다른 선=${r.afterInterrupted ? "보임" : "숨김"} · `
+      + `앞머리 한 번 탭=${r.frontOnce ? "보임" : "사라짐"} · HUD "${r.hud.trim()}" · 버튼 표시=${r.marked}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

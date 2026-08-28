@@ -237,8 +237,12 @@ body.land.compact .rgap{height:11px}
   line-height:1.05;text-align:center;padding:0 0 0 9px}
 .lbtn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3.5px;
   background:var(--dot,#8B94A6);opacity:.75}
-.lbtn.hidden-line{background:transparent;color:rgba(255,255,255,.34)}
+/* v1.85.0 — 숨긴 선은 **한눈에 보이게**: 점선 테두리 + 이름에 줄 (원장님 신고 2026-08-28
+   「이너가 사라졌다」 — 숨김인지 고장인지 버튼만 보고 알 수 있어야 합니다) */
+.lbtn.hidden-line{background:transparent;color:rgba(255,255,255,.34);
+  border-style:dashed;text-decoration:line-through}
 .lbtn.hidden-line::before{opacity:.22}
+.lbtn.hidden-line.sel{background:transparent}
 .lbtn.sel{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.30);
   color:#fff;font-weight:750}
 .lbtn.sel::before{width:5px;opacity:1}

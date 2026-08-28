@@ -63,6 +63,7 @@ const I18N = {
     set_tab_base: "기본 선 · 차례", set_tab_grab: "잡은 선 · 움직일 때",
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
+    line_hidden: "숨김 — 다시 누르면 나옵니다",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_edge_hd: "테두리 — 없어도 되는 덤",
     set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
@@ -220,6 +221,7 @@ const I18N = {
     set_tab_base: "Base lines", set_tab_grab: "Grabbed line",
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
+    line_hidden: "hidden — tap again to show",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_edge_hd: "Outline — optional extra",
     set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
@@ -351,7 +353,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.84.1";
+const APP_VERSION = "v1.85.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1599,6 +1601,9 @@ function pulseSel(key) {
 
 /* 선택 기록 — S.sel(드래그 대상) 과 축별 조절자 대상을 함께 갱신 */
 function noteSel(key) {
+  /* v1.85.0 — 레일 탭이 아닌 경로(가이드 진행·드로잉 맞춤·초기화 등)로 선택이 바뀌면
+     「두 번 탭 = 숨김」 카운트를 지운다. ⛔ 지우지 않으면 앱이 고른 선을 한 번만 눌러도 사라집니다. */
+  lastTapKey = null;
   if (key !== S.sel) pulseSel(key);
   S.sel = key;
   /* 세로선(좌우 이동)을 고르면 아래 가로 바를 선 조절로 되돌린다 (v1.11.0) */
@@ -1619,6 +1624,9 @@ function setSel(key) {
   render();                 /* v1.83.0 — 고른 순간의 반짝임·굵기 변화를 바로 그린다 */
 }
 
+/* v1.85.0 — 레일 버튼 **직전 탭**. 숨김(두 번 탭)은 이것으로만 판단합니다.
+   앱이 자동으로 고른 선(가이드 첫 스텝 등)은 여기에 들어가지 않습니다. */
+let lastTapKey = null;
 function buildLineButtons() {
   const mkBtn = (spec) => {
     const b = document.createElement("button");
@@ -1636,15 +1644,28 @@ function buildLineButtons() {
         toggleSel(spec.key);
         showHud(S.selSet.length ? `${S.selSet.length}${t("sel_count")}` : t("multi_on"));
       } else {
+        /* ⭐ v1.85.0 — 숨김은 **원장님이 같은 버튼을 두 번 누른 때만** (원장님 신고 2026-08-28
+             「드로잉 맞춤 클릭시 이너가 사라졌다」)
+           예전 조건은 `S.sel === 이 선` 이었습니다. v1.83.0 에서 **이너가 플로우 첫 스텝**이 되면서
+           드로잉 맞춤·가이드 켜기가 이너를 **자동으로 선택**해 두는데, 그 상태에서 이너를 한 번만
+           눌러도 「두 번째 탭」으로 취급돼 **선이 사라졌습니다.**
+           → 앱이 고른 선은 숨김의 근거가 되지 않습니다. **직전 탭이 같은 버튼일 때만** 숨깁니다.
+           ⛔ `S.sel === spec.key` 조건으로 되돌리지 마세요 — 회귀 139 가 잡습니다. */
+        const twoTaps = lastTapKey === spec.key && S.hMode === "line";
+        let hidNow = false;
         step(() => {
           const wasOn = S.g[spec.vis];
-          if (S.sel === spec.key && S.hMode === "line") S.g[spec.vis] = !S.g[spec.vis];
+          if (twoTaps) S.g[spec.vis] = !S.g[spec.vis];
           else S.g[spec.vis] = true;
+          hidNow = wasOn && !S.g[spec.vis];
           /* 꺼져 있던 선을 켤 때는 **그 고객 사진에서 측정한 자리**로 올린다 (v1.22.0).
              랜드마크가 없으면(얼굴 인식 실패) 마지막 값 그대로 — 조용히 실패한다. */
           if (!wasOn && S.g[spec.vis] && aiPlaceLine(spec.key)) aiSnapped = true;
         });
         noteSel(spec.key);
+        lastTapKey = spec.key;          /* noteSel 이 지운 뒤에 찍는다 — 다음 탭이 「두 번째」 */
+        /* 숨겼다는 것을 말로 알린다 — 선이 조용히 사라지면 고장으로 보입니다 */
+        if (hidNow) showHud(`${t(spec.i18n)} · ${t("line_hidden")}`, 1800);
       }
       render();
       if (aiSnapped) showHud(`${t(spec.i18n)} · ${t("ai_placed")}`, 1400);
