@@ -3762,6 +3762,46 @@ console.log("\n[밸런스 판정]");
       ok, `front ${r.front.toFixed(4)} (기대 ${r.exp.toFixed(4)}) · 눈 위 ${r.ticks.toFixed(1)} 눈금(기대 ${r.mid}) · 경계 ${r.lo}/${r.hi}`);
   }
 
+  /* 157. ⭐⭐ v2.1.2 — **쌍꺼풀·주름 쉐도우 방어** (원장님 지시 2026-08-29:
+       「2,4,7 판독 틀렸어. 쌍꺼풀, 주름 쉐도우를 방어하도록 룰 추가」)
+     두꺼운 쉐도우는 두께 창(155)을 **통과합니다** — 얇지 않으니까요. 그래서 넘버링으로
+     거릅니다: 눈 위 7 눈금 안쪽에서 찾은 것은, **위에 진짜 눈썹(7~16 눈금)이 또 있으면**
+     쉐도우였던 것입니다. ⛔ 첫 후보를 바로 쓰는 방식으로 되돌리면 이 검사가 잡습니다. */
+  {
+    const f157 = path.join(ROOT, ".front-shadow.svg");
+    fs.writeFileSync(f157, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<rect x="200" y="160" width="260" height="40" fill="#2a1c14"/>`      /* 눈썹 (아랫선 200) */
+      + `<rect x="200" y="240" width="260" height="18" fill="#5a463a"/></svg>`);  /* 두꺼운 쉐도우 */
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", f157);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H;
+      S.landmarks = null; S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 }; PBx.render();
+      const C = (ix, iy) => PBx.imgToCanvas(ix, iy, S.p);
+      /* 눈 y=300 · 1눈금 = 9px → 쉐도우(윗변 240) = 눈 위 ~5.7 눈금, 눈썹(아랫선 200) = ~10.5 눈금 */
+      const eyeC = C(0, 300).y;
+      S.g.h1 = eyeC / H;
+      S.innerAnchor = (9 * 13.15) / W;               /* 눈금 1칸 = 9 캔버스 px */
+      S.g.v1 = C(500, 0).x / W; S.g.v2 = C(420, 0).x / W;
+      const img = PBx.photoPixels();
+      const fy = PBx.frontDecide(img);
+      return { fy, expBrow: C(320, 200).y, shadow: C(320, 240).y,
+               tBrow: fy !== null ? (eyeC - fy) / 9 : null };
+    });
+    await ctx.close();
+    fs.unlinkSync(f157);
+    const atBrow = r.fy !== null && Math.abs(r.fy - r.expBrow) < 7;
+    const notShadow = r.fy === null || Math.abs(r.fy - r.shadow) > 10;
+    check("157. 쌍꺼풀·주름 쉐도우 방어 — 두꺼운 쉐도우가 있어도 넘버링(7~16)이 눈썹을 고른다",
+      atBrow && notShadow,
+      `앞머리 ${r.fy} (눈썹 아랫선 ${r.expBrow.toFixed(0)} 에 섬=${atBrow} · 쉐도우 ${r.shadow.toFixed(0)} 아님=${notShadow} · 눈 위 ${r.tBrow === null ? "?" : r.tBrow.toFixed(1)} 눈금)`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

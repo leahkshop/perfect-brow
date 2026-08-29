@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.1.1";
+const APP_VERSION = "v2.1.2";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3226,15 +3226,32 @@ function frontDecide(img) {
        출발점이 눈 화장(섀도·라이너·속눈썹) 속이면 그 검은 것부터 잡아 버립니다
        (실측: 짙은 화장 사진 2장에서 앞머리가 눈두덩에 내려앉았습니다).
        그래서 검은 창 **바로 앞(아래)에 피부가 FRONT_SKIN 줄 이상** 이어져 있어야 인정합니다. */
+    /* ⭐ v2.1.2 — **후보를 전부 모아, 넘버링으로 고른다** (원장님 지시 2026-08-29:
+       「쌍꺼풀, 주름 쉐도우를 방어하도록 룰 추가」)
+       쌍꺼풀 주름·눈두덩 쉐도우는 **눈 위 7 눈금 안쪽**에 삽니다. 처음 만난 검은 것을
+       바로 앞머리로 삼으면 거기 걸립니다. 이제 열을 끝까지 걸어 후보를 전부 모은 뒤:
+         ① 눈 위 7~16 눈금 안의 **가장 아래** 후보 = 앞머리
+         ② 그 범위에 없으면, 16 눈금을 넘지 않는 가장 아래 후보 (자가 특이한 얼굴)
+         ③ 자(anchor)가 없으면 예전처럼 첫 후보
+       → 쉐도우(5눈금)와 눈썹(11눈금)이 둘 다 잡혀도 **눈썹을 고릅니다.** */
     let light = 0;
+    const cands = [];
     for (let i = 0; i + FRONT_WIN <= dark.length; i++) {
       if (light >= FRONT_SKIN) {
         let hit = 0;
         for (let j = 0; j < FRONT_WIN; j++) if (dark[i + j]) hit++;
         if (hit >= FRONT_HIT) {
           let i0 = i; while (i0 < i + FRONT_WIN && !dark[i0]) i0++;   // 창 안 첫 어두운 줄
-          ys.push(yB - i0);                                           // = 눈썹 아랫선
-          break;
+          cands.push(yB - i0);                                        // 후보 (아래→위 순서)
+          /* 이 덩어리를 지나쳐 계속 — 위에 진짜 눈썹이 또 있는지 본다 */
+          while (i + FRONT_WIN <= dark.length) {
+            let h2 = 0;
+            for (let j = 0; j < FRONT_WIN; j++) if (dark[i + j]) h2++;
+            if (h2 < 2) break;
+            i++;
+          }
+          light = 0;
+          continue;
         }
       }
       /* 피부 세기는 **너그럽게** — 잔털·주근깨 한 줄로 끊기지 않게, 두 줄 연속 어두울 때만
@@ -3242,6 +3259,14 @@ function frontDecide(img) {
       if (dark[i]) { if (i > 0 && dark[i - 1]) light = 0; }
       else light++;
     }
+    const u0 = frontTickPx();
+    let pick = null;
+    if (u0) {
+      const eyePx = S.g.h1 * H;
+      for (const y of cands) { const t = (eyePx - y) / u0; if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = y; break; } }
+      if (pick === null) { for (const y of cands) { if ((eyePx - y) / u0 <= FRONT_T_HI) { pick = y; break; } } }
+    } else pick = cands.length ? cands[0] : null;
+    if (pick !== null) ys.push(pick);
   }
   if (ys.length < 3) return null;
   ys.sort((a, b) => a - b);

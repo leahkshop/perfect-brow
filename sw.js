@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v111"; /* v2.1.1 — 앞머리 넘버링 대체값 (눈 위 11.7 눈금 · 범위 7~16) */
+const VERSION = "pb-v112"; /* v2.1.2 — 쌍꺼풀·주름 쉐도우 방어 (후보 전부 모아 넘버링으로 고름) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
