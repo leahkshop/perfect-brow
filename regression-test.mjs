@@ -3417,6 +3417,59 @@ console.log("\n[밸런스 판정]");
       + `중점 (${(r.mx * 100).toFixed(1)}%, ${(r.my * 100).toFixed(1)}%) 기대 (${(r.cx * 100).toFixed(1)}%, ${(r.cy * 100).toFixed(0)}%) · 줌 ${r.zoom.toFixed(2)}× · SVG 그대로=${svgOk}`);
   }
 
+  /* 150. ⭐⭐ v1.98.0 — **레일 버튼 얇게·붙여서 중앙 배치 · 위아래 바 30% 짧게(아래 고정)**
+     (원장님 지시 2026-08-29: 「왼쪽 선 이름 버튼들 전부 조금 더 얇게 · 꼬리와 센터, 아우터와
+       센터피봇 간의 간격을 없애고 붙여서 · 버튼들의 배치를 중앙을 기점으로 ·
+       위아래 드래그바의 길이를 30% 짧게, 밑 배치된 위치 고정 ·
+       드래그바를 누를 때 왼쪽 선 이름 버튼이 눌리니 조금 더 떨어뜨려」)
+     ⛔ `#lineRail #hButtons` 에 position:relative 를 주지 마세요 — `.linebar{bottom:8px}` 가
+        되살아나 가로 버튼 묶음이 8px 위로 밀립니다 (설정 배지와 겹침 · 실제로 겪음). */
+  for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아이패드 가로 1180×820", w: 1180, h: 820 }]) {
+    const ctx = await browser.newContext({ viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const rail = document.getElementById("lineRail");
+      const rr = rail.getBoundingClientRect();
+      const st = document.getElementById("stage").getBoundingClientRect();
+      const v = document.getElementById("posCtlV").getBoundingClientRect();
+      const bd = document.getElementById("bottomDock").getBoundingClientRect();
+      const rct = (sel) => document.querySelector(sel).getBoundingClientRect();
+      const btns = [...document.querySelectorAll("#lineRail .lbtn")];
+      const chips = [...document.querySelectorAll("#railExtra .chip")];
+      const tail = rct('.lbtn[data-key="h3"]'), ctr = rct('.lbtn[data-key="v1"]');
+      const outer = rct('.lbtn[data-key="v4"]'), pivot = chips[0].getBoundingClientRect();
+      const lang = document.getElementById("railLang");
+      const lr = lang.getBoundingClientRect();
+      const eye = rct('.lbtn[data-key="h1"]');
+      const blockTop = eye.top, blockBot = chips[chips.length - 1].getBoundingClientRect().bottom;
+      return {
+        btnH: Math.max(...btns.map((b) => b.getBoundingClientRect().height)),
+        gapTailCenter: ctr.top - tail.bottom,
+        gapOuterPivot: pivot.top - outer.bottom,
+        blockOff: ((blockTop + blockBot) / 2 - rr.top) - rr.height / 2,   /* 덩어리 중심 − 레일 중심 */
+        fits: rail.scrollHeight <= rail.clientHeight + 2,
+        langAbs: getComputedStyle(lang).position === "absolute",
+        langClear: lr.bottom <= blockTop + 1,                              /* 설정이 버튼 위로 안 겹침 */
+        hStatic: getComputedStyle(document.getElementById("hButtons")).position === "static",
+        barFrac: v.height / st.height,
+        barGapFromRail: v.left - rr.right,
+        barAboveDock: bd.top - v.bottom,
+      };
+    });
+    await ctx.close();
+    check(`150. ${dev.n} — 레일 버튼 얇게·붙여서 중앙 · 바 30% 짧게·왼쪽 간격`,
+      r.btnH <= 22 && r.gapTailCenter <= 3 && r.gapOuterPivot <= 3 && Math.abs(r.blockOff) <= 4
+        && r.fits && r.langAbs && r.langClear && r.hStatic
+        && r.barFrac > 0.28 && r.barFrac < 0.46 && r.barGapFromRail >= 12 && r.barAboveDock > 0,
+      `버튼높이 ${r.btnH.toFixed(1)}px(≤22) · 꼬리↔센터 ${r.gapTailCenter.toFixed(1)}px / 아우터↔피봇 ${r.gapOuterPivot.toFixed(1)}px(≤3) · `
+      + `중앙오차 ${r.blockOff.toFixed(1)}px(≤4) · 넘침없음=${r.fits} · 설정 흐름밖=${r.langAbs}/안겹침=${r.langClear} · hButtons static=${r.hStatic} · `
+      + `바 높이 ${(r.barFrac * 100).toFixed(1)}%(28~46) · 레일과 간격 ${r.barGapFromRail.toFixed(0)}px(≥12) · 아래도크 위 ${r.barAboveDock.toFixed(0)}px`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

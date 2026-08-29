@@ -336,11 +336,18 @@ body.land.compact #editor .guidetip .chip{font-size:9.5px;padding:5px 9px}
    「선 움직임을 오른손으로만 움직이는데 드래그 바 때문에 손 액션 공간이 별로 없다」).
    #rightDock 라는 id 는 역사적 이름으로 남겨 둡니다 — 코드 전반이 이 id 로 작업 영역을 잽니다.
    ⛔ right 로 되돌리지 마세요 — workLeft() 가 이 도크 위치로 작업 영역 왼쪽 끝을 잡습니다. */
-/* v1.96.0 — 바만 남기고 **조금 더 왼쪽(4px)·조금 더 아래(translateY 22px)** (원장님 지시 2026-08-29
-   「지금보다 조금 왼쪽으로 더 붙이기 · 길이 유지하고 조금 더 밑으로」). 길이(48%)는 그대로입니다. */
-.rdock{position:absolute;left:4px;top:0;bottom:var(--bdock,152px);height:48%;min-height:185px;
+/* v1.96.0 — 바만 남기고 **조금 더 왼쪽·조금 더 아래(translateY 22px)** (원장님 지시 2026-08-29).
+   ⭐ v1.98.0 — 원장님 지시 2026-08-29:
+   「위아래 드래그바의 길이를 30% 짧게, 밑 배치된 위치 고정(위가 짧아져서 내려온다) ·
+     드래그바를 누를 때 왼쪽 선 이름 버튼이 눌리니 조금 더 떨어뜨려 배치」
+   · 길이 48% → **33.6%** (=48×0.7) · min-height 185 → 130px
+   · **아래 끝은 그대로**: 가운데 정렬 박스가 줄면 아래 끝이 0.15h 만큼 올라가므로,
+     자기 높이의 **21.43%**(=0.15h ÷ 0.7h)를 추가로 내려 상쇄합니다 → 위쪽만 짧아집니다.
+   · 왼쪽 4px → **16px** — 레일 버튼과 손가락이 부딪히지 않게 (workLeft 도 함께 밀립니다)
+   ⛔ translateY 의 % 항을 지우면 바가 위로 떠서 「아래 고정」이 깨집니다. */
+.rdock{position:absolute;left:16px;top:0;bottom:var(--bdock,152px);height:33.6%;min-height:130px;
   margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px;
-  transform:translateY(22px)}
+  transform:translateY(calc(22px + 21.43%))}
 /* v1.96.0 — 다시실행·되돌리기 행: 초기화 바로 밑, 오른쪽 끝 정렬 (되돌리기가 초기화 바로 아래) */
 .urow{position:absolute;top:48px;right:var(--redge);z-index:30;display:flex;gap:6px;justify-content:flex-end}
 .urow .dockbtn{height:34px;min-width:56px;flex-direction:row;gap:4px;font-size:10px;border-radius:11px}
@@ -531,18 +538,29 @@ button:disabled{opacity:.38;pointer-events:none}
 /* 가로 모드: 라인 선택 버튼 = 왼쪽 세로 레일 (왼손 전용) */
 /* ⚠️ 세로 공간이 빠듯합니다 — 라인이 하나 늘 때마다 여기가 먼저 넘칩니다 (v1.32.0 아치선).
    회귀 10번이 `rail=overflow` 로 잡습니다. 버튼을 추가하면 높이·간격부터 확인하세요. */
-#lineRail{grid-area:lines;background:var(--chrome);border-right:1px solid var(--hair);
-  flex-direction:column;align-items:center;justify-content:center;gap:7px;
+/* ⭐ v1.98.0 — 원장님 지시 2026-08-29:
+   「왼쪽 선 이름 버튼들 전부 조금 더 얇게 · 꼬리와 센터, 아우터와 센터피봇 간의 간격을 없애고
+     붙여서 · 버튼들의 배치를 중앙을 기점으로」
+   · 버튼 높이 25 → 21px (compact 23 → 20px)
+   · 레일 그룹 간격 7px → 2px = 그룹 안 간격과 같게 → 12개가 **한 덩어리**로 보인다
+   · 꼬리↔센터 · 아우터↔V센터피봇 사이의 여백(padding)과 구분선(::after/::before) 제거
+   · justify-content:center 로 그 덩어리가 레일 세로 한가운데에 온다
+   ⛔ 설정(railLang)의 아래 구분선은 남깁니다 — 선 버튼이 아니라 다른 종류의 컨트롤입니다. */
+#lineRail{position:relative;grid-area:lines;background:var(--chrome);border-right:1px solid var(--hair);
+  flex-direction:column;align-items:center;justify-content:center;gap:2px;
   padding:calc(var(--safe-t) + 8px) 3px calc(var(--safe-b) + 8px);overflow-y:auto;min-height:0}
 #lineRail .linebar{position:static;flex-direction:column;flex-wrap:nowrap;gap:2px;
   background:transparent;border:none;padding:0;max-width:none;
   backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:0}
-#lineRail .lbtn{width:52px;height:25px;font-size:9.5px;border-radius:7px}
-#lineRail #hButtons{position:relative;padding-bottom:9px}
-#lineRail #hButtons::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--hair)}
+#lineRail .lbtn{width:52px;height:21px;font-size:9px;border-radius:6px}
+/* ⛔ v1.98.0 버그 수정 — 여기에 position:relative 를 주면 `.linebar{bottom:8px}` 가 되살아나
+   가로 버튼 묶음이 **8px 위로 밀립니다**(설정 배지와 겹치고 꼬리↔센터 간격이 벌어짐).
+   구분선(::after)이 사라진 지금 relative 가 필요 없으므로 static 으로 못 박습니다. */
+#lineRail #hButtons{position:static;padding-bottom:0}
+#lineRail #hButtons::after{display:none}
 /* V 기본구조 버튼은 라인 버튼 아래에 (v1.11.0) */
-#railExtra{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:8px;width:100%}
-#railExtra::before{content:"";position:absolute;left:6px;right:6px;top:4px;height:1px;background:var(--hair)}
+#railExtra{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:0;width:100%}
+#railExtra::before{display:none}   /* v1.98.0 — 아우터↔V센터피봇 구분선 제거 (붙여서 배치) */
 #railExtra .chip{width:52px;padding:5px 3px;font-size:8.5px;line-height:1.15;white-space:normal;text-align:center}
 /* 레일 안(목록)은 담백하게 — 그라데이션·글로우를 쓰지 마세요 (디자인 규칙) */
 #lineRail .chip{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.07);
@@ -551,7 +569,10 @@ button:disabled{opacity:.38;pointer-events:none}
   color:#fff;box-shadow:none}
 body:not(.land) #railExtra{display:none}
 /* 한/영 (v1.19.0) — 왼쪽 버튼들 맨 위. 현재 언어만 색이 켜진다 */
-#railLang{position:relative;display:flex;gap:4px;width:100%;justify-content:center;padding-bottom:11px}
+/* v1.98.0 — 설정 배지는 **흐름 밖(맨 위 고정)**. 그래야 선 이름 버튼 12개만 레일 정중앙에 옵니다
+   (원장님 지시 「버튼들의 배치를 중앙을 기점으로」). ⛔ 다시 흐름에 넣으면 버튼들이 아래로 밀립니다. */
+#railLang{position:absolute;top:calc(var(--safe-t) + 8px);left:0;right:0;
+  display:flex;gap:4px;width:100%;justify-content:center;padding-bottom:11px}
 #railLang::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--hair)}
 #railLang button{width:52px;height:24px;border-radius:8px;font-size:12px;font-weight:700;
   background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.45);
@@ -725,11 +746,12 @@ body:not(.land) #railLang{display:none}
 
 /* 가로 화면이 낮을 때(아이폰 가로 등) 컨트롤 압축 */
 @media all{
-  body.land.compact #editor #lineRail{gap:5px;padding-top:4px;padding-bottom:4px}
-  body.land.compact #editor #lineRail .linebar{gap:2px;padding:3px}
-  body.land.compact #editor #lineRail .lbtn{width:56px;height:23px;font-size:9px}
+  body.land.compact #editor #lineRail{gap:2px;padding-top:4px;padding-bottom:4px}
+  /* v1.98.0 — 세로 패딩 0 (가로만 3px): 꼬리↔센터·아우터↔V센터피봇이 다른 줄과 같은 2px 로 붙는다 */
+  body.land.compact #editor #lineRail .linebar{gap:2px;padding:0 3px}
+  body.land.compact #editor #lineRail .lbtn{width:56px;height:20px;font-size:8.5px}
   /* 아치선이 늘면서 세로가 빠듯해졌습니다 (v1.32.0) — 회귀 10번이 넘침을 잡습니다 */
-  body.land.compact #editor #railExtra{padding-top:5px;gap:2px}
+  body.land.compact #editor #railExtra{padding-top:0;gap:2px}
   body.land.compact #editor #railExtra .chip{padding:4px 3px;font-size:8px}
   body.land.compact #editor #railLang{gap:3px}
   body.land.compact #editor #railLang button{width:52px;height:22px;font-size:11px}
@@ -746,7 +768,7 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .posctl.axis-h .plabel{min-width:60px;font-size:9.5px}
   body.land.compact #editor .posctl.axis-v .plabel{width:34px;font-size:8.5px;padding:2px 3px}  /* v1.53.0 — 왼쪽 배치는 기본 규칙을 따름 */
   body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
-  body.land.compact #editor .rdock{height:58%;min-height:135px;gap:5px;transform:translateY(10px)}
+  body.land.compact #editor .rdock{height:40.6%;min-height:95px;gap:5px;transform:translateY(calc(10px + 21.43%))}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
   /* v1.45.0 — compact에서도 초기화=프리셋 크기 · 되돌리기·다시실행 더 크게 (기본 .dockbtn 28px 를 이긴다) */
   body.land.compact #editor .dockbtn.danger{height:30px;min-width:50px;font-size:9px}
