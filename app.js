@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.99.2";
+const APP_VERSION = "v2.0.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -548,7 +548,15 @@ const HIT_PX = 28;        // 화면에서 선을 탭/드래그로 잡는 인식 
    ⛔ 이 두 상수를 지우거나 h1 을 HIT_PX 로 되돌리지 마세요 — 회귀 142 가 잡습니다. */
 const EYE_HIT_PX = 9;
 const V6_HIT_GAP = 8;
-const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭 (클수록 얼굴이 크게 잡힘)
+const EYE_FRAC = 0.44;    // (예비 경로 전용) 동공 간 거리 / 캔버스 폭
+/* ⭐⭐⭐ v2.0.0 — **자동 정렬의 자는 동공이 아니라 내안각입니다** (원장님 지시 2026-08-29:
+   「눈 앞꼬리를 항상 40으로 잡아야 하는거 아니니?」)
+   동공 간격으로 맞추면 사람마다 「내안각÷동공」 비율이 달라(실측 0.537~0.701) 내안각이
+   **37.7~41.3 눈금** 사이에서 흔들립니다 — 폭 3.6 눈금. 그러면 40~48 룰이 고객마다
+   통째로 밀립니다. 내안각 간격으로 맞추면 **내안각이 늘 같은 자리**에 옵니다.
+   0.263 = 내안각 반간격 0.1315 × 2 → **1 눈금 = 화면 1%** 가 되어 룰의 13.15 와 딱 맞습니다.
+   ⛔ 동공 기준으로 되돌리지 마세요 — 회귀 153 이 잡습니다. */
+const INNER_FRAC = 0.263; // 자동 정렬 시 내안각 간 거리 / 캔버스 폭
 /* ── 메인 작업 영역 (v1.17.0) ──────────────────────────────────
    캔버스 왼쪽 끝 ~ **오른쪽 위아래 드래그 바 왼쪽 끝**까지가 실제 작업 공간이다.
    · 가로 가이드 선은 이 영역을 넘어가지 않는다 (오른쪽 컨트롤·스크림 위로 튀어나오지 않게)
@@ -1875,7 +1883,8 @@ function posConfig(key) {
     return { name: t(sp.i18n), v: 1 - g[k], disp: Math.round((1 - g[k]) * 100), hint: t("hint_updown"), step: 0.003, invert: true, axis: "v" };
   }
   const sp = V_SPECS.find((s) => s.key === k);
-  return { name: t(sp.i18n), v: g[k], disp: Math.round(g[k] * 100), hint: t("hint_leftright"), step: 0.003, invert: false, axis: "h" };
+  /* v2.0.0 — 세로선은 **얼굴 기준 눈금**(왼쪽 내안각 40 · 센터 53.15). dispV 주석 참고. */
+  return { name: t(sp.i18n), v: g[k], disp: dispV(g[k]), hint: t("hint_leftright"), step: 0.003, invert: false, axis: "h" };
 }
 
 function applyPos(v, key) {
@@ -2167,6 +2176,7 @@ function placeLinesFromEyes(cx, cy, half) {
   g.v1 = cx;
   g.h1 = cy;
   S.innerAnchor = half * R_INNER;   /* v1.99.0 — 랜드마크가 없을 때의 「내안각 → 센터」 자 */
+  S.faceRef = { a: cx - half * R_INNER, c: cx };   /* v2.0.0 — 눈금 표시의 자 */
   g.v2 = clamp(cx - half * R_INNER, 0.01, 0.99); g.v3 = 2 * cx - g.v2;
   g.v4 = clamp(cx - half * R_OUTER, 0.01, 0.99); g.v5 = 2 * cx - g.v4;
   const up = (f) => clamp(cy - half * f * aspect, 0.02, 0.98);
@@ -2396,12 +2406,12 @@ function autoAlign(lm) {
   /* 회전: 두 동공을 수평으로 */
   const rot = clamp(-(Math.atan2(irisB.y - irisA.y, irisB.x - irisA.x) * 180) / Math.PI, -ROT_MAX, ROT_MAX);
 
-  /* 줌: 동공 간 거리가 캔버스 폭의 30% 가 되도록 */
-  const d = Math.hypot(irisB.x - irisA.x, irisB.y - irisA.y) * S.s0;
-  const zoom = clamp((EYE_FRAC * W) / Math.max(d, 1), ZOOM_MIN, ZOOM_MAX);
+  /* 줌: **내안각 간 거리**가 캔버스 폭의 INNER_FRAC 이 되도록 (v2.0.0 · 위 상수 주석) */
+  const d = Math.hypot(innerR.x - innerL.x, innerR.y - innerL.y) * S.s0;
+  const zoom = clamp((INNER_FRAC * W) / Math.max(d, 1), ZOOM_MIN, ZOOM_MAX);
 
-  /* 이동: 두 동공의 중점을 캔버스 중앙으로 */
-  const mx = (irisA.x + irisB.x) / 2, my = (irisA.y + irisB.y) / 2;
+  /* 이동: 좌우는 **내안각 중점**(얼굴 축), 위아래는 동공 높이(v1.97.2 에서 맞춘 CENTER_Y) */
+  const mx = (innerL.x + innerR.x) / 2, my = (irisA.y + irisB.y) / 2;
   const vx = (mx - iw / 2) * S.s0, vy = (my - ih / 2) * S.s0;
   const r = (rot * Math.PI) / 180;
   const rx = vx * Math.cos(r) - vy * Math.sin(r);
@@ -2451,7 +2461,8 @@ function autoAlignRelayout(lm) {
   const { W, H } = S.dim, tr = S.p;
   const c = eyeCorners(lm);
   const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
-  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  /* v2.0.0 — 좌우는 내안각 중점(얼굴 축), 위아래는 동공 높이. autoAlign 과 같은 기준. */
+  const mx = (c.innerL.x + c.innerR.x) / 2, my = (a.y + b.y) / 2;
   const vx = (mx - S.iw / 2) * S.s0, vy = (my - S.ih / 2) * S.s0;
   const r = (tr.rot * Math.PI) / 180;
   const rx = vx * Math.cos(r) - vy * Math.sin(r), ry = vx * Math.sin(r) + vy * Math.cos(r);
@@ -2473,6 +2484,7 @@ function placeLines(lm) {
   g.h1 = clamp(cv((a.x + b.x) / 2, (a.y + b.y) / 2).y / H, 0.02, 0.98);
   const halfIn = Math.abs((refIsLeft() ? inLc : inRc).x / W - g.v1);
   S.innerAnchor = halfIn;   /* v1.99.0 — 「내안각 → 센터」 자. 이너 판독의 기준 (40 = 여기) */
+  S.faceRef = { a: Math.min(inLc.x, inRc.x) / W, c: g.v1 };   /* v2.0.0 — 눈금 표시의 자 */
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
   const halfOut = browTailHalf(lm, S.p, g.v1);   /* 기준쪽 눈썹 꼬리 (v1.35.0/v1.38.0) */
   g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
@@ -3061,6 +3073,36 @@ const INNER_CASES = [
    ⛔ 케이스 중앙값을 대체값으로 되돌리지 마세요 — 회귀 151 이 잡습니다. */
 function innerCaseF() {
   return INNER_F_MID;
+}
+
+/* ⭐⭐⭐ v2.0.0 — **세로선 눈금은 얼굴에 붙은 자로 읽습니다** (원장님 지시 2026-08-29)
+   예전에는 `v × 100`, 즉 **화면 좌표**를 그대로 보여 줬습니다. 자동 정렬을 내안각 기준으로
+   바꿔도(위 INNER_FRAC) 기기 폭·도크 폭에 따라 센터가 조금씩 움직이고, `fitBrowsInFrame`
+   이 배율을 낮추면 또 밀립니다. 그래서 **표시 자체를 얼굴 기준**으로 바꿉니다:
+
+       왼쪽 내안각 = 40 · 센터 = 53.15 · 오른쪽 내안각 = 66.3   (1 눈금 = 이 자의 1/13.15)
+
+   이제 어떤 고객·어떤 기기에서도 **40 은 늘 눈 앞꼬리**이고, 48 은 늘 하드 맥시멈입니다.
+   ⛔ `Math.round(g[k] * 100)` 으로 되돌리지 마세요 — 회귀 153 이 잡습니다. */
+function faceRef() {
+  const lm = S.landmarks, W = S.dim.W;
+  if (lm && W) {
+    try {
+      const c = eyeCorners(lm);
+      const l = imgToCanvas(c.innerL.x, c.innerL.y, S.p).x / W;
+      const r = imgToCanvas(c.innerR.x, c.innerR.y, S.p).x / W;
+      const a = Math.min(l, r), b = Math.max(l, r);
+      if (b - a > 0.04) return { a, c: (a + b) / 2 };
+    } catch { /* 랜드마크가 깨졌으면 저장값으로 */ }
+  }
+  const f = S.faceRef;
+  return f && f.c - f.a > 0.02 ? f : null;
+}
+/* 세로선 값(0~1) → 원장님 눈금. 자가 없으면 예전처럼 화면 % 를 돌려준다. */
+function dispV(v) {
+  const f = faceRef();
+  if (!f) return Math.round(v * 100);
+  return Math.round(40 + ((v - f.a) / (f.c - f.a)) * 13.15);
 }
 
 /* ⚠️⚠️ **내안각(40)의 정의** — 원장님 확인 2026-08-29
@@ -4740,7 +4782,7 @@ if ("serviceWorker" in navigator) {
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   /* v1.94.0 — 고유색이 LOOK_DEF 를 따라가도록 참조로 연결 (기본값이 바뀌어도 안 어긋나게) */
   LINE_COLORS: { eye: "#3A3F4A", arch: LOOK_DEF.arch, tail: LOOK_DEF.tail, inner: LOOK_DEF.inner, innerDim: "#C9D1D6", neutral: "#14161B" },
-  render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
+  render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking, setLang,
@@ -4749,4 +4791,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
-  findPupilsFallback, fallbackPupilAlign, EYE_FRAC, CENTER_Y };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV };   /* v1.97.0 — 예비 동공 정렬 검사용 */

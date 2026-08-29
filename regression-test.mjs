@@ -1156,6 +1156,65 @@ console.log("[세로 모드 · 기능]");
       && Math.abs((meas.at - meas.h2) - (meas.ft - meas.front) * (0.040 / 0.025)) < 0.02,
     `아치 ${meas.h2.toFixed(3)}→두께 ${meas.at.toFixed(3)} / 앞머리 ${meas.front.toFixed(3)}→두께 ${meas.ft.toFixed(3)}`);
 
+  /* 153. ⭐⭐⭐ v2.0.0 — **눈 앞꼬리는 언제나 40** (원장님 지시 2026-08-29:
+       「눈 앞꼬리를 항상 40으로 잡아야 하는거 아니니?」)
+     예전에는 자동 정렬을 **동공 간격**으로 맞추고 눈금을 **화면 좌표**로 보여 줬습니다.
+     사람마다 「내안각÷동공」이 달라(실측 0.537~0.701) 내안각이 **37.7~41.3** 사이에서
+     흔들렸고, 그러면 40~48 룰이 고객마다 통째로 밀립니다.
+       ① 자동 정렬의 자 = **내안각 간격**(INNER_FRAC)
+       ② 세로선 눈금 = **얼굴 기준**(왼쪽 내안각 40 · 센터 53.15 · 오른쪽 내안각 66.3)
+     ⛔ 둘 다 되돌리지 마세요. */
+  {
+    const r153 = await p.evaluate((lm) => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W;
+      const out = {};
+      const run = (scale) => {
+        /* 같은 얼굴을 동공만 넓게/좁게 바꿔 본다 — 내안각은 그대로 */
+        const L = lm.map((q) => ({ ...q }));
+        const mid = (L[468].x + L[473].x) / 2;
+        for (const i of [468, 469, 470, 471, 472, 473, 474, 475, 476, 477]) {
+          L[i] = { ...L[i], x: mid + (L[i].x - mid) * scale };
+        }
+        S.landmarks = L; PBx.autoAlign(L); PBx.render();
+        const P = (i) => PBx.imgToCanvas(L[i].x * S.iw, L[i].y * S.ih, S.p).x / W;
+        const a = Math.min(P(133), P(362)), b = Math.max(P(133), P(362));
+        return { span: b - a, tick: PBx.dispV(a), center: PBx.dispV((a + b) / 2),
+                 far: PBx.dispV(b), innerDisp: PBx.posConfig("v2").disp };
+      };
+      out.narrow = run(0.80);   /* 동공이 좁은 얼굴 */
+      out.wide = run(1.25);     /* 동공이 넓은 얼굴 */
+      /* 눈썹이 프레임 안에 넉넉히 드는 얼굴 — fitBrowsInFrame 이 배율을 줄이지 않는다.
+         이때 내안각 간격이 실제로 INNER_FRAC 이 되는지 본다. */
+      {
+        const L = lm.map((q) => ({ ...q }));
+        L[70] = { x: 0.42, y: 0.420, z: 0 }; L[300] = { x: 0.58, y: 0.420, z: 0 };
+        L[46] = { x: 0.425, y: 0.445, z: 0 }; L[276] = { x: 0.575, y: 0.445, z: 0 };
+        S.landmarks = L; PBx.autoAlign(L); PBx.render();
+        const P = (i) => PBx.imgToCanvas(L[i].x * S.iw, L[i].y * S.ih, S.p).x / W;
+        const a = Math.min(P(133), P(362)), b = Math.max(P(133), P(362));
+        out.fits = { span: b - a, tick: PBx.dispV(a), center: PBx.dispV((a + b) / 2) };
+      }
+      out.frac = PBx.INNER_FRAC;
+      return out;
+    }, FAKE_FACE());
+    /* ⚠️ 배율이 늘 INNER_FRAC 인 것은 아닙니다 — `fitBrowsInFrame`(1-40)이 눈썹 꼬리가
+       잘리면 배율을 낮춥니다. 잠가야 하는 것은 **동공 간격에 흔들리지 않는 것**과
+       **눈금이 늘 40** 인 것입니다. 눈썹이 넉넉히 드는 얼굴에서는 INNER_FRAC 그대로. */
+    const sameOk = Math.abs(r153.narrow.span - r153.wide.span) < 0.005;
+    const fitOk = Math.abs(r153.fits.span - r153.frac) < 0.02
+      && r153.fits.tick === 40 && r153.fits.center === 53;
+    const tickOk = r153.narrow.tick === 40 && r153.wide.tick === 40;
+    const midOk = r153.narrow.center === 53 && r153.wide.center === 53;
+    const farOk = r153.narrow.far === 66 && r153.wide.far === 66;
+    const innerOk = r153.narrow.innerDisp === 40 && r153.wide.innerDisp === 40;
+    check("153. 눈 앞꼬리 = 언제나 40 — 동공 간격이 달라도 내안각 눈금이 흔들리지 않는다",
+      sameOk && fitOk && tickOk && midOk && farOk && innerOk,
+      `동공 좁/넓 내안각 간격 ${(r153.narrow.span * 100).toFixed(1)}% / ${(r153.wide.span * 100).toFixed(1)}% (같아야 함) · `
+      + `안 잘리는 얼굴 ${(r153.fits.span * 100).toFixed(1)}%(기대 ${(r153.frac * 100).toFixed(1)}%) 눈금 ${r153.fits.tick} · `
+      + `내안각 눈금 ${r153.narrow.tick}/${r153.wide.tick}(40) · 센터 ${r153.narrow.center}/${r153.wide.center}(53) · `
+      + `반대쪽 ${r153.narrow.far}/${r153.wide.far}(66) · 이너 표시 ${r153.narrow.innerDisp}/${r153.wide.innerDisp}(40)`);
+  }
+
   // 70. 비대칭 얼굴 — 이너 바 오차를 좌·우에 고르게 나눈다 (대칭은 유지)
   const asym = await p.evaluate((lm) => {
     const S = window.PB.S, W = S.dim.W;
