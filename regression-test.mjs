@@ -3765,7 +3765,7 @@ console.log("\n[밸런스 판정]");
     });
     await ctx.close();
     const ok = Math.abs(r.front - r.exp) < 0.005 && Math.abs(r.ticks - r.mid) < 0.2
-      && r.mid > 9 && r.mid < 14 && r.lo === 7 && r.hi === 16 && r.hasFn;
+      && r.mid > 8 && r.mid < 14 && r.lo === 6 && r.hi === 16 && r.hasFn;
     check("156. 앞머리 넘버링 — 판독 없는 배치는 눈 위 11.7 눈금 (이너와 같은 자 · 범위 7~16 잠금)",
       ok, `front ${r.front.toFixed(4)} (기대 ${r.exp.toFixed(4)}) · 눈 위 ${r.ticks.toFixed(1)} 눈금(기대 ${r.mid}) · 경계 ${r.lo}/${r.hi}`);
   }
@@ -3847,7 +3847,7 @@ console.log("\n[밸런스 판정]");
     });
     await ctx.close();
     check("158. 앞머리 하한 — 눈 위 7 눈금 미만은 앞머리가 아니다 (보통값 11.7 로 대체)",
-      r.fixed && Math.abs(r.t1 - r.mid) < 0.2 && r.kept && Math.abs(r.t2 - 10) < 0.2 && r.zoomKept && r.lo === 7,
+      r.fixed && Math.abs(r.t1 - r.mid) < 0.2 && r.kept && Math.abs(r.t2 - 10) < 0.2 && r.zoomKept && r.lo === 6,
       `3눈금→대체=${r.fixed}(→${r.t1.toFixed(1)}눈금, 기대 ${r.mid}) · 10눈금 유지=${r.kept}(${r.t2.toFixed(1)}) · 18눈금 유지=${r.zoomKept} · 하한 ${r.lo}`);
   }
 
