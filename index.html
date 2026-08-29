@@ -545,7 +545,7 @@ button:disabled{opacity:.38;pointer-events:none}
    · 레일 그룹 간격 7px → 2px = 그룹 안 간격과 같게 → 12개가 **한 덩어리**로 보인다
    · 꼬리↔센터 · 아우터↔V센터피봇 사이의 여백(padding)과 구분선(::after/::before) 제거
    · justify-content:center 로 그 덩어리가 레일 세로 한가운데에 온다
-   ⛔ 설정(railLang)의 아래 구분선은 남깁니다 — 선 버튼이 아니라 다른 종류의 컨트롤입니다. */
+   v1.98.1 — 설정 배지는 눈 버튼 바로 위로 (아래 #railLang 주석 참고). */
 #lineRail{position:relative;grid-area:lines;background:var(--chrome);border-right:1px solid var(--hair);
   flex-direction:column;align-items:center;justify-content:center;gap:2px;
   padding:calc(var(--safe-t) + 8px) 3px calc(var(--safe-b) + 8px);overflow-y:auto;min-height:0}
@@ -569,11 +569,15 @@ button:disabled{opacity:.38;pointer-events:none}
   color:#fff;box-shadow:none}
 body:not(.land) #railExtra{display:none}
 /* 한/영 (v1.19.0) — 왼쪽 버튼들 맨 위. 현재 언어만 색이 켜진다 */
-/* v1.98.0 — 설정 배지는 **흐름 밖(맨 위 고정)**. 그래야 선 이름 버튼 12개만 레일 정중앙에 옵니다
-   (원장님 지시 「버튼들의 배치를 중앙을 기점으로」). ⛔ 다시 흐름에 넣으면 버튼들이 아래로 밀립니다. */
-#railLang{position:absolute;top:calc(var(--safe-t) + 8px);left:0;right:0;
-  display:flex;gap:4px;width:100%;justify-content:center;padding-bottom:11px}
-#railLang::after{content:"";position:absolute;left:6px;right:6px;bottom:4px;height:1px;background:var(--hair)}
+/* ⭐ v1.98.1 — 설정 배지는 **눈 버튼 바로 위, 살짝 갭(8px)** (원장님 지시 2026-08-29
+   「설정 버튼을 눈 버튼과 살짝 갭을 두고 눈버튼 위로 옮겨줘」).
+   ⚠️ 동시에 v1.98.0 의 「선 버튼 12개가 레일 정중앙」도 지켜야 합니다 → 흐름에는 넣되
+   **음수 margin-top 으로 자기 높이를 상쇄**해서 가운데 정렬 계산에 0 으로 잡히게 합니다:
+     margin-top = −(박스높이 24+6 + 레일 gap 2) = −32px  (compact 는 −30px)
+   ⛔ margin-top 을 지우면 선 버튼 덩어리가 아래로 밀려 중앙이 깨집니다 (회귀 150 중앙오차). */
+#railLang{position:relative;display:flex;gap:4px;width:100%;justify-content:center;
+  padding-bottom:6px;margin-top:-32px}
+#railLang::after{display:none}   /* 갭만으로 구분 — 구분선은 8px 갭 안에서 답답합니다 */
 #railLang button{width:52px;height:24px;border-radius:8px;font-size:12px;font-weight:700;
   background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.45);
   display:flex;align-items:center;justify-content:center;padding:0}
@@ -753,7 +757,7 @@ body:not(.land) #railLang{display:none}
   /* 아치선이 늘면서 세로가 빠듯해졌습니다 (v1.32.0) — 회귀 10번이 넘침을 잡습니다 */
   body.land.compact #editor #railExtra{padding-top:0;gap:2px}
   body.land.compact #editor #railExtra .chip{padding:4px 3px;font-size:8px}
-  body.land.compact #editor #railLang{gap:3px}
+  body.land.compact #editor #railLang{gap:3px;padding-bottom:6px;margin-top:-30px}
   body.land.compact #editor #railLang button{width:52px;height:22px;font-size:11px}
   body.land.compact #editor #railExtra .chip{width:56px;padding:4px 3px;font-size:8px}
   body.land.compact #editor .chip{padding:5px 8px;font-size:10px}

@@ -3452,7 +3452,9 @@ console.log("\n[밸런스 판정]");
         gapOuterPivot: pivot.top - outer.bottom,
         blockOff: ((blockTop + blockBot) / 2 - rr.top) - rr.height / 2,   /* 덩어리 중심 − 레일 중심 */
         fits: rail.scrollHeight <= rail.clientHeight + 2,
-        langAbs: getComputedStyle(lang).position === "absolute",
+        /* v1.98.1 — 설정 배지는 눈 버튼 **바로 위 살짝 갭**. 흐름에 있되 음수 margin 으로
+           가운데 정렬에는 0 으로 잡혀야 합니다 (blockOff 검사가 그것을 잠급니다). */
+        langGap: blockTop - lang.querySelector("button").getBoundingClientRect().bottom,
         langClear: lr.bottom <= blockTop + 1,                              /* 설정이 버튼 위로 안 겹침 */
         hStatic: getComputedStyle(document.getElementById("hButtons")).position === "static",
         barFrac: v.height / st.height,
@@ -3463,10 +3465,10 @@ console.log("\n[밸런스 판정]");
     await ctx.close();
     check(`150. ${dev.n} — 레일 버튼 얇게·붙여서 중앙 · 바 30% 짧게·왼쪽 간격`,
       r.btnH <= 22 && r.gapTailCenter <= 3 && r.gapOuterPivot <= 3 && Math.abs(r.blockOff) <= 4
-        && r.fits && r.langAbs && r.langClear && r.hStatic
+        && r.fits && r.langGap >= 4 && r.langGap <= 14 && r.langClear && r.hStatic
         && r.barFrac > 0.28 && r.barFrac < 0.46 && r.barGapFromRail >= 12 && r.barAboveDock > 0,
       `버튼높이 ${r.btnH.toFixed(1)}px(≤22) · 꼬리↔센터 ${r.gapTailCenter.toFixed(1)}px / 아우터↔피봇 ${r.gapOuterPivot.toFixed(1)}px(≤3) · `
-      + `중앙오차 ${r.blockOff.toFixed(1)}px(≤4) · 넘침없음=${r.fits} · 설정 흐름밖=${r.langAbs}/안겹침=${r.langClear} · hButtons static=${r.hStatic} · `
+      + `중앙오차 ${r.blockOff.toFixed(1)}px(≤4) · 넘침없음=${r.fits} · 설정↔눈 갭 ${r.langGap.toFixed(1)}px(4~14)/안겹침=${r.langClear} · hButtons static=${r.hStatic} · `
       + `바 높이 ${(r.barFrac * 100).toFixed(1)}%(28~46) · 레일과 간격 ${r.barGapFromRail.toFixed(0)}px(≥12) · 아래도크 위 ${r.barAboveDock.toFixed(0)}px`);
   }
 

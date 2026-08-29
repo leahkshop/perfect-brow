@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 기준 버전 | **v1.98.0** |
+| 기준 버전 | **v1.98.1** |
 | 확정일 | 2026-08-27 |
 | 라이브 주소 | https://leahkshop.github.io/perfect-brow/ |
 | 저장소 | https://github.com/leahkshop/perfect-brow |
@@ -610,8 +610,12 @@ halfIn = (|내안각L − v1| + |내안각R − v1|) / 2     // 좌·우 실측�
 - **붙여서**: 레일 그룹 간격 7 → **2px**(그룹 안과 동일) · 꼬리↔센터·아우터↔V센터피봇의
   여백과 구분선(`#hButtons::after` · `#railExtra::before`) 제거 → 12개가 한 덩어리.
   compact 의 `.linebar{padding:3px}` 는 **세로만 0** 으로 (가로 3px 유지).
-- **중앙 기점**: `#railLang`(설정 배지)을 **흐름 밖**(absolute, 맨 위)으로 빼서 선 버튼
-  덩어리만 레일 정중앙에 온다. 실측 오차 0px(844×390 · 1180×820 둘 다).
+- **중앙 기점**: 선 버튼 덩어리만 레일 정중앙에 온다. 실측 오차 0px(844×390 · 1180×820 둘 다).
+- **설정 배지 자리** (v1.98.1 · 원장님 지시 「설정 버튼을 눈 버튼과 살짝 갭을 두고 눈버튼 위로」):
+  `#railLang` 은 흐름 안에 두되 **음수 margin-top 으로 자기 높이를 상쇄**해 가운데 정렬
+  계산에는 0 으로 잡힌다 → 눈 버튼 바로 위 **8px 갭**에 뜨면서 중앙 정렬은 그대로.
+  `margin-top = −(박스높이 + 레일 gap)` = −32px (compact −30px). 구분선은 제거(갭으로 구분).
+  ⛔ margin-top 을 지우면 선 버튼이 아래로 밀려 중앙이 깨집니다.
 - 🐛 **`#lineRail #hButtons{position:relative}` 버그**: `.linebar{position:absolute;bottom:8px}`
   의 `bottom` 이 되살아나 가로 버튼 묶음이 **8px 위로** 밀려 설정 배지와 겹쳤습니다.
   구분선이 사라진 지금은 `position:static` 으로 못 박습니다. ⛔ relative 로 되돌리지 마세요.
