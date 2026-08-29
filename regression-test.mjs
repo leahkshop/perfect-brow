@@ -2300,7 +2300,10 @@ console.log("\n[밸런스 판정]");
       const g = S.g, D = window.PB.DEFAULT_GUIDE;
       /* ⚠️ v1.69.0 — 드로잉 맞춤이 놓는 것은 **앞두께·아치 둘뿐**. 나머지는 그대로여야 한다 */
       const OTHERS = ["front", "archThickness", "h3", "v2", "v4", "v6"];
-      return { ok, W, H, exp,
+      /* ⭐ v2.4.0 — 이너 맥시멈 45: 드로잉 시작점이 45 를 넘으면 기대값도 45 자리다 */
+      const a90 = window.PB.innerAnchor();
+      const innerCapPx = a90 ? (g.v1 - a90 * (1 - window.PB.INNER_F_SOFT)) * W : 1e9;
+      return { ok, W, H, exp, innerCapPx,
         frontPx: g.front * H, ftPx: g.frontThickness * H,
         archPx: g.h2 * H, atPx: g.archThickness * H, tailPx: g.h3 * H,
         innerPx: g.v2 * W, outerPx: g.v4 * W, archVPx: g.v6 * W,
@@ -2318,12 +2321,12 @@ console.log("\n[밸런스 판정]");
     && near(o.frontPx, o.exp.front, 5 * z) && near(o.ftPx, o.exp.ft, 5 * z)
     && near(o.archPx, o.exp.arch, 5 * z) && near(o.atPx, o.exp.at, 5 * z)
     && near(o.tailPx, o.exp.tail, 5 * z)
-    && near(o.innerPx, o.exp.inner, 9 * z) && near(o.outerPx, o.exp.outer, 9 * z)
+    && near(o.innerPx, Math.min(o.exp.inner, o.innerCapPx), 9 * z) && near(o.outerPx, o.exp.outer, 9 * z)
     && near(o.archVPx, o.exp.archV, 12 * z) && o.mirrorOk
     && o.pivotUntouched && o.vBase === false;
   const say = (o) => `앞머리 ${o.frontPx.toFixed(0)}(${o.exp.front.toFixed(0)}) / 앞두께 ${o.ftPx.toFixed(0)}(${o.exp.ft.toFixed(0)}) / `
     + `아치 ${o.archPx.toFixed(0)}(${o.exp.arch.toFixed(0)}) / 아치두께 ${o.atPx.toFixed(0)}(${o.exp.at.toFixed(0)}) / 꼬리 ${o.tailPx.toFixed(0)}(${o.exp.tail.toFixed(0)}) / `
-    + `이너 ${o.innerPx.toFixed(0)}(${o.exp.inner.toFixed(0)}) · 아치선 ${o.archVPx.toFixed(0)}(${o.exp.archV.toFixed(0)}) `
+    + `이너 ${o.innerPx.toFixed(0)}(${Math.min(o.exp.inner, o.innerCapPx).toFixed(0)}) · 아치선 ${o.archVPx.toFixed(0)}(${o.exp.archV.toFixed(0)}) `
     + `· 아우터 ${o.outerPx.toFixed(0)}(${o.exp.outer.toFixed(0)}) · V피봇 그대로=${o.pivotUntouched}`;
 
   const o87 = await runDraw(true, fd, null, SHAPE_A);
@@ -3895,6 +3898,68 @@ console.log("\n[밸런스 판정]");
     check("159. 넘버링 0 동일화 — 0 = 동공 중심 실측 · h1 을 옮겨도 흔들리지 않는다",
       stable && Math.abs(r.z2 - 0.55) < 1e-9 && Math.abs(r.z3 - 0.70) < 1e-9,
       `랜드마크 0 ${r.z0.toFixed(3)} → h1 옮긴 뒤 ${r.z1.toFixed(3)} (같음=${stable}) · 저장값 ${r.z2} · 최후 h1 ${r.z3}`);
+  }
+
+  /* 160. ⭐⭐ v2.4.0 — **이너 맥시멈 45** (원장님 지시 2026-08-29: 「이너 45를 맥시멈으로
+       설정해라」) — 답은 40~45 를 벗어날 수 없다. 탐색·맨살 기준은 48 쪽을 계속 쓰되,
+       ① innerDecide 답 클램프가 INNER_F_SOFT(45)여야 하고 (fRaw 는 캡 전 값 보존),
+       ② 예비 경로(밴드 half)의 클램프도 45 기준이어야 한다.
+     ⛔ 클램프를 INNER_F_HARD(48)로 되돌리면 이 테스트가 잡습니다. */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+    const hasAnsClamp = src.includes("const fAns = Math.min(fRaw, INNER_F_SOFT)");
+    const hasRaw = src.includes("clamp(i > 0 ? scan[i - 1] : scan[i], INNER_F_LO, INNER_F_HARD)");
+    const hasHalfClamp = src.includes("clamp(half, a0 * (1 - INNER_F_SOFT), a0)");
+    const noOldHalf = !src.includes("a0 * (1 - INNER_F_HARD)");
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const c160 = await p.evaluate(() => ({
+      soft: window.PB.INNER_F_SOFT,
+      fbF: (() => { const S = window.PB.S; S.innerAnchor = 0.13; S.landmarks = null;
+        const d = window.PB.innerFallback(); return d ? { f: d.f, raw: d.fRaw } : null; })(),
+    }));
+    await ctx.close();
+    check("160. 이너 맥시멈 45 — 답 클램프·예비 경로 모두 45(INNER_F_SOFT) 기준이다",
+      hasAnsClamp && hasRaw && hasHalfClamp && noOldHalf
+        && Math.abs(c160.soft - 0.380) < 1e-9 && c160.fbF && c160.fbF.raw !== undefined,
+      `답클램프=${hasAnsClamp} fRaw보존=${hasRaw} half클램프=${hasHalfClamp}/옛경로없음=${noOldHalf} `
+      + `SOFT=${c160.soft} 대체fRaw=${c160.fbF && c160.fbF.raw}`);
+  }
+
+  /* 161. ⭐⭐ v2.4.0 — **앞두께 우선순위** (원장님 지시 2026-08-29: 「보통값 6.0 이 중요한 게
+       아니다. ① 반드시 픽셀 검증 — 검은색에서 피부색이 나오는 부분의 검은 마지막 끝부분.
+       ② 명확하지 않을 때는 색상의 **퍼센트지가 낮아지는 부분**을 선택해야 한다」)
+     합성 사진: 눈썹(검정) 위로 옅은 그라데이션이 길게 이어져 피부-복귀 두께가 12.7눈금
+     (상식 밖) — 이때 ② 가 어둡기 퍼센트가 가장 크게 낮아지는 **검정 끝(y≈300)** 을
+     골라야 한다. ② 를 빼고 보통값으로 직행하면 top 이 그라데이션 끝(y≈270)이 된다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r161 = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      const W = 400, H = 400;
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const g = cv.getContext("2d");
+      const fill = (v, y0, y1) => { g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y0, W, y1 - y0 + 1); };
+      fill(200, 0, H - 1);            // 피부
+      fill(40, 300, 320);             // 눈썹 (검정) — 앞머리 320 · 검정 끝 300
+      fill(140, 270, 299);            // 옅은 그라데이션 (softThr 아래 → 걷기가 못 멈춘다)
+      const img = g.getImageData(0, 0, W, H);
+      S.dim = { W, H }; S.landmarks = null; S.eyeZero = 0.9; S.innerAnchor = 0.13;
+      S.g.v1 = 0.9; S.g.v2 = 0.25; S.innerRead = null;
+      const fd = PBx.frontDecide(img);
+      return fd ? { y: fd.y, top: fd.top } : null;
+    });
+    await ctx.close();
+    const okY = r161 && Math.abs(r161.y - 320) <= 3;
+    const okTop = r161 && Math.abs(r161.top - 300) <= 4;      /* ② = 검정 끝 (그라데이션 끝 270 이 아니다) */
+    check("161. 앞두께 우선순위② — 피부 복귀가 불명확하면 퍼센트가 낮아지는 자리(검정 끝)를 고른다",
+      okY && okTop,
+      r161 ? `앞머리 y=${r161.y}(기대 320) · 앞두께 top=${r161.top}(기대 ≈300 · 그라데이션끝 270 금지)` : "판독 실패");
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)

@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.3.1";
+const APP_VERSION = "v2.4.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3042,8 +3042,11 @@ function growEnd(band, kept, toInner) {
 
 const INNER_F_LO   = 0.000;   // 40 — 눈 앞꼬리(내안각). 하한
 const INNER_F_MID  = 0.228;   // 43 — 읽을 수 없을 때
-const INNER_F_SOFT = 0.380;   // 45 — 보통 맥시멈
-const INNER_F_HARD = 0.608;   // 48 — 절대 맥시멈
+const INNER_F_SOFT = 0.380;   // 45 — **맥시멈** (원장님 확정 2026-08-29: 「이너 45를 맥시멈으로 설정해라」)
+const INNER_F_HARD = 0.608;   // 48 — 맨살 골짜기 샘플링·탐색 시작점으로만 쓴다 (답으로는 못 나간다)
+/* ⭐ v2.4.0 — **이너의 답은 40~45 를 벗어날 수 없습니다.** 탐색은 48 에서 시작하지만
+   (48 쪽이 맨살 기준이라), 선이 45 를 넘게 그려져 있어도 답은 45 로 자릅니다.
+   ⛔ 답 클램프를 INNER_F_HARD 로 되돌리지 마세요 — 회귀 160 이 잡습니다. */
 /* 「확 띄는 지점」의 잣대 두 개. 맨살(0) ~ 눈썹 잉크(1) 사이에서 이만큼 올라오고,
    동시에 맨살의 이 배는 되어야 「여기서 선이 시작한다」로 봅니다.
    ── 케이스 1 실측 (컨테이너 재현 · 눈썹 잉크 = 100%, 맨살 기준 = 45~48 골짜기) ──
@@ -3212,7 +3215,13 @@ function frontTickPx() {
 function frontDecide(img) {
   const { W, H } = S.dim;
   if (!img || !W || !H) return null;
-  const cx = S.g.v1 * W, ix = S.g.v2 * W;
+  const cx = S.g.v1 * W;
+  let ix = S.g.v2 * W;
+  /* ⭐ v2.4.0 — 이너 선이 45 로 캡되어도 훑는 열은 **캡 전 실제 드로잉 시작점**(fRaw)에
+     둡니다 — 열을 캡 자리로 옮기면 파우더·짙은 드로잉 사진의 앞머리가 밀립니다. */
+  const ir = S.innerRead;
+  if (ir && ir.fRaw != null && ir.fRaw > INNER_F_SOFT && ir.anchor)
+    ix = clamp(S.g.v1 - ir.anchor * (1 - ir.fRaw), 0.02, 0.98) * W;
   const dir = ix < cx ? -1 : 1;                          // 눈썹 몸통 방향 = 센터 반대쪽
   const ez = eyeZeroY();                                 // 넘버링의 0 = 동공 중심 (v2.2.2)
   const yB = Math.round((ez - FRONT_LASH_GAP) * H);      // 시작(아래)
@@ -3258,13 +3267,40 @@ function frontDecide(img) {
              그라데이션(FT_SOFT 문턱)이 이어지면 계속 올라가고, 피부가 FT_SKIN 줄 연속되면 끝.
              ⛔ 짙은 문턱(thr)으로 되돌리지 마세요 — 5장 중 4장에서 1~2 눈금 낮게 잡혔습니다. */
           const softThr = skin - (skin - darkest) * FT_SOFT;
-          let j = i0, last = i0, gap = 0;
+          let j = i0, last = i0, gap = 0, clearSkin = false;
           while (j + 1 < dark.length) {
             j++;
             if (col[j] < softThr) { last = j; gap = 0; }
-            else { gap++; if (gap >= FT_SKIN) break; }
+            else { gap++; if (gap >= FT_SKIN) { clearSkin = true; break; } }
           }
-          cands.push({ y: yB - i0, top: yB - last });                 // 후보 (아래→위 순서)
+          /* ⭐⭐ v2.4.0 — **앞두께 우선순위** (원장님 확정 2026-08-29):
+             「보통값 6.0 이 중요한 게 아니다. ① 반드시 사진에서 **픽셀 검증**으로 —
+               앞머리에서 위로 올라가며 검은색에서 피부색이 나오는 부분의 **검은 마지막
+               끝부분**이 앞두께다. ② 피부색이 나온 부분이 **명확하지 않을 때**는
+               색상의 **퍼센트지가 낮아지는 부분**을 선택해야 한다.」
+             ① = 위 걷기의 `last` (피부 FT_SKIN 줄 연속으로 끝났을 때 = 명확).
+             ② = 피부 복귀를 못 찾았거나(clearSkin=false) 두께가 상식 범위(3~9눈금)를
+                 벗어났을 때 → 열의 어둡기 퍼센트(피부 0% · 최암부 100%, 3줄 평활)가
+                 **가장 크게 낮아지는 자리**를 앞두께로 잡는다.
+             ③ 보통값 6.0(ftGuard)은 ①②가 모두 실패했을 때의 **최후 안전판**입니다.
+             ⛔ ② 를 빼고 바로 6.0 으로 가지 마세요 — 회귀 161 이 잡습니다. */
+          let ftop = last;
+          const u2 = frontTickPx();
+          const thTk = u2 ? (last - i0) / u2 : null;
+          if (!clearSkin || (thTk !== null && (thTk < FT_T_MIN || thTk > FT_T_MAX))) {
+            const nC = col.length;
+            const pc = (y) => { const yy = Math.max(0, Math.min(nC - 1, y));
+              return Math.max(0, Math.min(1, (skin - col[yy]) / Math.max(1, skin - darkest))); };
+            const sm = (y) => (pc(y - 1) + pc(y) + pc(y + 1)) / 3;
+            const lim = Math.min(nC - 2, u2 ? i0 + Math.round(FT_T_MAX * u2) : nC - 2);
+            let bj = -1, bd = 0;
+            for (let y2 = i0 + 1; y2 <= lim; y2++) {
+              const drop = sm(y2) - sm(y2 + 2);                       // 퍼센트가 낮아지는 정도
+              if (drop > bd) { bd = drop; bj = y2; }
+            }
+            if (bj > i0 && bd >= FT_P2_MIN) ftop = bj;
+          }
+          cands.push({ y: yB - i0, top: yB - ftop });                 // 후보 (아래→위 순서)
           /* 이 덩어리를 지나쳐 계속 — 위에 진짜 눈썹이 또 있는지 본다 */
           while (i + FRONT_WIN <= dark.length) {
             let h2 = 0;
@@ -3344,6 +3380,12 @@ const FT_T_MIN = 3;     // 이보다 얇으면 잘못 읽은 것 (확정 최소 
 const FT_T_MAX = 9;     // 이보다 두꺼우면 이마 그늘·머리카락까지 읽은 것
 const FT_SOFT = 0.25;   // 「아직 피부가 아니다」의 문턱 — 피부↔최암부 차의 이 비율
 const FT_SKIN = 4;      // 피부가 이만큼 연속되면 눈썹이 끝난 것
+const FT_P2_MIN = 0.15; // 우선순위② — 「퍼센트가 낮아진다」로 인정할 최소 하락폭 (3줄 평활 기준)
+/* ⭐⭐ v2.4.0 — ftGuard 는 이제 **최후 안전판**입니다 (원장님 2026-08-29:
+   「두께 보통값 6.0 이 중요한 게 아니다」). 우선순위는 frontDecide 안에 있습니다:
+   ① 픽셀 검증 — 피부색이 나오기 전 **검은 마지막 끝부분**
+   ② 불명확하면 — 어둡기 **퍼센트가 낮아지는 부분**
+   ③ 그래도 두께가 3~9 눈금 밖이면 여기서 보통값 6.0 으로 대체 (말도 안 되는 자리 방지). */
 function ftGuard() {
   const u = frontTickPx();
   if (!u) return false;
@@ -3545,14 +3587,18 @@ function innerDecide(img, band) {
          원장님: 「맨살에서 이곳에 선이 있다라고 판단되는 점수가 확 띄는 지점」 —
          선의 **안쪽 경계**가 이너입니다. 통과한 열은 이미 선 위에 올라선 자리라
          그대로 쓰면 한 눈금 바깥(눈꼬리 쪽)으로 밀립니다. */
-      const fAns = clamp(i > 0 ? scan[i - 1] : scan[i], INNER_F_LO, INNER_F_HARD);
+      /* ⭐ v2.4.0 — 답의 상한은 45(INNER_F_SOFT) — 원장님: 「이너 45를 맥시멈으로」.
+         fRaw = 캡 전 실제 시작점 — 앞머리 훑는 열(frontDecide)은 이걸 씁니다.
+         캡 때문에 열까지 옮기면 케이스 2·3·8 앞머리가 밀립니다 (실측 2026-08-29). */
+      const fRaw = clamp(i > 0 ? scan[i - 1] : scan[i], INNER_F_LO, INNER_F_HARD);
+      const fAns = Math.min(fRaw, INNER_F_SOFT);
       const v = prof.inkAt(innerFx(scan[i], sgn, anchor));
-      return { f: fAns, sgn, anchor,
+      return { f: fAns, fRaw, sgn, anchor,
                rise: (v - skinInk) / span, mult: v / Math.max(1e-6, skinInk), why: "read" };
     }
   }
   /* ④ 읽지 못했다 — 중간(43) */
-  return { f: innerCaseF(), sgn, anchor, rise: 0, mult: 0, why: "fallback" };
+  return { f: innerCaseF(), fRaw: innerCaseF(), sgn, anchor, rise: 0, mult: 0, why: "fallback" };
 }
 
 /* ⭐⭐ v1.99.2 — **자가 없을 때만 예전 경로**입니다.
@@ -3565,7 +3611,7 @@ function innerDecide(img, band) {
 function innerFallback() {
   const anchor = innerAnchor();
   if (!anchor) return null;
-  return { f: INNER_F_MID, sgn: -1, anchor, rise: 0, mult: 0, why: "no-band" };
+  return { f: INNER_F_MID, fRaw: INNER_F_MID, sgn: -1, anchor, rise: 0, mult: 0, why: "no-band" };
 }
 
 
@@ -3808,7 +3854,7 @@ function autoFromDrawing() {
       const innerX = pts.innerX !== undefined && pts.innerX !== null ? pts.innerX : seq[0].x;
       let half = Math.abs(innerX - cx) / W;
       const a0 = innerAnchor();
-      if (a0) half = clamp(half, a0 * (1 - INNER_F_HARD), a0);
+      if (a0) half = clamp(half, a0 * (1 - INNER_F_SOFT), a0);   /* v2.4.0 — 맥시멈 45 */
       setLine("v2", clamp(S.g.v1 - half, 0.02, 0.98));
     }
   }
@@ -3825,7 +3871,7 @@ function autoFromDrawing() {
     /* 어떤 경로로 왔든 마지막에 **하한 집행** — 눈 위 7 눈금 미만이면 앞머리가 아니다.
        (상한 대체는 뺐습니다 — 크게 확대한 사진에서는 눈썹이 정당하게 16 을 넘습니다.) */
     frontFloor();
-    /* 앞두께도 상식 검사 — 두께가 3~9 눈금 밖이면 보통값(6.0)으로 */
+    /* 앞두께 최후 안전판 — 우선순위①②(frontDecide) 뒤에도 3~9 눈금 밖이면 보통값(6.0) */
     ftGuard();
   }
   setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
@@ -5105,4 +5151,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
-  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
