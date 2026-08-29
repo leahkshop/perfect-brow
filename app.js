@@ -65,6 +65,7 @@ const I18N = {
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     line_hidden: "숨김 — 다시 누르면 나옵니다",
     editor_tip: "안내", ai_name: "눈썹정렬",
+    ai_auto_on: "AI 눈썹정렬 적용됨 — 되돌리기를 누르면 기본정렬로",
     line_step_keep: "지금 차례라 숨기지 않습니다",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_edge_hd: "테두리 — 없어도 되는 덤",
@@ -225,6 +226,7 @@ const I18N = {
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     line_hidden: "hidden — tap again to show",
     editor_tip: "Tips", ai_name: "Brow Align",
+    ai_auto_on: "AI Brow Align applied — Undo for default layout",
     line_step_keep: "kept — this is the current step",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_edge_hd: "Outline — optional extra",
@@ -357,7 +359,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.90.1";
+const APP_VERSION = "v1.91.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2418,6 +2420,25 @@ async function serverAnalyze(dataUrl) {
   } catch { return null; }
 }
 
+/* ⭐ v1.91.0 — **앱 시작 = AI 눈썹정렬 켜짐** (원장님 지시 2026-08-28:
+     「앱이 시작되면 기본으로 AI 눈썹정렬을 켜둬라 · 나중에 무료 캐시가 끝나면 꺼지고
+      프리미엄 가입 시 다시 켜진다 · 무료 캐시를 다 쓰면 기본정렬로 변경된다」)
+   · 사진을 넣으면 랜드마크 기본정렬을 깐 뒤 **자동으로 AI 눈썹정렬**을 한 번 돌린다
+   · 판독이 실패하면(드로잉이 없는 사진 등) **조용히 기본정렬로 남는다** —
+     v1.34.0 의 실패(어긋난 판독으로 시작)를 그대로 안고 가지 않기 위한 안전판. ⛔ 이 안전판을 빼지 마세요
+   · aiAllowed() = 프리미엄 게이트 자리. 지금은 무료(항상 true).
+     나중에 무료 캐시 소진 → false → 자동 정렬 꺼짐 + 버튼 🔒 잠금, 프리미엄 가입 → true.
+   · step() 으로 감싼다 — 되돌리기 한 번이면 기본정렬로 돌아간다 */
+const aiAllowed = () => true;   /* TODO(프리미엄): 무료 캐시·구독 상태를 여기서 판정 */
+function autoAiOnLoad() {
+  if (!aiAllowed()) return;
+  let ok = false;
+  step(() => { ok = autoFromDrawing(); });
+  /* 실패하면 아무것도 바뀌지 않고, commitEdit 는 값이 그대로면 기록하지 않으므로
+     되돌리기 기록도 더럽혀지지 않는다 — 조용히 기본정렬로 남는다 */
+  if (ok) { showNote(t("ai_auto_on"), 2600); render(); }
+}
+
 async function runFaceAI() {
   setAI(t("ai_loading"));
   try {
@@ -2427,6 +2448,7 @@ async function runFaceAI() {
       S.landmarks = null;
       setAI(t("ai_noface"), "warn");
       render();
+      autoAiOnLoad();             /* v1.91.0 — 얼굴 인식이 안 돼도 예비 경로가 드로잉을 찾는다 */
       return;
     }
     S.landmarks = res.faceLandmarks[0];
@@ -2436,14 +2458,17 @@ async function runFaceAI() {
        판독이 어긋나면 선이 엉뚱하게 벌어진 채 시작됐습니다. 원장님 판정(2026-08-21):
        「초기화 눌렀을때 올라온 선들이 맞다. 이것을 내가 사진을 입력하는 순간부터
        적용하고싶다」 — 즉 시작 배치는 **초기화와 동일한 랜드마크 배치**입니다.
-       드로잉 판독은 `드로잉 맞춤` 버튼을 눌렀을 때만 돕니다. */
+       (v1.91.0) 원장님 새 지시로 **자동 AI 눈썹정렬**이 켜졌지만, 위 원칙은 남아 있습니다 —
+       autoAiOnLoad() 는 판독이 실패하면 **랜드마크 배치를 그대로** 둡니다. */
     setAI(t("ai_ok"), "ok");
     render();
+    autoAiOnLoad();               /* v1.91.0 — 시작 = AI 눈썹정렬 켜짐 (원장님 지시 2026-08-28) */
   } catch (err) {
     console.warn("[PerfectBrow] face AI unavailable:", err);
     S.landmarks = null;
     setAI(t("ai_fail"), "warn");
     render();
+    autoAiOnLoad();               /* v1.91.0 — AI 모델이 없어도(오프라인) 예비 경로로 */
   }
 }
 

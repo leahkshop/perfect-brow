@@ -4333,22 +4333,25 @@ console.log("\n[밸런스 판정]");
       !!av && shown.includes(av), `APP_VERSION=${av} · 화면="${shown}"`);
   }
 
-  /* 96. ⚠️ 시작 배치 규칙 (v1.34.0) — 원장님 판정(2026-08-21):
-     「초기화 눌렀을때 올라온 선들이 맞다. 이것을 내가 사진을 입력하는 순간부터 적용하고싶다」
-     사진을 넣으면 **초기화와 동일한 랜드마크 배치**로 시작한다. 드로잉 판독(autoFromDrawing)은
-     `드로잉 맞춤` 버튼에서만 돈다. runFaceAI 안에 자동 호출을 되살리면 이 검사가 깨집니다 —
-     실제 고객 사진에서 판독이 어긋나면 선이 엉뚱하게 벌어진 채 시작됐습니다 (v1.30.0~v1.33.0 의 실패). */
+  /* 96. ⭐ v1.91.0 — **앱 시작 = AI 눈썹정렬 켜짐 · 실패하면 기본정렬로 남는다** (원장님 지시 2026-08-28
+     「앱이 시작되면 기본으로 AI 눈썹정렬을 켜둬라」 — v1.34.0 의 「버튼에서만」 규칙을 대체)
+     · runFaceAI 의 모든 경로가 autoAiOnLoad() 를 부른다 (성공·얼굴없음·모델실패)
+     · autoAiOnLoad 는 판독 실패 시 **아무것도 바꾸지 않는다** — v1.30~33 의 「어긋난 시작」 방어
+     · aiAllowed() 프리미엄 게이트가 존재한다 (지금은 무료 = true) */
   {
     const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
     const m = src.match(/async function runFaceAI\(\)[\s\S]*?\n}/);
-    /* 주석은 걷어내고 실제 코드만 본다 — 함수 안 주석이 이 규칙 자체를 설명하고 있어서 */
     const code = m && m[0].replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-    const auto = m && /autoFromDrawing\s*\(/.test(code);
+    const autoCalls = code ? (code.match(/autoAiOnLoad\s*\(/g) || []).length : 0;
+    const helper = src.match(/function autoAiOnLoad\(\)[\s\S]*?\n}/);
+    const helperCode = helper && helper[0].replace(/\/\*[\s\S]*?\*\//g, "");
+    const gated = helperCode && /aiAllowed\(\)/.test(helperCode) && /autoFromDrawing\s*\(/.test(helperCode);
+    const hasGate = /const aiAllowed\s*=/.test(src);
     const snapSrc = src.match(/\$\("btnSnap"\)\.onclick[\s\S]*?};/);
     const manual = snapSrc && /autoFromDrawing\s*\(/.test(snapSrc[0]);
-    check("96. 시작 배치 = 랜드마크(초기화와 동일) · 드로잉 판독은 버튼에서만",
-      !!m && auto === false && manual === true,
-      `runFaceAI에 자동호출 ${auto ? "있음(잘못)" : "없음"} · 드로잉맞춤 버튼 호출 ${manual ? "있음" : "없음(잘못)"}`);
+    check("96. 시작 = AI 눈썹정렬 자동 · 실패 시 기본정렬 · 프리미엄 게이트 존재",
+      autoCalls >= 3 && !!gated && hasGate && manual === true,
+      `runFaceAI 경로 호출 ${autoCalls}곳(>=3) · 게이트 경유 ${!!gated} · aiAllowed ${hasGate} · 버튼 수동 호출 ${manual ? "있음" : "없음(잘못)"}`);
   }
 
   /* 95. 세로선 길이·굵기 (v1.33.0) — 원장님 지시:
