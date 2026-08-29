@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.2.1";
+const APP_VERSION = "v2.2.2";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2175,6 +2175,7 @@ function placeLinesFromEyes(cx, cy, half) {
   const g = S.g, { W, H } = S.dim, aspect = W / H;
   g.v1 = cx;
   g.h1 = cy;
+  S.eyeZero = cy;     /* v2.2.2 — 넘버링의 0 (정렬이 맞춘 동공 높이) */
   S.innerAnchor = half * R_INNER;   /* v1.99.0 — 랜드마크가 없을 때의 「내안각 → 센터」 자 */
   S.faceRef = { a: cx - half * R_INNER, c: cx };   /* v2.0.0 — 눈금 표시의 자 */
   g.v2 = clamp(cx - half * R_INNER, 0.01, 0.99); g.v3 = 2 * cx - g.v2;
@@ -2495,6 +2496,7 @@ function placeLines(lm) {
   const inLc = cv(c.innerL.x, c.innerL.y), inRc = cv(c.innerR.x, c.innerR.y);
   g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
   g.h1 = clamp(cv((a.x + b.x) / 2, (a.y + b.y) / 2).y / H, 0.02, 0.98);
+  S.eyeZero = g.h1;   /* v2.2.2 — 넘버링의 0 (동공 중심). h1 은 이후 옮겨질 수 있다 */
   const halfIn = Math.abs((refIsLeft() ? inLc : inRc).x / W - g.v1);
   S.innerAnchor = halfIn;   /* v1.99.0 — 「내안각 → 센터」 자. 이너 판독의 기준 (40 = 여기) */
   S.faceRef = { a: Math.min(inLc.x, inRc.x) / W, c: g.v1 };   /* v2.0.0 — 눈금 표시의 자 */
@@ -3206,8 +3208,9 @@ function frontDecide(img) {
   if (!img || !W || !H) return null;
   const cx = S.g.v1 * W, ix = S.g.v2 * W;
   const dir = ix < cx ? -1 : 1;                          // 눈썹 몸통 방향 = 센터 반대쪽
-  const yB = Math.round((S.g.h1 - FRONT_LASH_GAP) * H);  // 시작(아래)
-  const yT = Math.max(2, Math.round((S.g.h1 - FRONT_UP) * H));
+  const ez = eyeZeroY();                                 // 넘버링의 0 = 동공 중심 (v2.2.2)
+  const yB = Math.round((ez - FRONT_LASH_GAP) * H);      // 시작(아래)
+  const yT = Math.max(2, Math.round((ez - FRONT_UP) * H));
   if (yB - yT < FRONT_WIN + 6 || yB >= H) return null;
   const ys = [];
   for (let k = 1; k <= FRONT_COLS; k++) {
@@ -3274,7 +3277,7 @@ function frontDecide(img) {
          예전에는 범위 안에 후보가 없으면 낮은 후보(눈꺼풀·속눈썹)라도 썼습니다 — 그 구멍으로
          원장님 폰에서 앞머리가 눈꺼풀에 내려앉았습니다. 이제 **7 눈금 미만은 후보 자격이
          없습니다.** 범위 안에 아무것도 없으면 이 열은 포기합니다 (→ 대체값 경로). */
-      const eyePx = S.g.h1 * H;
+      const eyePx = ez * H;
       for (const c of cands) { const t = (eyePx - c.y) / u0; if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = c; break; } }
     } else pick = cands.length ? cands[0] : null;
     if (pick !== null) ys.push(pick);
@@ -3291,6 +3294,29 @@ function frontDecide(img) {
    원장님: 「판독이 애매한 경우에도 말도 안 되는 위치에 있으면 안 된다」
    ⚠️ 상한(16)은 집행하지 않습니다 — 크게 확대한 사진(회귀 120 의 모양 C)에서는 눈썹이
       정당하게 16 눈금을 넘습니다. 위쪽 오독은 후보 선택(≤16)이 이미 막습니다. */
+/* ⭐⭐⭐ v2.2.2 — **넘버링의 0 자리 동일화** (원장님 지시 2026-08-29:
+   「너의 0 자리도 앞머리 고도화와 마찬가지 오류로 사진마다 다 다르다. 그러니 보통값도
+     이상한 자리가 된다. **0 자리 동일화 프롬포트 정해라**」)
+   정의: **0 = 동공(눈동자) 중심의 높이.** 사람이 눈대중으로 찍는 값이 아니라
+   시스템이 측정하는 값입니다:
+     ① 랜드마크가 있으면 홍채 중심(468~477)의 평균 — 매번 실측
+     ② 없으면 배치 때 저장한 동공 높이(S.eyeZero — 정렬이 맞춘 CENTER_Y 자리)
+     ③ 그것도 없으면 눈 가로선(h1)
+   ⚠️ **h1 을 직접 쓰지 마세요** — h1 은 원장님이 드래그로 옮길 수 있는 선이라,
+      옮기는 순간 넘버링 전체(하한 7 · 보통값 11.6 · 두께 4.7)가 따라 밀립니다.
+      0 은 얼굴에 붙어 있어야 합니다. 회귀 159 가 잡습니다. */
+function eyeZeroY() {
+  const lm = S.landmarks, H = S.dim.H;
+  if (lm && H) {
+    try {
+      const a = lmAvg(lm, IRIS_L), b = lmAvg(lm, IRIS_R);
+      const y = imgToCanvas((a.x + b.x) / 2, (a.y + b.y) / 2, S.p).y / H;
+      if (y > 0.05 && y < 0.95) return y;
+    } catch { /* 랜드마크가 깨졌으면 저장값으로 */ }
+  }
+  return S.eyeZero && S.eyeZero > 0.05 && S.eyeZero < 0.95 ? S.eyeZero : S.g.h1;
+}
+
 /* ⭐ v2.2.0 — **앞두께 넘버링** (원장님 승인 2026-08-29: 「진행」)
    앞두께 = 앞머리에서 위로 몇 눈금(두께)인가. 케이스 실측으로 확정한 범위:
    두께가 이 범위를 벗어나면 파우더 번짐·이마 그늘을 읽은 것 → 보통값으로 대체. */
@@ -3313,9 +3339,10 @@ function frontFloor() {
   const u = frontTickPx();
   if (!u) return false;
   const H = S.dim.H;
-  const t = ((S.g.h1 - S.g.front) * H) / u;
+  const ez = eyeZeroY();                                  // 0 = 동공 중심 (v2.2.2)
+  const t = ((ez - S.g.front) * H) / u;
   if (t < FRONT_T_LO) {
-    setLine("front", clamp(S.g.h1 - (FRONT_T_MID * u) / H, 0.02, 0.98));
+    setLine("front", clamp(ez - (FRONT_T_MID * u) / H, 0.02, 0.98));
     return true;
   }
   return false;
@@ -5057,4 +5084,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
-  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, ftGuard };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */

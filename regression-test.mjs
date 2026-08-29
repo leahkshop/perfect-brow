@@ -3722,6 +3722,7 @@ console.log("\n[밸런스 판정]");
       /* 이너를 눈썹 안쪽 끝(340) 근처에, 센터를 그 오른쪽에 두고, 눈(h1)을 화장 아래에 둔다 */
       S.g.v1 = C(420, 0).x / W; S.g.v2 = C(338, 0).x / W;
       S.g.h1 = (C(0, 248).y + PBx.FRONT_LASH_GAP * H) / H;   /* 출발점이 화장 덩어리 안 */
+      S.eyeZero = S.g.h1;                                    /* v2.2.2 — 넘버링 0 고정 */
       const img = PBx.photoPixels();
       const fd = PBx.frontDecide(img);
       return { fy: fd ? fd.y : null, ft: fd ? fd.top : null,
@@ -3793,6 +3794,7 @@ console.log("\n[밸런스 판정]");
       /* 눈 y=300 · 1눈금 = 9px → 쉐도우(윗변 240) = 눈 위 ~5.7 눈금, 눈썹(아랫선 200) = ~10.5 눈금 */
       const eyeC = C(0, 300).y;
       S.g.h1 = eyeC / H;
+      S.eyeZero = eyeC / H;                                  /* v2.2.2 — 넘버링 0 고정 */
       S.innerAnchor = (9 * 13.15) / W;               /* 눈금 1칸 = 9 캔버스 px */
       S.g.v1 = C(500, 0).x / W; S.g.v2 = C(420, 0).x / W;
       const img = PBx.photoPixels();
@@ -3827,6 +3829,7 @@ console.log("\n[밸런스 판정]");
       const PBx = window.PB, S = PBx.S, H = S.dim.H, W = S.dim.W;
       S.landmarks = null;
       S.g.h1 = 0.60;
+      S.eyeZero = 0.60;                                /* v2.2.2 — 넘버링 0 고정 */
       S.innerAnchor = (9 * 13.15) / W;                 /* 1 눈금 = 9px */
       const u = 9;
       /* ① 눈꺼풀 자리(3 눈금)에 선 앞머리 → 11.7 로 대체돼야 한다 */
@@ -3846,6 +3849,52 @@ console.log("\n[밸런스 판정]");
     check("158. 앞머리 하한 — 눈 위 7 눈금 미만은 앞머리가 아니다 (보통값 11.7 로 대체)",
       r.fixed && Math.abs(r.t1 - r.mid) < 0.2 && r.kept && Math.abs(r.t2 - 10) < 0.2 && r.zoomKept && r.lo === 7,
       `3눈금→대체=${r.fixed}(→${r.t1.toFixed(1)}눈금, 기대 ${r.mid}) · 10눈금 유지=${r.kept}(${r.t2.toFixed(1)}) · 18눈금 유지=${r.zoomKept} · 하한 ${r.lo}`);
+  }
+
+  /* 159. ⭐⭐ v2.2.2 — **넘버링의 0 자리 동일화** (원장님 지시 2026-08-29:
+       「너의 0 자리도 사진마다 다 다르다 … 0 자리 동일화 프롬포트 정해라」)
+     0 = **동공 중심** — 랜드마크가 있으면 매번 실측, 없으면 배치 때 저장한 동공 높이.
+     ⛔ h1(눈 가로선)을 0 으로 쓰면 안 됩니다 — 원장님이 드래그로 옮기는 순간
+        하한 7·보통값 11.6·두께 4.7 이 전부 따라 밀립니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", face.file);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate((lm) => {
+      const PBx = window.PB, S = PBx.S;
+      /* ① 랜드마크가 있으면 0 = 홍채 실측 — h1 을 옮겨도 그대로 */
+      S.landmarks = lm; PBx.autoAlign(lm); PBx.render();
+      const z0 = PBx.eyeZeroY();
+      S.g.h1 += 0.10;                       /* 원장님이 눈 선을 옮겼다 */
+      const z1 = PBx.eyeZeroY();
+      /* ② 랜드마크가 없으면 배치 때 저장한 동공 높이 — 역시 h1 과 무관 */
+      S.landmarks = null; S.eyeZero = 0.55; S.g.h1 = 0.70;
+      const z2 = PBx.eyeZeroY();
+      /* ③ 저장값도 없으면 마지막으로 h1 */
+      S.eyeZero = 0;
+      const z3 = PBx.eyeZeroY();
+      return { z0, z1, z2, z3 };
+    }, (() => {
+      /* 이 구획에서는 FAKE_FACE 가 보이지 않아 최소 랜드마크를 여기서 만든다 */
+      const lm = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+      const set = (i, x, y) => { lm[i] = { x, y, z: 0 }; };
+      [468, 469, 470, 471, 472].forEach((i) => set(i, 0.400, 0.500));
+      [473, 474, 475, 476, 477].forEach((i) => set(i, 0.600, 0.500));
+      set(33, 0.330, 0.500); set(133, 0.455, 0.500); set(362, 0.545, 0.500); set(263, 0.670, 0.500);
+      set(70, 0.300, 0.420); set(300, 0.700, 0.420); set(46, 0.305, 0.445); set(276, 0.695, 0.445);
+      set(64, 0.440, 0.620); set(294, 0.560, 0.620);
+      set(105, 0.420, 0.400); set(334, 0.580, 0.400); set(52, 0.420, 0.440); set(282, 0.580, 0.440);
+      set(107, 0.465, 0.430); set(336, 0.535, 0.430); set(55, 0.465, 0.455); set(285, 0.535, 0.455);
+      return lm;
+    })());
+    await ctx.close();
+    const stable = Math.abs(r.z0 - r.z1) < 1e-9;
+    check("159. 넘버링 0 동일화 — 0 = 동공 중심 실측 · h1 을 옮겨도 흔들리지 않는다",
+      stable && Math.abs(r.z2 - 0.55) < 1e-9 && Math.abs(r.z3 - 0.70) < 1e-9,
+      `랜드마크 0 ${r.z0.toFixed(3)} → h1 옮긴 뒤 ${r.z1.toFixed(3)} (같음=${stable}) · 저장값 ${r.z2} · 최후 h1 ${r.z3}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
