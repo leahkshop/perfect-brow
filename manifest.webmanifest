@@ -1,14 +1,14 @@
 {
   "name": "Brow Balance",
   "short_name": "Brow Balance",
-  "description": "PMU 아티스트와 눈썹 디자이너를 위한 정밀 눈썹 대칭·밸런스 가이드 도구",
+  "description": "Precision brow symmetry & balance guide for PMU artists and brow designers.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "landscape",
   "background_color": "#ffffff",
   "theme_color": "#5B7FD8",
-  "lang": "ko",
+  "lang": "en",
   "icons": [
     { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

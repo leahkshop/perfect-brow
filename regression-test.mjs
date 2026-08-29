@@ -761,15 +761,17 @@ console.log("[세로 모드 · 기능]");
     S.g = { ...window.PB.DEFAULT_GUIDE }; S.sel = "h1"; window.PB.render();
   });
 
-  // 53. `모든 라인 숨김` 버튼 이름 · 여러라인 버튼 존재
+  /* 53. `모든 라인 숨김` 버튼 이름 · 여러라인 버튼 존재
+     v1.92.0 — 기본 언어가 **영어**가 되어(1-55) 이름은 언어별로 검사합니다. 자리(같은 줄)는 그대로. */
   const btns = await p.evaluate(() => ({
     allHide: document.getElementById("btnAllLine").textContent.trim(),
     multi: document.getElementById("btnMulti").textContent.trim(),
     sideBySide: Math.abs(document.getElementById("btnAllLine").getBoundingClientRect().top
       - document.getElementById("btnMulti").getBoundingClientRect().top) < 3,
   }));
-  check("53. 버튼 이름 — `모든 라인 숨김` + 옆에 `여러라인`",
-    btns.allHide === "모든 라인 숨김" && btns.multi === "여러라인" && btns.sideBySide,
+  check("53. 버튼 이름 — `모든 라인 숨김/Hide all lines` + 옆에 `여러라인/Multi`",
+    /^(모든 라인 숨김|Hide all lines)$/.test(btns.allHide)
+      && /^(여러라인|Multi)$/.test(btns.multi) && btns.sideBySide,
     `[${btns.allHide}] [${btns.multi}] 같은 줄=${btns.sideBySide}`);
 
   // 43. 라인 버튼 — 1탭 = 선택(표시 유지) / 같은 버튼 다시 탭 = 숨김
@@ -3054,7 +3056,7 @@ console.log("\n[밸런스 판정]");
       /* ⑥ AI 버튼 두 줄 「AI / 눈썹정렬」 */
       const snap = document.getElementById("btnSnap");
       const twoLine = (snap.querySelector(".aihead") || {}).textContent === "AI"
-        && /눈썹정렬|Brow Align/.test(snap.textContent)
+        && /눈썹정렬|Align/.test(snap.textContent)      /* v1.92.0 — 영어는 "Align" (좁은 폰 폭) */
         && (snap.querySelector(".ailock") || {}).textContent === "🔒";
       return { centred, topArea, sameBox, duringIntro, keptOffFlow,
                offHidden, flowAlive, notSaved, backOn, noteShown, noteTop, twoLine };
@@ -3066,6 +3068,45 @@ console.log("\n[밸런스 판정]");
         && r.noteShown && r.noteTop && r.twoLine,
       `중앙위=${r.centred}/${r.topArea} 같은자리=${r.sameBox} · 인사중 ①=${r.duringIntro} · 플로우밖 유지=${r.keptOffFlow} · `
       + `토글 끔=${r.offHidden}(플로우 유지 ${r.flowAlive}, 세션한정 ${r.notSaved}) 켬=${r.backOn} · AI알림 위=${r.noteShown}/${r.noteTop} · 두 줄=${r.twoLine}`);
+  }
+
+  /* 144. ⭐ v1.92.0 — **기본 언어 영어 · 링크 미리보기 영어** (원장님 지시 2026-08-28
+       「이 링크에 설명을 기본 영어, 다운받을 때 설정 기본 영어로 변경」)
+     · 처음 여는 기기(저장된 언어 없음) → **영어**로 시작 · 한국어를 고르면 저장되어 유지
+     · 링크 미리보기(og:*)·설치 이름/설명(manifest)·html lang 이 전부 영어
+     · og:image 는 **절대 주소** — 상대 주소면 메신저가 아이콘을 못 읽는다 */
+  {
+    const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+    const mf = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.webmanifest"), "utf8"));
+    const head = html.slice(0, html.indexOf("</head>"));
+    const meta = (re) => (head.match(re) || [])[1] || "";
+    const hasKo = (t) => /[가-힣]/.test(t);
+    const desc = meta(/<meta name="description" content="([^"]*)"/);
+    const ogT = meta(/<meta property="og:title" content="([^"]*)"/);
+    const ogD = meta(/<meta property="og:description" content="([^"]*)"/);
+    const ogI = meta(/<meta property="og:image" content="([^"]*)"/);
+    const htmlLang = (html.match(/<html lang="([^"]+)"/) || [])[1];
+    const metaOk = !hasKo(desc) && desc.length > 20 && !hasKo(ogT) && !hasKo(ogD)
+      && /^https:\/\//.test(ogI) && htmlLang === "en";
+    const mfOk = mf.lang === "en" && !hasKo(mf.description || "") && mf.name === "Brow Balance";
+    /* 앱 기본 언어 — 저장값이 없으면 영어 */
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 } });
+    const p2 = await ctx.newPage();
+    await p2.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p2.waitForTimeout(300);
+    const r = await p2.evaluate(() => {
+      const en = document.getElementById("langEn").classList.contains("on");
+      const ko0 = document.getElementById("langKo").classList.contains("on");
+      /* 한국어를 고르면 저장되어 유지된다 */
+      document.getElementById("langKo").click();
+      return { en, ko0, koAfter: document.getElementById("langKo").classList.contains("on"),
+               saved: localStorage.getItem("pb_lang") };
+    });
+    await ctx.close();
+    check("144. 기본 언어 영어 · 링크 미리보기(OG)·설치 설명 영어 · 한국어는 눌러 저장",
+      metaOk && mfOk && r.en && !r.ko0 && r.koAfter && r.saved === "ko",
+      `설명 "${desc.slice(0, 40)}…" 한글없음=${!hasKo(desc)} · og:image 절대=${/^https:\/\//.test(ogI)} · html lang=${htmlLang} · `
+      + `manifest lang=${mf.lang}/한글없음=${!hasKo(mf.description || "")} · 앱 시작 영어=${r.en} · 한국어 선택 저장=${r.saved}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)

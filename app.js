@@ -209,6 +209,7 @@ const I18N = {
     undo_done: "Undone one step",
     undo_none: "Nothing to undo",
     editor_align: "Pupil Align",
+    editor_guide: "Guide",          /* v1.92.0 — 영어가 기본이 되며 빠져 있던 것을 채움 */
     editor_preset: "Presets",
     editor_preset_save: "Save current",
     set_title: "Settings — Line look", set_badge: "Set",
@@ -225,7 +226,7 @@ const I18N = {
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     line_hidden: "hidden — tap again to show",
-    editor_tip: "Tips", ai_name: "Brow Align",
+    editor_tip: "Tips", ai_name: "Align",   /* v1.92.0 — 좁은 폰에서 잠금(센터선)과 부딪히지 않는 폭 */
     ai_auto_on: "AI Brow Align applied — Undo for default layout",
     line_step_keep: "kept — this is the current step",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
@@ -243,10 +244,10 @@ const I18N = {
     set_saved: "Settings saved",
     editor_load_preset: "Presets",
     editor_preset_load: "Presets",
-    editor_photo_lock: "Lock Photo",
+    editor_photo_lock: "Lock",      /* v1.92.0 — 짧게: 가운데 잠금이 센터선 위에 남아야 합니다 */
     editor_photo_unlock: "Unlock",
-    editor_export: "Save Photo",
-    editor_change_photo: "Change Photo",
+    editor_export: "Save",          /* v1.92.0 — 짧게: 왼쪽 도크가 넓어지면 가운데 잠금을 밀어냅니다 */
+    editor_change_photo: "Change",
     editor_rotate: "Landscape",
     editor_rotate_off: "Auto rotate",
     rot_on: "Locked to landscape",
@@ -351,7 +352,10 @@ const I18N = {
     p_arch: "Arched Brow",
   },
 };
-let LANG = localStorage.getItem("pb_lang") || "ko";
+/* v1.92.0 — **기본 언어 = 영어** (원장님 지시 2026-08-28: 「링크에 설명을 기본 영어,
+   다운받을 때 설정 기본 영어로 변경」). 해외 학생에게 링크를 보낼 때가 기준입니다.
+   ⚠️ 한 번 고른 언어는 pb_lang 에 저장되어 유지됩니다 — 원장님 폰에서 「한국어」를 한 번 누르시면 끝. */
+let LANG = localStorage.getItem("pb_lang") || "en";
 const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* ═══════════ 2. 라인 정의 · 기본값 ═══════════ */
@@ -359,7 +363,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.91.0";
+const APP_VERSION = "v1.92.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -4129,7 +4133,15 @@ function alignCenterDock() {
   let x = S.g.v1 * S.dim.W - lockMid;                     // 잠금 중심이 센터선에 오도록
   const ld = $("leftDock"), bd = $("bottomDock");
   const loLimit = ld ? ld.offsetLeft + ld.offsetWidth + 10 : 0;
-  const hiLimit = (bd ? bd.offsetLeft - 10 : S.dim.W) - cd.offsetWidth;
+  /* ⚠️ v1.92.0 — 좌우 바 행(.barrow)은 .bdock 보다 **왼쪽으로 넘쳐** 있습니다(152%).
+     그 왼쪽 끝에 AI 눈썹정렬 버튼이 있으므로, bdock 만 보면 잠금이 AI 버튼 위로 올라탑니다
+     (영어 라벨로 왼쪽 도크가 넓어졌을 때 실제로 겹쳤습니다). **더 왼쪽인 쪽**을 한계로 잡습니다. */
+  const snap = $("btnSnap");
+  const rightEdge = Math.min(
+    bd ? bd.offsetLeft : S.dim.W,
+    snap && snap.offsetParent ? snap.getBoundingClientRect().left - stage.getBoundingClientRect().left : S.dim.W,
+  );
+  const hiLimit = rightEdge - 10 - cd.offsetWidth;
   x = clamp(x, Math.min(loLimit, Math.max(hiLimit, 0)), Math.max(hiLimit, 0));
   cd.style.left = "0px";
   cd.style.transform = `translateX(${Math.round(x)}px)`;
