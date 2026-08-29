@@ -2077,6 +2077,25 @@ console.log("\n[밸런스 판정]");
       + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/></svg>`);
     return f;
   };
+  /* ⭐⭐ v1.99.0 — **눈썹 안쪽에 눈꺼풀 그늘이 이어진 사진** (원장님 폰 2026-08-29:
+     「눈꼬리부터 내부로 들어오면서 굵은 선이 충분히 인식이 되는데도 너의 인식은 아주 먼
+       내부에 정해져 있다 … 사용자의 드로잉은 44에 있다」)
+     이 사진은 눈썹(x 120~340) 안쪽에 **진하기가 눈썹의 28% 인 그늘**(x 340~384)이 이어집니다.
+     `growEnd` 는 진하기 문턱(중앙값 × 0.25)만 보기 때문에 그늘을 눈썹으로 알고 **끝까지 걸어가**
+     이너를 미간 맨살에 세웠습니다 (실기기 재현: 정답 44 자리에 48 이 섰습니다).
+     이너는 **드로잉이 시작하는 340 근처**에 서야 하고, 그늘 끝(384)으로 가면 안 됩니다.
+     ⛔ 이너를 `growEnd` 결과로 되돌리지 마세요 — 이 검사가 바로 잡습니다. */
+  const INNERSHADE = { inkEndX: 340, shadeEndX: 384 };
+  const makeInnerShadeFace = () => {
+    const f = path.join(ROOT, ".draw-inshade.svg");
+    const up = [], dn = [];
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<rect x="338" y="150" width="46" height="36" fill="#b0a396"/>`     /* 눈꺼풀 그늘 — 눈썹의 28% */
+      + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/></svg>`);
+    return f;
+  };
   /* ⭐ v1.74.0 — **앞머리 쪽이 얇게 시작하는 눈썹** (원장님 지시 2026-08-25:
      「이너 라인은 앞 라인이 맞아 색이 시작하는 선이잖아 … 왼쪽 드로잉 시작점이 이너 시작 라인이야」)
      몸통(x 120~300)은 두껍고, 안쪽(x 300~344)으로 갈수록 **얇아지지만 색은 그대로** 입니다.
@@ -3470,6 +3489,48 @@ console.log("\n[밸런스 판정]");
       `버튼높이 ${r.btnH.toFixed(1)}px(≤22) · 꼬리↔센터 ${r.gapTailCenter.toFixed(1)}px / 아우터↔피봇 ${r.gapOuterPivot.toFixed(1)}px(≤3) · `
       + `중앙오차 ${r.blockOff.toFixed(1)}px(≤4) · 넘침없음=${r.fits} · 설정↔눈 갭 ${r.langGap.toFixed(1)}px(4~14)/안겹침=${r.langClear} · hButtons static=${r.hStatic} · `
       + `바 높이 ${(r.barFrac * 100).toFixed(1)}%(28~46) · 레일과 간격 ${r.barGapFromRail.toFixed(0)}px(≥12) · 아래도크 위 ${r.barAboveDock.toFixed(0)}px`);
+  }
+
+  /* 151. ⭐⭐⭐ v1.99.0 — **이너 판독 룰** (원장님 지시 2026-08-29)
+       「40이 눈 앞꼬리, 밸런스 기본이 되는 선. 48이 맥시멈 … 보통은 45가 맥시멈.
+         40에서 48까지 들어오면서 드로잉이 시작되는 굵은 혹은 검정색의 라인을 이너라인으로
+         선택한다. 선택할 수 없을 경우 40에서 45의 중간인 43을 잡아낸다」
+       「이너라인을 선택하는 룰은 **가장 높은 값을 선택하는 게 아니다** … 맨살에서
+         「이곳에 선이 있다」라고 판단되는 점수가 확 띄는 지점이 이너라인이다」
+     ① 눈꺼풀 그늘이 안쪽으로 이어져도 이너는 **드로잉이 시작하는 곳**에 선다 (그늘 끝 ✗)
+     ② 이너는 **내안각(40) ~ 하드 맥시멈(48)** 밖으로 나가지 못한다
+     ③ 읽지 못하면 **43**(케이스 3개 이상이면 케이스 중앙값) */
+  {
+    const fis = makeInnerShadeFace();
+    const o151 = await runDraw(true, fis, null, SHAPE_A);
+    fs.unlinkSync(fis);
+    const r151 = await (async () => {
+      const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+      const p = await ctx.newPage();
+      await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+      await p.waitForTimeout(300);
+      await p.setInputFiles("#fileInput", fd);
+      await p.waitForTimeout(1000);
+      const r = await p.evaluate(() => {
+        const PBx = window.PB;
+        return { lo: PBx.INNER_F_LO, mid: PBx.INNER_F_MID, soft: PBx.INNER_F_SOFT, hard: PBx.INNER_F_HARD,
+                 rise: PBx.INNER_RISE, mult: PBx.INNER_MULT, cases: PBx.INNER_CASES.length,
+                 caseF: PBx.innerCaseF(), hasPhoto: PBx.INNER_CASES.every((c) => !("photo" in c) && !("img" in c)) };
+      });
+      await ctx.close();
+      return r;
+    })();
+    const atInk = Math.abs(o151.innerPx - o151.exp.inner) < 12;                 /* 드로잉 시작(340) */
+    const notShade = o151.innerPx < o151.exp.inner + 22;                        /* 그늘 끝(384)까지 안 감 */
+    /* ② 하드 맥시멈 밖으로는 못 나간다 — 상수 자체를 잠근다 (얼굴 비율 자) */
+    const bounds = r151.lo === 0 && Math.abs(r151.mid - 0.228) < 1e-6
+      && Math.abs(r151.soft - 0.380) < 1e-6 && Math.abs(r151.hard - 0.608) < 1e-6
+      && r151.rise >= 0.10 && r151.rise <= 0.20 && r151.mult >= 1.2 && r151.mult <= 1.9;
+    const fb = r151.cases < 3 ? Math.abs(r151.caseF - r151.mid) < 1e-6 : true;  /* ③ 43 */
+    check("151. 이너 판독 — 눈꺼풀 그늘을 따라가지 않고 드로잉이 시작하는 곳에 선다 (40~48 · 못 읽으면 43)",
+      o151.ok && atInk && notShade && bounds && fb && r151.hasPhoto,
+      `이너 ${o151.innerPx.toFixed(0)}px (드로잉 시작 ${o151.exp.inner.toFixed(0)} 에 섬=${atInk} · 그늘 끝까지 안 감=${notShade}) · `
+      + `경계 40/43/45/48=${bounds} (rise ${r151.rise} · mult ${r151.mult}) · 못읽으면 43=${fb} · 케이스 ${r151.cases}개(사진 미저장=${r151.hasPhoto})`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)

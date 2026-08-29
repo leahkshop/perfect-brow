@@ -53,7 +53,7 @@ const I18N = {
        ⛔ 한 줄을 넘기지 마세요 — 시술 화면을 가립니다. */
     /* ⚠️ v1.81.0 — 번호(①②③…)는 **문구에 박지 않습니다.** 순서를 원장님이 바꾸실 수 있으므로
        updateGuideTip 이 지금 순서에서 매번 붙입니다. ⛔ 번호를 다시 문구에 넣지 마세요. */
-    tip_v2: "이너 — 콧방울·내안각 선에 세로선을 맞추세요 (좌우 바)",
+    tip_v2: "이너 — 드로잉 앞부분에 맞추세요 (좌우 바)",
     tip_front: "앞머리 — 눈썹 앞부분 <b>아랫선</b>에 얹으세요 (위아래 바)",
     tip_frontThickness: "앞두께 — 앞부분 <b>윗선</b>에 맞추세요 (위아래 바)",
     tip_h2: "아치엣지 — 산꼭대기 <b>윗선</b>에 얹으세요 (위아래 바)",
@@ -218,7 +218,7 @@ const I18N = {
     set_title: "Settings — Line look", set_badge: "Set",
     set_dragc: "Core", set_drage: "Outline", set_back: "Undo changes",
     set_cycle: "Colors", set_c_mine: "My set",
-    tip_v2: "Inner — align the vertical to the nostril / inner-canthus line",
+    tip_v2: "Inner — align it to the start of the drawing",
     tip_front: "Front — put it on the <b>lower</b> edge of the front",
     tip_frontThickness: "Front thickness — put it on the <b>upper</b> edge of the front",
     tip_h2: "Arch edge — put it on the <b>upper</b> edge of the peak",
@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.98.1";
+const APP_VERSION = "v1.99.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2166,6 +2166,7 @@ function placeLinesFromEyes(cx, cy, half) {
   const g = S.g, { W, H } = S.dim, aspect = W / H;
   g.v1 = cx;
   g.h1 = cy;
+  S.innerAnchor = half * R_INNER;   /* v1.99.0 — 랜드마크가 없을 때의 「내안각 → 센터」 자 */
   g.v2 = clamp(cx - half * R_INNER, 0.01, 0.99); g.v3 = 2 * cx - g.v2;
   g.v4 = clamp(cx - half * R_OUTER, 0.01, 0.99); g.v5 = 2 * cx - g.v4;
   const up = (f) => clamp(cy - half * f * aspect, 0.02, 0.98);
@@ -2471,6 +2472,7 @@ function placeLines(lm) {
   g.v1 = clamp((inLc.x + inRc.x) / 2 / W, 0.02, 0.98);
   g.h1 = clamp(cv((a.x + b.x) / 2, (a.y + b.y) / 2).y / H, 0.02, 0.98);
   const halfIn = Math.abs((refIsLeft() ? inLc : inRc).x / W - g.v1);
+  S.innerAnchor = halfIn;   /* v1.99.0 — 「내안각 → 센터」 자. 이너 판독의 기준 (40 = 여기) */
   g.v2 = clamp(g.v1 - halfIn, 0.02, 0.98);  g.v3 = 2 * g.v1 - g.v2;
   const halfOut = browTailHalf(lm, S.p, g.v1);   /* 기준쪽 눈썹 꼬리 (v1.35.0/v1.38.0) */
   g.v4 = clamp(g.v1 - halfOut, 0.02, 0.98); g.v5 = 2 * g.v1 - g.v4;
@@ -2971,6 +2973,224 @@ function growEnd(band, kept, toInner) {
   return add;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⭐⭐⭐ v1.99.0 — **이너(앞머리 세로선) 판독 룰** (원장님 지시 2026-08-29)
+   ───────────────────────────────────────────────────────────────────────────
+   원장님 말씀 그대로 (프롬프트로 읽으세요):
+
+     「40이 눈 앞꼬리, 밸런스 기본이 되는 선. 48이 맥시멈, 각 나라마다 맥시멈 자리가
+       있다. 보통은 45가 맥시멈, 최대 48까지 늘어날 수 있다. 40에서 48까지 들어오면서
+       드로잉이 시작되는 굵은 혹은 검정색의 라인을 이너라인으로 선택한다. 만약 이너
+       라인을 선택할 수 없을 경우 40에서 45의 중간인 43을 잡아낸다. 그러니 42이거나
+       43이거나 44일 수 있다. 42,43,44 중에 근접하게 검정 선이 있을 때 자동으로
+       선택해라. 자동으로 선택할 수 없을 경우 중간 43을 선택한다」
+
+     「이너라인을 선택하는 룰은 **가장 높은 값을 선택하는 게 아니다.** 사실 46은 거의
+       맨살, 45도 맨살 낮은 점수, 그리고 44에서 조금 더 높은 점수로 띄는 값이 이너라인의
+       선택지라고 볼 수 있다. 맨살에 쉐도우와 확연히 조금 더 짙은 선이 시작하는 부분,
+       맨살에서 「이곳에 선이 있다」라고 판단되는 점수가 확 띄는 지점이 이너라인으로
+       선택될 수 있다」
+
+   ⚠️ **40·43·45·48 은 화면 눈금이 아니라 얼굴 비율입니다.**
+   원장님이 부르시는 숫자는 자동 정렬된 화면에서 이너 슬라이더가 가리키는 값(= v2 × 100)
+   입니다. 사진 프레임이 달라지면 그 숫자는 흔들리므로, 앱은 같은 뜻을 **얼굴에 붙은 자**로
+   저장합니다 — 「내안각 → 센터」 거리를 1.0 으로 본 비율 f:
+       f = (이너 − 내안각) / (센터 − 내안각)
+   원장님 사진에서 내안각 = 40, 센터 = 53.15 였으므로 1 눈금 = 7.6% 입니다:
+       40 → f 0.000 (하한 · 눈 앞꼬리, 이보다 바깥으로 절대 안 나간다)
+       43 → f 0.228 (읽을 수 없을 때의 답)
+       44 → f 0.304 (원장님 정답 · 케이스 1)
+       45 → f 0.380 (보통 맥시멈)
+       48 → f 0.608 (절대 맥시멈)
+   ⛔ 이 상수들을 화면 눈금(0.40 등)으로 되돌리지 마세요 — 프레임이 바뀌면 다 틀립니다.
+
+   ⚠️ **왜 `growEnd` 로는 안 되는가** (2026-08-29 컨테이너 재현으로 확인)
+   `growEnd` 는 열마다 columnRuns 가 스스로 찾은 「제일 진한 덩어리」의 진하기를 봅니다.
+   눈썹 앞머리 안쪽에는 **눈꺼풀·눈두덩 그늘**이 이어져 있어서, 눈썹이 끝난 뒤에도 그
+   덩어리의 진하기가 중앙값의 30% 대로 계속 남습니다 (재현값 dark 10~13, 문턱 8.5).
+   그래서 밴드는 44.0 에서 제대로 끝나는데 `growEnd` 가 48.3 까지 걸어갔습니다.
+   결정적 단서: 그 열들의 **두께가 78~111px** — 진짜 눈썹(약 40px)의 2~3배였습니다.
+   → 이제 이너는 **두께를 눈썹으로 고정한 창**으로 다시 잽니다 (`innerProfile`).
+   ⛔ 이너를 `growEnd` 결과로 되돌리지 마세요 — 회귀 151 이 잡습니다. */
+
+const INNER_F_LO   = 0.000;   // 40 — 눈 앞꼬리(내안각). 하한
+const INNER_F_MID  = 0.228;   // 43 — 읽을 수 없을 때
+const INNER_F_SOFT = 0.380;   // 45 — 보통 맥시멈
+const INNER_F_HARD = 0.608;   // 48 — 절대 맥시멈
+/* 「확 띄는 지점」의 잣대 두 개. 맨살(0) ~ 눈썹 잉크(1) 사이에서 이만큼 올라오고,
+   동시에 맨살의 이 배는 되어야 「여기서 선이 시작한다」로 봅니다.
+   ── 케이스 1 실측 (컨테이너 재현 · 눈썹 잉크 = 100%, 맨살 기준 = 45~48 골짜기) ──
+     앱 42.0 → 59% (올라온 정도 0.42 · 맨살의 2.02배)
+     앱 43.0 → 45% (0.219 · 1.53배)
+     앱 43.5 → 39% (0.138 · 1.33배)  ← **여기서 처음 문턱을 넘는다**
+     앱 44.0 → 32% (0.045 · 1.11배)  ← 그 바로 안쪽 = **선의 안쪽 경계 = 정답 44**
+     앱 44.5~46 → 32~34% (맨살) · 앱 46.5~47 → 28% (맨살 바닥)
+   ⛔ RISE 를 0.10 아래로 내리지 마세요 — 45·46(맨살)의 잔물결까지 선으로 봅니다.
+   ⛔ MULT 를 2.0 같은 큰 값으로 올리지 마세요 — 어두운 핵심 평균(INNER_CORE)이라
+      맨살도 0 이 아닙니다. 2.2 로 뒀을 때 42 로 밀렸습니다 (2026-08-29 1차 시도). */
+const INNER_RISE = 0.12;
+const INNER_MULT = 1.28;
+const INNER_CORE = 0.35;      // 창에서 제일 어두운 이 비율만 평균 낸다 (가는 선 보존)
+const INNER_STEP = 0.010;     // f 를 이 간격으로 훑는다 (≈ 0.13 눈금)
+const INNER_RUN  = 2;         // 연속 이만큼 통과해야 인정 (점 하나에 안 끌리게)
+
+/* ═══ 드로잉 케이스 보관함 (원장님 지시 2026-08-29: 「드로잉 케이스마다 저장하고,
+   여러 케이스에서 가장 잘 사용되는 것, 판독을 자세히 측정할 수 없을 때 가장 비슷하다고
+   생각되는 지점을 선택하도록 룰을 만들어야 한다」)
+   ⛔ **사진은 저장하지 않습니다** — 저장소가 Public 이고 고객 얼굴이기 때문입니다.
+      숫자만 남깁니다. 케이스가 3개 이상 모이면 「읽을 수 없을 때의 답」이 43 대신
+      **케이스들의 중앙값**이 됩니다 = 「가장 잘 쓰이는 지점」. */
+const INNER_CASES = [
+  /* id · 날짜 · f(정답) · rise(맨살→잉크 올라온 정도) · mult(맨살 대비 배수) · 메모 */
+  { id: 1, at: "2026-08-29", f: 0.304, rise: 0.159, mult: 2.6, note: "앱 44 · 내안각 40 · 센터 53.15 · 굵은 선이 시작하는 자리" },
+];
+function innerCaseF() {
+  if (INNER_CASES.length < 3) return INNER_F_MID;
+  const v = INNER_CASES.map((c) => c.f).sort((a, b) => a - b);
+  return v[Math.floor(v.length / 2)];
+}
+
+/* 내안각 → 센터 거리 (화면 폭 비율). 랜드마크가 있으면 실측, 없으면 배치 때 저장한 값. */
+function innerAnchor() {
+  const lm = S.landmarks, W = S.dim.W;
+  if (lm && W) {
+    try {
+      const c = eyeCorners(lm);
+      const inLc = imgToCanvas(c.innerL.x, c.innerL.y, S.p);
+      const inRc = imgToCanvas(c.innerR.x, c.innerR.y, S.p);
+      const v1 = (inLc.x + inRc.x) / 2 / W;
+      const a = Math.abs((refIsLeft() ? inLc : inRc).x / W - v1);
+      if (a > 0.02 && a < 0.45) return a;
+    } catch { /* 랜드마크가 깨졌으면 저장값으로 */ }
+  }
+  return S.innerAnchor && S.innerAnchor > 0.02 ? S.innerAnchor : null;
+}
+
+/* f(얼굴 비율) → 화면 x(px). sgn = +1 이면 눈썹이 센터 오른쪽. */
+const innerFx = (f, sgn, anchor) => (S.g.v1 + sgn * anchor * (1 - f)) * S.dim.W;
+
+/* ─────────────────────────────────────────────────────────────────────────
+   `innerProfile` — 열마다 **눈썹 두께로 고정한 창**의 잉크를 잰다.
+   columnRuns 의 `dark` 는 열에서 제일 진한 덩어리를 스스로 고르므로 눈썹이 끝난 뒤에는
+   눈꺼풀 그늘을 따라갑니다. 여기서는 밴드 안쪽 끝의 창(중심선 기울기 + 두께)을 그대로
+   끌고 가며 **눈썹이 있어야 할 자리만** 재기 때문에 맨살에서는 값이 뚝 떨어집니다. */
+function innerProfile(img, band, sgn) {
+  const { W, H } = S.dim;
+  if (!img || !band || band.length < 6) return null;
+  /* 안쪽 40% 열로 중심선(1차식)과 두께(중앙값)를 잡는다 */
+  const asc = band.slice().sort((a, b) => a.x - b.x);
+  const inSide = sgn > 0 ? asc.slice(0, Math.max(4, Math.round(asc.length * 0.4)))
+                         : asc.slice(-Math.max(4, Math.round(asc.length * 0.4)));
+  const mid = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)] || 0; };
+  const th = Math.max(6, mid(inSide.map((p) => p.bot - p.top)));
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of inSide) { const y = (p.top + p.bot) / 2; sx += p.x; sy += y; sxx += p.x * p.x; sxy += p.x * y; }
+  const nI = inSide.length, den = nI * sxx - sx * sx;
+  let slope = den ? (nI * sxy - sx * sy) / den : 0;
+  slope = clamp(slope, -1.2, 1.2);                       // 폭주 방지
+  const x0 = sx / nI, y0 = sy / nI;
+  const midY = (x) => y0 + slope * (x - x0);
+
+  /* 한 열의 잉크 = 창 안에서 「피부보다 얼마나 어두운가」의 평균.
+     피부는 창 위아래를 넉넉히 포함한 큰 열의 **밝은 40% 평균** (columnRuns 와 같은 잣대) */
+  const inkAt = (x) => {
+    const xi = Math.round(x);
+    if (xi < 0 || xi >= W) return null;
+    const cy = midY(x);
+    const t = Math.round(cy - th / 2), b = Math.round(cy + th / 2);
+    const bt = Math.round(cy - 2.2 * th), bb = Math.round(cy + 2.2 * th);
+    if (t < 0 || b >= H || bt < 0 || bb >= H) return null;
+    const big = [];
+    for (let y = bt; y <= bb; y++) big.push(lumaAt(img, W, xi, y));
+    const s = big.slice().sort((p, q) => p - q), k = Math.floor(s.length * 0.6);
+    let sum = 0;
+    for (let i = k; i < s.length; i++) sum += s[i];
+    const skin = sum / Math.max(1, s.length - k);
+    /* ⭐ 창 전체 평균이 아니라 **제일 어두운 INNER_CORE 만큼의 평균**입니다.
+       눈썹은 안쪽으로 갈수록 얇아지므로, 두께 고정 창의 평균을 쓰면 진짜 선이 있어도
+       맨살에 희석되어 「없다」가 됩니다 (원장님 44 자리가 맨살 46 과 겨우 5%p 차이였습니다).
+       어두운 쪽만 보면 **가는 선 한 줄도 그대로 드러납니다**. */
+    const dif = [];
+    for (let y = t; y <= b; y++) dif.push(Math.max(0, skin - lumaAt(img, W, xi, y)));
+    if (!dif.length) return null;
+    dif.sort((p1, q1) => q1 - p1);
+    const kc = Math.max(3, Math.round(dif.length * INNER_CORE));
+    let ink = 0;
+    for (let i = 0; i < kc; i++) ink += dif[i];
+    return ink / kc;
+  };
+  return { inkAt, th, midY };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   이너 최종 판정. 돌려주는 것은 { f, why } — f 는 얼굴 비율, why 는 기록용.
+   ① 맨살 기준선을 **하드 맥시멈(48)보다 안쪽**(미간 맨살)에서 잰다
+   ② 눈썹 잉크 기준선은 밴드 한가운데 열들의 중앙값 (= 100%)
+   ③ 하드 맥시멈에서 **바깥(눈꼬리 방향)으로 걸어 나오며** 처음으로
+      「맨살보다 확 띄는」 열을 만나면 그 자리가 이너다
+   ④ 못 찾으면 43 (케이스가 3개 이상이면 케이스 중앙값) */
+function innerDecide(img, band) {
+  const { W } = S.dim;
+  const anchor = innerAnchor();
+  if (!anchor || !img || !band || band.length < 6) return null;
+  const cx = S.g.v1 * W;
+  const bandMid = (band[0].x + band[band.length - 1].x) / 2;
+  const sgn = bandMid < cx ? -1 : 1;
+  const prof = innerProfile(img, band, sgn);
+  if (!prof) return null;
+  const mid = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)] || 0; };
+
+  /* ② 눈썹 잉크 기준 — 밴드 가운데 50% 열 */
+  const asc = band.slice().sort((a, b) => a.x - b.x);
+  const q0 = Math.floor(asc.length * 0.25), q1 = Math.ceil(asc.length * 0.75);
+  const core = [];
+  for (let i = q0; i < q1; i++) { const v = prof.inkAt(asc[i].x); if (v !== null) core.push(v); }
+  const browInk = mid(core);
+  if (!(browInk > 0)) return null;
+
+  /* ① 맨살 기준 — **45~48 골짜기** (원장님: 「46은 거의 맨살, 45도 맨살 낮은 점수」).
+     ⛔ 48 **너머**에서 재지 마세요 — 그쪽은 미간·콧대 그늘과 반대쪽 눈썹이라
+        맨살보다 훨씬 어둡습니다 (실측: 앱 51 에서 눈썹의 57%). 기준이 부풀면
+        진짜 선(44)이 문턱을 못 넘습니다. 실패 재현: 2026-08-29 1차 시도 → 42. */
+  const skinS = [];
+  for (let f = INNER_F_SOFT; f <= INNER_F_HARD + 0.25; f += INNER_STEP) {
+    const v = prof.inkAt(innerFx(f, sgn, anchor));
+    if (v !== null) skinS.push(v);
+  }
+  skinS.sort((a, b) => a - b);
+  /* **낮은 15% 분위** — 「골짜기」를 고르는 자리입니다. 평균·중앙값을 쓰면
+     ⓐ 드로잉이 45 를 넘게 그려진 사진에서는 드로잉이,
+     ⓑ 48 너머에서는 미간·콧대 그늘이 기준을 끌어올려 진짜 선이 문턱을 못 넘습니다. */
+  const skinInk = skinS.length ? skinS[Math.floor(skinS.length * 0.15)] : 0;
+  const span = Math.max(1e-6, browInk - skinInk);
+  if (browInk <= skinInk * 1.4) return null;   // 눈썹과 맨살이 구분되지 않는다 → 판독 포기
+
+  /* ③ 48 → 40 방향으로 걸어 나오며 처음 「확 띄는」 자리 */
+  const pass = (f) => {
+    const v = prof.inkAt(innerFx(f, sgn, anchor));
+    if (v === null) return false;
+    return (v - skinInk) / span >= INNER_RISE && v >= skinInk * INNER_MULT;
+  };
+  const scan = [];
+  for (let f = INNER_F_HARD; f >= INNER_F_LO - 1e-9; f -= INNER_STEP) scan.push(f);
+  for (let i = 0; i < scan.length; i++) {
+    let ok = true;
+    for (let k = 0; k < INNER_RUN; k++) { if (i + k >= scan.length || !pass(scan[i + k])) { ok = false; break; } }
+    if (ok) {
+      /* ⭐ 답은 통과한 열이 아니라 **그 바로 안쪽(맨살 쪽) 열**입니다.
+         원장님: 「맨살에서 이곳에 선이 있다라고 판단되는 점수가 확 띄는 지점」 —
+         선의 **안쪽 경계**가 이너입니다. 통과한 열은 이미 선 위에 올라선 자리라
+         그대로 쓰면 한 눈금 바깥(눈꼬리 쪽)으로 밀립니다. */
+      const fAns = clamp(i > 0 ? scan[i - 1] : scan[i], INNER_F_LO, INNER_F_HARD);
+      const v = prof.inkAt(innerFx(scan[i], sgn, anchor));
+      return { f: fAns, sgn, anchor,
+               rise: (v - skinInk) / span, mult: v / Math.max(1e-6, skinInk), why: "read" };
+    }
+  }
+  /* ④ 읽지 못했다 — 중간(43) 또는 케이스 중앙값 */
+  return { f: innerCaseF(), sgn, anchor, rise: 0, mult: 0, why: "fallback" };
+}
+
 
 /* 기준 쪽 눈썹에서 그려진 드로잉을 읽는다. 실패하면 null.
    반환: x 오름차순 [{x, top, bot}] — top/bot 은 캔버스 px */
@@ -3199,8 +3419,22 @@ function autoFromDrawing() {
      아우터는 **검은 드로잉이 끝나는 열**입니다 (v1.72.0 · 얇은 털 추적 금지 v1.71.0). */
   /* v1.74.0 — 이너 = **드로잉 색이 시작하는 선** (원장님 2026-08-25). 밴드의 안쪽 끝이
      아니라 `growEnd` 가 이어 붙인 끝입니다 — 위 `growEnd` 주석 참고. */
-  const innerX = pts.innerX !== undefined && pts.innerX !== null ? pts.innerX : seq[0].x;
-  setLine("v2", clamp(S.g.v1 - Math.abs(innerX - cx) / W, 0.02, 0.98));
+  /* ⭐ v1.99.0 — 이너는 **전용 판독**(innerDecide)이 정합니다 — 위 룰 주석 참고.
+     `growEnd` 는 눈꺼풀 그늘을 따라 미간 맨살(앱 48)까지 걸어갔습니다.
+     판독이 아예 안 되면 예전 경로를 쓰되 **40~48 밖으로는 못 나가게** 자릅니다. */
+  {
+    const dec = innerDecide(img, pts);
+    S.innerRead = dec || null;
+    if (dec) {
+      setLine("v2", clamp(S.g.v1 - dec.anchor * (1 - dec.f), 0.02, 0.98));
+    } else {
+      const innerX = pts.innerX !== undefined && pts.innerX !== null ? pts.innerX : seq[0].x;
+      let half = Math.abs(innerX - cx) / W;
+      const a0 = innerAnchor();
+      if (a0) half = clamp(half, a0 * (1 - INNER_F_HARD), a0);
+      setLine("v2", clamp(S.g.v1 - half, 0.02, 0.98));
+    }
+  }
   setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
      그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
@@ -4471,6 +4705,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
-  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
+  updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF,
+  INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, CENTER_Y };   /* v1.97.0 — 예비 동공 정렬 검사용 */
