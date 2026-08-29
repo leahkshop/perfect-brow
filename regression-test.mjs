@@ -220,9 +220,10 @@ console.log("[세로 모드 · 기능]");
   /* 기준점: v1.96.0 — 작업 영역의 42% 지점 (원장님 지시 「더 왼쪽으로」 · CENTER_BIAS).
      앱의 centerX() 를 그대로 기준으로 씁니다. */
   const cxExp = await p.evaluate(() => window.PB.centerX());
-  check("6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 0.60",
-    near(st.rot, -6, 0.3) && near(st.v1, cxExp, 0.003) && near(st.h1, 0.60, 0.001),
-    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 ${cxExp.toFixed(3)}) h1=${st.h1.toFixed(3)}`);
+  const cyExp = await p.evaluate(() => window.PB.CENTER_Y);   /* v1.97.2 — 세로 기준도 상수를 직접 읽는다 */
+  check("6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 = CENTER_Y",
+    near(st.rot, -6, 0.3) && near(st.v1, cxExp, 0.003) && near(st.h1, cyExp, 0.001),
+    `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 ${cxExp.toFixed(3)}) h1=${st.h1.toFixed(3)}(기대 ${cyExp})`);
 
   // 44. 얼굴(동공 중점)이 실제로 캔버스 가로 35% 지점에 온다 — 오른쪽 컨트롤을 피하려고 왼쪽으로 15%
   const faceCenter = await p.evaluate(([px, py]) => {
@@ -233,9 +234,9 @@ console.log("[세로 모드 · 기능]");
     const cy = S.dim.H / 2 + p.oy * S.dim.H + p.zoom * (vx * Math.sin(r) + vy * Math.cos(r));
     return { x: cx / S.dim.W, y: cy / S.dim.H };
   }, [(face.pupilL.x + face.pupilR.x) / 2, (face.pupilL.y + face.pupilR.y) / 2]);
-  check("44. 자동 정렬 — 얼굴이 작업 영역 가로 한가운데 · 세로 60%",
-    near(faceCenter.x, cxExp, 0.01) && near(faceCenter.y, 0.60, 0.01),
-    `얼굴 중심 = (${(faceCenter.x * 100).toFixed(1)}%, ${(faceCenter.y * 100).toFixed(1)}%) / 기대 x ${(cxExp * 100).toFixed(1)}%`);
+  check("44. 자동 정렬 — 얼굴이 작업 영역 가로 한가운데 · 세로 = CENTER_Y",
+    near(faceCenter.x, cxExp, 0.01) && near(faceCenter.y, cyExp, 0.01),
+    `얼굴 중심 = (${(faceCenter.x * 100).toFixed(1)}%, ${(faceCenter.y * 100).toFixed(1)}%) / 기대 (${(cxExp * 100).toFixed(1)}%, ${(cyExp * 100).toFixed(0)}%)`);
 
   // 7. 슬라이더
   const sl = await p.evaluate(() => {
