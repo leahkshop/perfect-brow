@@ -1,0 +1,20 @@
+{
+  "_설명": "원장님 확정 정답표 — 숫자만 저장합니다. 고객 얼굴 사진은 절대 이 저장소에 넣지 마세요.",
+  "_사진위치": "사진은 각자의 컴퓨터에 두고 PB_CASES 환경변수로 폴더를 알려 줍니다 (측정-검증.mjs).",
+  "_눈금정의": "0 = 동공(눈동자) 중심 · 1눈금 = 내안각자(anchor)/13.15 · 앞두께 = 앞머리에서 위로 몇 눈금",
+  "_보정값설명": "inL·inR = 사진 원본 좌표의 양쪽 내안각 x · eyeY = 동공 중심 y · zeroY/unitPx = 실측한 0 자리와 1눈금 픽셀",
+  "cases": [
+    { "id": 1, "kind": "드로잉(굵은 선)",   "file": "small.png",   "inL": 668, "inR": 827, "eyeY": 446,  "zeroY": 436.9,  "unitPx": 6.05,  "innerF": 0.411, "front": null, "thickness": 4.8 },
+    { "id": 2, "kind": "짙은 파우더 반영구", "file": "c1_face.png", "inL": 418, "inR": 797, "eyeY": 1005, "zeroY": 994.3,  "unitPx": 14.41, "innerF": 0.555, "front": 11.0, "thickness": 6.0 },
+    { "id": 3, "kind": "자연 결 눈썹",      "file": "c2_face.png", "inL": 412, "inR": 818, "eyeY": 1098, "zeroY": 1067.2, "unitPx": 15.44, "innerF": 0.456, "front": null, "thickness": 7 },
+    { "id": 4, "kind": "옅은 반영구",       "file": "c3_face.png", "inL": 500, "inR": 787, "eyeY": 1052, "zeroY": 1010.7, "unitPx": 10.91, "innerF": 0.198, "front": 10.2, "thickness": null },
+    { "id": 5, "kind": "옅은 자연 눈썹 ①",  "file": "d1_s.png",    "inL": 669, "inR": 800, "eyeY": 448,  "zeroY": 449.4,  "unitPx": 5.02,  "innerF": 0.137, "front": null, "thickness": null },
+    { "id": 6, "kind": "옅은 자연 눈썹 ②",  "file": "d2_s.png",    "inL": 597, "inR": 710, "eyeY": 445,  "zeroY": 444.1,  "unitPx": 4.30,  "innerF": 0.183, "front": null, "thickness": 6 },
+    { "id": 7, "kind": "옅은 자연 눈썹 ③",  "file": "d3_s.png",    "inL": 663, "inR": 783, "eyeY": 468,  "zeroY": 460.2,  "unitPx": 4.56,  "innerF": 0.144, "front": 7.3,  "thickness": null },
+    { "id": 8, "kind": "옅은 자연 눈썹 ④",  "file": "d4_s.png",    "inL": 696, "inR": 808, "eyeY": 420,  "zeroY": 416.5,  "unitPx": 4.26,  "innerF": 0.388, "front": null, "thickness": 7 }
+  ],
+  "확정_앞머리_7건": [7.3, 7.9, 9.4, 10.2, 10.9, 11.0, 13.3],
+  "확정_앞머리_보통값": 10.2,
+  "확정_앞두께_5건": [4.8, 6.0, 7, 6, 7],
+  "확정_앞두께_보통값": 6.0
+}
