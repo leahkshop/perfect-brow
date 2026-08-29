@@ -3354,6 +3354,68 @@ console.log("\n[밸런스 판정]");
       `탭 후 차례 ${a1.cur}(기대 ${pre.second}) · 끝냄 [${a1.done}] · 안내 이동=${tipMoved} · 인사 보호=${introSafe}`);
   }
 
+  /* 149. ⭐⭐ v1.97.0 — **예비 동공 정렬** (원장님 지시 2026-08-29)
+     「첫 사진 크기가 모두 달라 동공 위치가 달라져 사용감이 나쁘다 — 동공 위치를 파악해
+       처음부터 동공이 비슷한 위치·비슷한 크기에 오도록 고도화」
+     ① 얼굴 인식이 실패하는 사진(눈 부위만 확대 촬영)도 픽셀에서 동공 쌍을 찾아
+        동공 간격 = EYE_FRAC×W · 중점 = (centerX, CENTER_Y) 로 통일된다
+     ② SVG 사진(회귀 픽스처)은 건드리지 않는다 — 기존 테스트의 변환 안정성
+     ⛔ findPupilsFallback 의 동그람(aspect)·크기 필터를 지우지 마세요 — 눈썹·머리카락을 잡습니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    /* 눈 부위만 확대 촬영한 것 같은 래스터(PNG) 사진을 만든다 — 피부 배경 · 큰 동공 두 개 ·
+       길쭉한 눈썹(제외돼야 함) */
+    const pngB64 = await p.evaluate(() => {
+      const c = document.createElement("canvas"); c.width = 900; c.height = 620;
+      const g = c.getContext("2d");
+      g.fillStyle = "#E8C39E"; g.fillRect(0, 0, 900, 620);
+      /* 눈썹 — 길쭉한 어두운 획 (aspect 필터로 후보에서 빠져야 한다) */
+      g.fillStyle = "#5A4632";
+      g.fillRect(120, 150, 260, 34); g.fillRect(520, 150, 260, 34);
+      /* 눈 흰자 + 동공 (짙고 동그란 한 쌍) */
+      const eye = (x) => {
+        g.fillStyle = "#FFFFFF"; g.beginPath(); g.ellipse(x, 340, 110, 60, 0, 0, 7); g.fill();
+        g.fillStyle = "#241812"; g.beginPath(); g.arc(x, 340, 40, 0, 7); g.fill();
+        g.fillStyle = "#000000"; g.beginPath(); g.arc(x, 340, 18, 0, 7); g.fill();
+      };
+      eye(250); eye(650);
+      return c.toDataURL("image/png").split(",")[1];
+    });
+    await p.setInputFiles("#fileInput", { name: "closeup.png", mimeType: "image/png", buffer: Buffer.from(pngB64, "base64") });
+    await p.waitForTimeout(3500);                       /* 얼굴 AI 실패 → 예비 동공 정렬까지 대기 */
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H;
+      const A = PBx.imgToCanvas(250, 340, S.p), B = PBx.imgToCanvas(650, 340, S.p);
+      const dist = Math.hypot(B.x - A.x, B.y - A.y);
+      const mx = (A.x + B.x) / 2 / W, my = (A.y + B.y) / 2 / H;
+      /* 검출기 단독 검사 — 찾은 동공이 실제 자리(250/650, 340) 근처인가 */
+      const f = PBx.findPupilsFallback();
+      const fOk = !!f && Math.abs(Math.min(f.a.x, f.b.x) - 250) < 45
+        && Math.abs(Math.max(f.a.x, f.b.x) - 650) < 45
+        && Math.abs(f.a.y - 340) < 45 && Math.abs(f.b.y - 340) < 45;
+      return { frac: dist / W, eyeFrac: PBx.EYE_FRAC, mx, my, cx: PBx.centerX(), cy: PBx.CENTER_Y,
+               zoom: S.p.zoom, fOk, found: f && [Math.round(f.a.x), Math.round(f.a.y), Math.round(f.b.x), Math.round(f.b.y)] };
+    });
+    /* ② SVG 픽스처는 그대로 — 변환이 기본값이어야 한다 */
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(3000);
+    const svgKeep = await p.evaluate(() => {
+      const S2 = window.PB.S;
+      return { zoom: S2.p.zoom, ox: S2.p.ox, oy: S2.p.oy, type: S2.photoType };
+    });
+    await ctx.close();
+    const alignOk = Math.abs(r.frac - r.eyeFrac) < r.eyeFrac * 0.12
+      && Math.abs(r.mx - r.cx) < 0.05 && Math.abs(r.my - r.cy) < 0.05;
+    const svgOk = svgKeep.zoom === 1 && svgKeep.ox === 0 && svgKeep.oy === 0 && /svg/.test(svgKeep.type);
+    check("149. 예비 동공 정렬 — 인식 실패 사진도 동공 간격 44%·기준점 정렬 · SVG 픽스처는 그대로",
+      r.fOk && alignOk && svgOk,
+      `검출 [${r.found}] (250,340/650,340 근처=${r.fOk}) · 간격 ${(r.frac * 100).toFixed(1)}%(기대 ${(r.eyeFrac * 100).toFixed(0)}%) · `
+      + `중점 (${(r.mx * 100).toFixed(1)}%, ${(r.my * 100).toFixed(1)}%) 기대 (${(r.cx * 100).toFixed(1)}%, ${(r.cy * 100).toFixed(0)}%) · 줌 ${r.zoom.toFixed(2)}× · SVG 그대로=${svgOk}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

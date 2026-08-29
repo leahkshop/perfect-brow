@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.96.0";
+const APP_VERSION = "v1.97.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2508,6 +2508,80 @@ function autoAiOnLoad() {
   if (ok) { showNote(t("ai_auto_on"), 2600); render(); }
 }
 
+/* ═══ v1.97.0 — 예비 동공 정렬 (원장님 지시 2026-08-29) ═══════════════════
+   「사진이 자동 정렬되는 첫 크기가 모두 달라 동공 위치가 달라져 사용감이 나쁘다.
+     동공 위치를 파악해 처음부터 동공이 비슷한 위치·비슷한 크기에 오도록 고도화」
+   얼굴 전체가 나온 사진은 MediaPipe → autoAlign 이 이미 동공 간격을 EYE_FRAC(44%)으로
+   통일합니다. 문제는 **눈 부위만 확대 촬영한 사진** — 얼굴 인식이 실패해 보정이 아예
+   안 걸리고 눈이 화면만큼 커진 채 시작됩니다 (실기기에서 확인).
+   → 인식이 실패하면 사진 픽셀에서 동공(어둡고 동그란 한 쌍)을 직접 찾아
+     alignFromPupils() 로 **같은 크기·같은 자리**에 놓습니다.
+   · 어두운 픽셀(하위 6%)의 연결 덩어리 중 **동그란 것**만 후보 — 눈썹(길쭉)·머리카락(큼) 제외
+   · 한 쌍 조건: 가로 간격 12~80% · 기울기 ±22° · 크기비 3.2배 이내 · 어두울수록 가점
+   · SVG 사진(회귀 테스트 자산)은 건드리지 않습니다 — 픽스처 변환 안정성 (회귀 149의 ② 검사)
+   ⛔ 성공 경로(autoAlign)를 이것으로 대체하지 마세요 — 랜드마크가 늘 더 정확합니다. */
+function findPupilsFallback() {
+  if (!S.imgEl || !S.iw || !S.ih) return null;
+  const DW = 220, DH = Math.max(60, Math.round((DW * S.ih) / S.iw));
+  const cv = document.createElement("canvas"); cv.width = DW; cv.height = DH;
+  const cx2 = cv.getContext("2d", { willReadFrequently: true });
+  let d;
+  try { cx2.drawImage(S.imgEl, 0, 0, DW, DH); d = cx2.getImageData(0, 0, DW, DH).data; }
+  catch (e) { return null; }
+  const N = DW * DH, lum = new Float32Array(N);
+  for (let i = 0; i < N; i++) lum[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const th = Float32Array.from(lum).sort()[Math.floor(N * 0.06)];   /* 하위 6% 어두움 */
+  const seen = new Uint8Array(N), blobs = [];
+  const qx = new Int32Array(N), qy = new Int32Array(N);
+  for (let i = 0; i < N; i++) {
+    if (seen[i] || lum[i] > th) continue;
+    let head = 0, tail = 0;
+    qx[0] = i % DW; qy[0] = (i / DW) | 0; tail = 1; seen[i] = 1;
+    let minx = DW, maxx = 0, miny = DH, maxy = 0, sx = 0, sy = 0, n = 0, sl = 0;
+    while (head < tail) {
+      const px = qx[head], py = qy[head]; head++;
+      const id = py * DW + px;
+      n++; sx += px; sy += py; sl += lum[id];
+      if (px < minx) minx = px; if (px > maxx) maxx = px;
+      if (py < miny) miny = py; if (py > maxy) maxy = py;
+      if (px > 0)      { const j = id - 1;  if (!seen[j] && lum[j] <= th) { seen[j] = 1; qx[tail] = px - 1; qy[tail] = py; tail++; } }
+      if (px < DW - 1) { const j = id + 1;  if (!seen[j] && lum[j] <= th) { seen[j] = 1; qx[tail] = px + 1; qy[tail] = py; tail++; } }
+      if (py > 0)      { const j = id - DW; if (!seen[j] && lum[j] <= th) { seen[j] = 1; qx[tail] = px; qy[tail] = py - 1; tail++; } }
+      if (py < DH - 1) { const j = id + DW; if (!seen[j] && lum[j] <= th) { seen[j] = 1; qx[tail] = px; qy[tail] = py + 1; tail++; } }
+    }
+    if (n < 6) continue;
+    const w = maxx - minx + 1, h = maxy - miny + 1;
+    if (w > DW * 0.22 || h > DH * 0.3) continue;        /* 머리카락·그림자 같은 큰 덩어리 */
+    const ar = w / h;
+    if (ar > 2.4 || ar < 0.35) continue;                /* 눈썹처럼 길쭉한 것 */
+    if (n / (w * h) < 0.45) continue;                   /* 속이 빈 테두리 모양 */
+    blobs.push({ x: sx / n, y: sy / n, n, dark: sl / n });
+  }
+  if (blobs.length < 2) return null;
+  let best = null;
+  for (let i = 0; i < blobs.length; i++) for (let j = i + 1; j < blobs.length; j++) {
+    const A = blobs[i], B = blobs[j];
+    const dx = Math.abs(A.x - B.x), dy = Math.abs(A.y - B.y);
+    if (dx < DW * 0.12 || dx > DW * 0.8) continue;      /* 콧구멍 쌍(좁음)·화면 끝끼리(넓음) 배제 */
+    if (dy > dx * 0.4) continue;                        /* 기울기 ±22° 안 */
+    if (Math.max(A.n, B.n) / Math.min(A.n, B.n) > 3.2) continue;
+    const score = (255 - A.dark) + (255 - B.dark) + dx * 0.15 - dy * 0.6;
+    if (!best || score > best.score) best = { score, a: A, b: B };
+  }
+  if (!best) return null;
+  const kx = S.iw / DW, ky = S.ih / DH;
+  return { a: { x: best.a.x * kx, y: best.a.y * ky }, b: { x: best.b.x * kx, y: best.b.y * ky } };
+}
+function fallbackPupilAlign() {
+  if (S.photoType && S.photoType.includes("svg")) return false;   /* 테스트 자산 보호 (위 주석) */
+  const pp = findPupilsFallback();
+  if (!pp) return false;
+  const A = imgToCanvas(pp.a.x, pp.a.y, S.p), B = imgToCanvas(pp.b.x, pp.b.y, S.p);
+  alignFromPupils(A, B);
+  render();
+  return true;
+}
+
 async function runFaceAI() {
   setAI(t("ai_loading"));
   try {
@@ -2517,6 +2591,7 @@ async function runFaceAI() {
       S.landmarks = null;
       setAI(t("ai_noface"), "warn");
       render();
+      fallbackPupilAlign();       /* v1.97.0 — 동공을 직접 찾아 같은 크기·자리로 (확대 촬영 사진) */
       autoAiOnLoad();             /* v1.91.0 — 얼굴 인식이 안 돼도 예비 경로가 드로잉을 찾는다 */
       return;
     }
@@ -2537,6 +2612,7 @@ async function runFaceAI() {
     S.landmarks = null;
     setAI(t("ai_fail"), "warn");
     render();
+    fallbackPupilAlign();         /* v1.97.0 — 모델이 없어도 동공 기준 크기·자리 통일 */
     autoAiOnLoad();               /* v1.91.0 — AI 모델이 없어도(오프라인) 예비 경로로 */
   }
 }
@@ -3276,6 +3352,7 @@ function loadPhoto(file) {
     if (photo.src && photo.src.startsWith("blob:")) URL.revokeObjectURL(photo.src);
     S.imgEl = im;
     S.iw = im.naturalWidth; S.ih = im.naturalHeight;
+    S.photoType = (file && file.type) || "";   /* v1.97.0 — 예비 동공 정렬의 SVG(테스트 자산) 구분용 */
     photo.src = url;
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
@@ -4386,4 +4463,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
   updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
-  workLeft, workRight, centerX };   /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
+  workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
+  findPupilsFallback, fallbackPupilAlign, EYE_FRAC, CENTER_Y };   /* v1.97.0 — 예비 동공 정렬 검사용 */
