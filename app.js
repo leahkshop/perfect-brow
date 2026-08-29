@@ -363,7 +363,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.92.0";
+const APP_VERSION = "v1.93.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1948,7 +1948,7 @@ function buildFavBar() {
     b.addEventListener("click", () => applyPreset(p));
     return b;
   }));
-  alignCenterDock();   /* 즐겨찾기로 왼쪽 도크 폭이 바뀌면 가운데 도크를 다시 맞춘다 (v1.58.0) */
+  fitDocks();          /* 즐겨찾기로 왼쪽 도크 폭이 바뀌면 도크 전체를 다시 맞춘다 (v1.58.0 · v1.93.0) */
 }
 
 function userPresets() {
@@ -3688,6 +3688,7 @@ function setLang(l) {
   LANG = l;
   localStorage.setItem("pb_lang", l);
   applyI18n();
+  fitDocks();   /* v1.93.0 — 언어가 바뀌면 글자 폭이 바뀐다: 도크를 다시 맞춘다 */
 }
 
 /* ═══════════ 이벤트 배선 ═══════════ */
@@ -4137,14 +4138,33 @@ function alignCenterDock() {
      그 왼쪽 끝에 AI 눈썹정렬 버튼이 있으므로, bdock 만 보면 잠금이 AI 버튼 위로 올라탑니다
      (영어 라벨로 왼쪽 도크가 넓어졌을 때 실제로 겹쳤습니다). **더 왼쪽인 쪽**을 한계로 잡습니다. */
   const snap = $("btnSnap");
-  const rightEdge = Math.min(
-    bd ? bd.offsetLeft : S.dim.W,
-    snap && snap.offsetParent ? snap.getBoundingClientRect().left - stage.getBoundingClientRect().left : S.dim.W,
-  );
+  /* ⚠️ v1.93.0 — getBoundingClientRect 는 rot90(세로폰 가짜 회전)에서 90° 돌아간 좌표를 줍니다.
+     실제 폰에서 잠금이 엉뚱한 곳에 놓여 AI 버튼과 겹친 원인(원장님 신고 2026-08-29).
+     **offsetLeft(레이아웃 좌표)** 로만 잰다 — BASELINE 1-6 과 같은 이유입니다. ⛔ rect 로 되돌리지 마세요. */
+  const snapLeft = bd && snap && snap.offsetParent ? bd.offsetLeft + snap.offsetLeft : S.dim.W;
+  const rightEdge = Math.min(bd ? bd.offsetLeft : S.dim.W, snapLeft);
   const hiLimit = rightEdge - 10 - cd.offsetWidth;
   x = clamp(x, Math.min(loLimit, Math.max(hiLimit, 0)), Math.max(hiLimit, 0));
   cd.style.left = "0px";
   cd.style.transform = `translateX(${Math.round(x)}px)`;
+}
+
+/* ⭐ v1.93.0 — **아래 도크 자동 맞춤** (원장님 지시 2026-08-29). 화면 폭은 기기마다 다르다 —
+   실제로 재 보고, 왼쪽 도크와 잠금·AI 버튼이 서로 밟으면 dock-tight → dock-min 으로 줄인다.
+   측정은 전부 offsetLeft(레이아웃 좌표) — rot90 에서 rect 는 돌아가 있다(위 alignCenterDock 주석). */
+function fitDocks() {
+  const b = document.body;
+  const ld = $("leftDock"), bd = $("bottomDock"), snap = $("btnSnap"), lk = $("btnLock");
+  if (!ld || !bd || !snap || !lk || !ld.offsetWidth) return;
+  for (const cls of ["", "dock-tight", "dock-min"]) {
+    b.classList.remove("dock-tight", "dock-min");
+    if (cls) b.classList.add(cls);
+    const snapLeft = bd.offsetLeft + snap.offsetLeft;
+    const ldRight = ld.offsetLeft + ld.offsetWidth;
+    /* 잠금이 왼쪽 도크와 AI 버튼 사이에 여유 있게 들어가는가 */
+    if (snapLeft - ldRight >= lk.offsetWidth + 24) break;
+  }
+  alignCenterDock();
 }
 
 /* 오른쪽 도크는 아래 도크와 겹치면 안 되므로 아래 도크 높이를 CSS 변수로 넘긴다 */
@@ -4155,7 +4175,6 @@ function syncDockSpace() {
 }
 
 function applyLayout() {
-  const mode = getOrient();
   const devPortrait = window.innerHeight > window.innerWidth;
 
   /* v1.8.0 — 세로 지원 중지.
@@ -4169,8 +4188,15 @@ function applyLayout() {
      둘이 90° 어긋나 사진을 고르기가 어렵다 (원장님 실제 불편 · 스크린샷 확인).
      "가로 전용"은 **작업 화면**에 대한 규칙이고, 사진을 넣는 동안에는 적용하지 않는다. */
   const editing = !!($("editor") && $("editor").classList.contains("active"));
-  const rot = devPortrait && editing
-    && (mode === "on" || (mode === "auto" && isTouchDevice()));
+  /* ⭐ v1.93.0 — **무조건 가로** (원장님 지시 2026-08-29: 「핸드폰 회전 잠금이 잠겨 있든 아니든
+     우리 앱은 무조건 가로모드」). pb_orient 설정("off" 포함)을 더 이상 따지지 않는다 —
+     **손가락으로 쓰는 기기**(폰·태블릿)는 편집 화면에서 뷰포트가 세로면 언제나 90° 돌린다.
+     isTouchDevice 는 남긴다: 데스크톱 브라우저 창을 세로로 좁힌 경우까지 돌리면
+     PC 확인 작업이 불가능해진다 (세로 폴백 레이아웃 · 회귀 11). 사진 선택 중 예외(v1.27.0)도 그대로. */
+  /* pb_test_norot — **회귀 테스트 전용** 탈출구. 세로 폴백 레이아웃(회귀 11 등)을 터치 컨텍스트에서
+     검사하려면 회전을 잠시 꺼야 한다. 사용자용 설정이 아니다 — UI 어디에도 없다. */
+  const rot = devPortrait && editing && isTouchDevice()
+    && localStorage.getItem("pb_test_norot") !== "1";
   /* 사진 선택 중에는 **방향을 바꾸지 않고** 화면만 어둡게 낮춘다 (index.html `body.picking`).
      세로로 돌려버리면 "지금 가로냐 세로냐"가 헷갈린다 — 원장님 지시 (v1.27.0). */
   document.body.classList.toggle("picking", !!S.picking);
@@ -4185,6 +4211,7 @@ function applyLayout() {
   updateButtons();
   measure();
   render();
+  fitDocks();                     /* v1.93.0 — 이 화면 폭에 맞게 아래 도크를 줄인다 */
 }
 
 /* 진짜 방향 잠금 — 성공하면 폰 화면 자체가 가로로 돌아간다(= 시스템 UI 도 함께 가로).
@@ -4194,7 +4221,7 @@ function applyLayout() {
    실패해도 조용히 넘어간다. 실패 = 가짜 회전으로 폴백. */
 let orientLockDone = false, orientLockTries = 0;
 function tryOrientationLock() {
-  if (orientLockDone || getOrient() === "off") return;
+  if (orientLockDone) return;   /* v1.93.0 — 무조건 가로: "off" 예외 폐지 */
   if (++orientLockTries > 4) { orientLockDone = true; return; }   /* 무한 재시도 방지 */
   const so = screen.orientation;
   if (!so || typeof so.lock !== "function") { orientLockDone = true; return; }

@@ -129,7 +129,7 @@ console.log("[세로 모드 · 기능]");
   await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
   /* v1.8.0: 기본값(auto)은 세로 기기를 무조건 가로로 돌린다.
      이 블록은 "회전 없는" 좌표계에서 기능을 검증하는 곳이므로 폴백 모드(off)로 고정한다. */
-  await p.evaluate(() => localStorage.setItem("pb_orient", "off"));
+  await p.evaluate(() => localStorage.setItem("pb_test_norot", "1"));   /* v1.93.0 — off 폐지: 테스트 전용 탈출구 */
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.waitForTimeout(500);
   await p.setInputFiles("#fileInput", face.file);
@@ -600,8 +600,16 @@ console.log("[세로 모드 · 기능]");
       /* ⚠️ v1.64.0 — 바는 줌~밸런스 행보다 길다 · 왼쪽으로만 늘어난다.
          v1.89.0 — AI 눈썹 맞춤 버튼이 바 왼쪽에 들어오면서 barrow(=버튼+바)는 152% 가 됐고,
          **바 자체**의 길이는 v1.64.0 의 「행보다 길게」를 유지한다 (바+버튼 합이 행×1.52) */
-      spansRow: h.width > m.width * 1.02 && Math.abs(m.right - h.right) < 2
-                && h.left < m.left - 2,
+      /* v1.93.0 — 「바 > 행 · 왼쪽으로 넘침」은 **가로 기본 화면**의 규칙(v1.64.0).
+         좁은 화면(dock-tight/min)과 세로 폴백에서는 fitDocks 가 바를 의도적으로 줄이므로
+         **오른쪽 끝 정렬만** 요구한다 */
+      spansRow: (() => {
+        const aligned = Math.abs(m.right - h.right) < 2;
+        const land = document.body.classList.contains("land");
+        const tight = /dock-(tight|min)/.test(document.body.className);
+        if (!land || tight) return aligned;
+        return aligned && h.width > m.width * 1.02 && h.left < m.left - 2;
+      })(),
       /* 화살표 오폭 방지 — 버튼 행과 바 사이 갭 (원장님: 「위 버튼이 실수로 눌리지 않도록」) */
       gap: Math.round(h.top - m.bottom),
     };
@@ -1545,15 +1553,19 @@ console.log("\n[강제 가로 회전]");
     backPortrait.rot && backPortrait.land,
     `rot90=${backPortrait.rot} land=${backPortrait.land}`);
 
-  /* 해제하면 다시 세로 레이아웃 */
+  /* v1.93.0 — "off" 는 **폐지** (원장님 지시 2026-08-29 「무조건 가로」). off 로 저장돼 있어도 돈다 */
   await p.evaluate(() => localStorage.setItem("pb_orient", "off"));
   await p.reload({ waitUntil: "domcontentloaded" });
   await p.waitForTimeout(400);
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1200);
   const off = await p.evaluate(() => ({
     rot: document.body.classList.contains("rot90"),
     land: document.body.classList.contains("land"),
   }));
-  check("15. 가로 강제 해제 — 기기 방향 복귀", !off.rot && !off.land);
+  await p.evaluate(() => localStorage.removeItem("pb_orient"));
+  check("15. pb_orient=off 도 무시 — 무조건 가로 (v1.93.0)", off.rot && off.land,
+    `rot90=${off.rot} land=${off.land}`);
 
   await ctx.close();
 }
@@ -3107,6 +3119,59 @@ console.log("\n[밸런스 판정]");
       metaOk && mfOk && r.en && !r.ko0 && r.koAfter && r.saved === "ko",
       `설명 "${desc.slice(0, 40)}…" 한글없음=${!hasKo(desc)} · og:image 절대=${/^https:\/\//.test(ogI)} · html lang=${htmlLang} · `
       + `manifest lang=${mf.lang}/한글없음=${!hasKo(mf.description || "")} · 앱 시작 영어=${r.en} · 한국어 선택 저장=${r.saved}`);
+  }
+
+  /* 145. ⭐⭐ v1.93.0 — **아래 도크 자동 맞춤 · 무조건 가로** (원장님 신고·지시 2026-08-29
+       「폰 크기에 따라 자동조정 · 사진저장 행이 다 겹쳤다·AI 겹침 · 가로모드에서 아래 버튼 안 나옴 ·
+        회전 잠금과 무관하게 무조건 가로」)
+     · 좁은 폰(667·740·812)에서도 왼쪽 도크·잠금·AI 버튼이 **서로 밟지 않는다** (dock-tight/min 자동)
+     · pb_orient="off" 로 저장돼 있어도 세로 뷰포트는 **무조건 rot90**
+     · .screen 높이는 **dvh 가 마지막**(주소창 있는 화면에서 아래 버튼이 잘리던 원인)
+     · alignCenterDock 은 rect 가 아니라 **offset 좌표**만 쓴다 (rot90 에서 rect 는 90° 돌아가 있다) */
+  {
+    const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+    const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+    const acd = (src.match(/function alignCenterDock\(\)[\s\S]*?\n}/) || [""])[0]
+      .replace(/\/\*[\s\S]*?\*\//g, "");                       /* 주석이 이 규칙 자체를 설명한다 */
+    const noRect = !/getBoundingClientRect/.test(acd) && /offsetLeft/.test(acd);
+    const scr = (html.match(/\.screen\{[^}]*\}/) || [""])[0];
+    const dvhLast = scr.indexOf("100vh") >= 0 && scr.indexOf("100dvh") > scr.indexOf("100vh");
+    const results = [];
+    for (const [vw, vh] of [[667, 375], [740, 360], [812, 375], [844, 390]]) {
+      const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+      const p = await ctx.newPage();
+      await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+      await p.waitForTimeout(250);
+      await p.setInputFiles("#fileInput", fd);
+      await p.waitForTimeout(1500);
+      results.push(await p.evaluate((vw2) => {
+        const $ = (id) => document.getElementById(id);
+        const ld = $("leftDock"), bd = $("bottomDock"), snap = $("btnSnap"), cd = $("centerDock");
+        const snapLeft = bd.offsetLeft + snap.offsetLeft;
+        const ldRight = ld.offsetLeft + ld.offsetWidth;
+        const m = (cd.style.transform || "").match(/([\d.]+)px/); const cdX = m ? +m[1] : cd.offsetLeft;
+        return { vw: vw2, tier: (document.body.className.match(/dock-\w+/) || ["base"])[0],
+                 gapL: Math.round(cdX - ldRight), gapR: Math.round(snapLeft - (cdX + cd.offsetWidth)) };
+      }, vw));
+      await ctx.close();
+    }
+    const noOverlap = results.every((r2) => r2.gapL >= 4 && r2.gapR >= 4);
+    /* 무조건 가로 — pb_orient=off 여도 세로 뷰포트는 rot90 */
+    const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p2 = await ctx2.newPage();
+    await p2.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p2.evaluate(() => localStorage.setItem("pb_orient", "off"));
+    await p2.reload({ waitUntil: "domcontentloaded" });
+    await p2.waitForTimeout(250);
+    await p2.setInputFiles("#fileInput", fd);
+    await p2.waitForTimeout(1200);
+    const forced = await p2.evaluate(() => document.body.classList.contains("rot90"));
+    await p2.evaluate(() => localStorage.removeItem("pb_orient"));
+    await ctx2.close();
+    check("145. 도크 자동 맞춤(667~844 겹침 없음) · pb_orient=off 여도 무조건 가로 · dvh 마지막 · offset 좌표",
+      noOverlap && forced && dvhLast && noRect,
+      results.map((r2) => `${r2.vw}px:${r2.tier}(L${r2.gapL}/R${r2.gapR})`).join(" · ")
+      + ` · 강제가로=${forced} · dvh마지막=${dvhLast} · rect금지=${noRect}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)

@@ -86,7 +86,10 @@ body{
 button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
 input,textarea{font:inherit}
 
-.screen{display:none;flex-direction:column;height:100dvh;height:100vh}
+/* ⚠️ v1.93.0 — 폴백 순서 버그 수정 (원장님 신고 2026-08-29 「가로모드에서 아래 버튼 안 나옴」).
+   100dvh 를 **먼저**, 100vh 를 **나중에** 써서 항상 100vh 가 이겨 버렸습니다 — 브라우저 주소창이
+   있는 화면에서 화면이 실제보다 길어져 **아래 버튼 줄이 잘렸습니다.** dvh 가 마지막이어야 합니다. */
+.screen{display:none;flex-direction:column;height:100vh;height:100dvh}
 .screen.active{display:flex}
 
 /* ── Home ───────────────────────────────── */
@@ -402,6 +405,25 @@ body.land.compact #editor .favrow button i, body.land.compact #editor .favrow bu
   box-shadow:0 0 16px rgba(168,85,247,.5),0 1px 0 rgba(255,255,255,.18) inset}
 #btnSnap:active{filter:brightness(1.15)}
 #btnSnap .ailock{position:absolute;top:2px;right:4px;font-size:8px;line-height:1;text-decoration:none;opacity:.95}
+/* ⭐ v1.93.0 — **아래 도크 자동 맞춤** (원장님 지시 2026-08-29 「휴대폰 크기·화면·사양에 따라
+   자동조정 · 사진저장 행이 다 겹쳤다 · AI 자동정렬 다 겹침」).
+   fitDocks() 가 실제로 재 보고 좁으면 dock-tight → dock-min 순서로 줄입니다. ⛔ 고정 px 로 되돌리지 마세요. */
+body.dock-tight .menurow button{min-width:44px;padding:0 4px;font-size:8.5px}
+body.dock-tight #btnExport, body.dock-tight #btnChange, body.dock-tight #btnLock{min-width:50px !important}
+body.dock-tight .dgap{width:6px}
+body.dock-tight .barrow{min-width:114%}
+body.dock-tight #btnSnap{min-width:46px;padding:0 5px}
+body.dock-tight .modebtns button{padding:0 7px;font-size:9px}
+/* dock-min — 아주 좁은 폰: 아이콘만. 잠금·AI 는 글자를 남긴다 (제일 중요한 두 버튼) */
+body.dock-min .menurow button{min-width:36px;padding:0 3px}
+body.dock-min .menurow button em{display:none}
+body.dock-min #btnLock em{display:block;font-size:8px}
+body.dock-min #btnExport, body.dock-min #btnChange, body.dock-min #btnLock{min-width:40px !important}
+body.dock-min .dgap{width:4px}
+body.dock-min .barrow{min-width:104%}
+body.dock-min #btnSnap{min-width:38px;padding:0 4px}
+body.dock-min #btnSnap em[data-i18n]{display:none}   /* 「AI」만 남긴다 */
+body.dock-min .modebtns button{padding:0 5px;font-size:8.5px}
 #btnSnap .aihead{font-size:11.5px;font-weight:900;letter-spacing:.6px;line-height:1.1}
 #btnSnap em{display:block}
 .posctl.axis-h{flex-direction:row-reverse;width:100%;min-width:0;height:46px}
