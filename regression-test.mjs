@@ -3526,11 +3526,14 @@ console.log("\n[밸런스 판정]");
     const bounds = r151.lo === 0 && Math.abs(r151.mid - 0.228) < 1e-6
       && Math.abs(r151.soft - 0.380) < 1e-6 && Math.abs(r151.hard - 0.608) < 1e-6
       && r151.rise >= 0.10 && r151.rise <= 0.20 && r151.mult >= 1.2 && r151.mult <= 1.9;
-    const fb = r151.cases < 3 ? Math.abs(r151.caseF - r151.mid) < 1e-6 : true;  /* ③ 43 */
+    /* ③ 대체값은 **언제나 43** — 케이스가 몇 개든 중앙값으로 바뀌면 안 됩니다
+       (원장님 재확인 2026-08-29: 「판독 안될 경우 43도 괜찮아 보인다」).
+       케이스 4개의 중앙값은 47 이라, 되돌리면 못 읽은 사진이 미간 맨살에 섭니다. */
+    const fb = Math.abs(r151.caseF - r151.mid) < 1e-6 && r151.cases >= 4;
     check("151. 이너 판독 — 눈꺼풀 그늘을 따라가지 않고 드로잉이 시작하는 곳에 선다 (40~48 · 못 읽으면 43)",
       o151.ok && atInk && notShade && bounds && fb && r151.hasPhoto,
       `이너 ${o151.innerPx.toFixed(0)}px (드로잉 시작 ${o151.exp.inner.toFixed(0)} 에 섬=${atInk} · 그늘 끝까지 안 감=${notShade}) · `
-      + `경계 40/43/45/48=${bounds} (rise ${r151.rise} · mult ${r151.mult}) · 못읽으면 43=${fb} · 케이스 ${r151.cases}개(사진 미저장=${r151.hasPhoto})`);
+      + `경계 40/43/45/48=${bounds} (rise ${r151.rise} · mult ${r151.mult}) · 못읽으면 항상 43=${fb} · 케이스 ${r151.cases}개(사진 미저장=${r151.hasPhoto})`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
