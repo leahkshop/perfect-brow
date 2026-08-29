@@ -2281,6 +2281,10 @@ console.log("\n[밸런스 판정]");
       S.landmarks = lm;
       S.p = tr || { zoom: 1, rot: 0, ox: 0, oy: 0 };
       S.g = { ...window.PB.DEFAULT_GUIDE };
+      /* v2.1.3 — 앞머리 하한(눈 위 7 눈금)은 **눈 위치(h1)** 를 기준으로 잽니다.
+         합성 랜드마크의 눈은 이미지 y=250 — h1 을 거기에 맞춰야 눈금이 실제 얼굴처럼
+         잽니다 (안 맞추면 눈썹이 4.9 눈금으로 보여 하한에 걸립니다). */
+      if (lm) S.g.h1 = window.PB.imgToCanvas(0, 250, S.p).y / S.dim.H;
       S.refSide = "L";
       window.PB.render();
       /* 사진을 확대·이동해도 같은 자리에 붙어야 한다 — 기대값을 지금 변환으로 환산한다 */
@@ -3800,6 +3804,44 @@ console.log("\n[밸런스 판정]");
     check("157. 쌍꺼풀·주름 쉐도우 방어 — 두꺼운 쉐도우가 있어도 넘버링(7~16)이 눈썹을 고른다",
       atBrow && notShadow,
       `앞머리 ${r.fy} (눈썹 아랫선 ${r.expBrow.toFixed(0)} 에 섬=${atBrow} · 쉐도우 ${r.shadow.toFixed(0)} 아님=${notShadow} · 눈 위 ${r.tBrow === null ? "?" : r.tBrow.toFixed(1)} 눈금)`);
+  }
+
+  /* 158. ⭐⭐⭐ v2.1.3 — **앞머리 하한은 절대 규칙** (원장님 지시 2026-08-29:
+       「어느 넘버 이하는 앞머리로 측정하지 않는다가 있어야 한다. 판독이 애매한 경우에도
+         말도 안 되는 위치에 있으면 안 된다」 — 실제 폰에서 앞머리가 눈꺼풀에 내려앉음)
+     ① 어떤 경로로 왔든 최종 앞머리가 눈 위 7 눈금 미만이면 → 보통값(11.7)으로 대체
+     ② 7 눈금 이상이면 그대로 둔다 (확대 사진의 16 초과도 허용 — 회귀 120 의 모양 C)
+     ⛔ frontFloor() 호출을 빼거나 하한을 0 으로 내리면 이 검사가 잡습니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, H = S.dim.H, W = S.dim.W;
+      S.landmarks = null;
+      S.g.h1 = 0.60;
+      S.innerAnchor = (9 * 13.15) / W;                 /* 1 눈금 = 9px */
+      const u = 9;
+      /* ① 눈꺼풀 자리(3 눈금)에 선 앞머리 → 11.7 로 대체돼야 한다 */
+      S.g.front = S.g.h1 - (3 * u) / H;
+      const fixed = PBx.frontFloor();
+      const t1 = ((S.g.h1 - S.g.front) * H) / u;
+      /* ② 정상 자리(10 눈금) → 그대로 */
+      S.g.front = S.g.h1 - (10 * u) / H;
+      const kept = !PBx.frontFloor();
+      const t2 = ((S.g.h1 - S.g.front) * H) / u;
+      /* ③ 확대 사진(18 눈금) → 그대로 (상한 집행 없음) */
+      S.g.front = S.g.h1 - (18 * u) / H;
+      const zoomKept = !PBx.frontFloor();
+      return { fixed, t1, kept, t2, zoomKept, mid: PBx.FRONT_T_MID, lo: PBx.FRONT_T_LO };
+    });
+    await ctx.close();
+    check("158. 앞머리 하한 — 눈 위 7 눈금 미만은 앞머리가 아니다 (보통값 11.7 로 대체)",
+      r.fixed && Math.abs(r.t1 - r.mid) < 0.2 && r.kept && Math.abs(r.t2 - 10) < 0.2 && r.zoomKept && r.lo === 7,
+      `3눈금→대체=${r.fixed}(→${r.t1.toFixed(1)}눈금, 기대 ${r.mid}) · 10눈금 유지=${r.kept}(${r.t2.toFixed(1)}) · 18눈금 유지=${r.zoomKept} · 하한 ${r.lo}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)

@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.1.2";
+const APP_VERSION = "v2.1.3";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3262,15 +3262,37 @@ function frontDecide(img) {
     const u0 = frontTickPx();
     let pick = null;
     if (u0) {
+      /* ⭐ v2.1.3 — **하한은 절대 규칙입니다** (원장님 지시 2026-08-29:
+         「어느 넘버 이하는 앞머리로 측정하지 않는다가 있어야 한다. 판독이 애매한 경우에도
+           말도 안 되는 위치에 있으면 안 된다」)
+         예전에는 범위 안에 후보가 없으면 낮은 후보(눈꺼풀·속눈썹)라도 썼습니다 — 그 구멍으로
+         원장님 폰에서 앞머리가 눈꺼풀에 내려앉았습니다. 이제 **7 눈금 미만은 후보 자격이
+         없습니다.** 범위 안에 아무것도 없으면 이 열은 포기합니다 (→ 대체값 경로). */
       const eyePx = S.g.h1 * H;
       for (const y of cands) { const t = (eyePx - y) / u0; if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = y; break; } }
-      if (pick === null) { for (const y of cands) { if ((eyePx - y) / u0 <= FRONT_T_HI) { pick = y; break; } } }
     } else pick = cands.length ? cands[0] : null;
     if (pick !== null) ys.push(pick);
   }
   if (ys.length < 3) return null;
   ys.sort((a, b) => a - b);
   return ys[Math.floor(ys.length / 2)];
+}
+
+/* ⭐⭐ v2.1.3 — **최종 하한 집행** — 어떤 경로로 왔든(판독·밴드·이전 값) 앞머리가
+   눈 위 FRONT_T_LO(7) 눈금 미만이면 그것은 앞머리가 아닙니다 → 보통값(11.7)으로 대체.
+   원장님: 「판독이 애매한 경우에도 말도 안 되는 위치에 있으면 안 된다」
+   ⚠️ 상한(16)은 집행하지 않습니다 — 크게 확대한 사진(회귀 120 의 모양 C)에서는 눈썹이
+      정당하게 16 눈금을 넘습니다. 위쪽 오독은 후보 선택(≤16)이 이미 막습니다. */
+function frontFloor() {
+  const u = frontTickPx();
+  if (!u) return false;
+  const H = S.dim.H;
+  const t = ((S.g.h1 - S.g.front) * H) / u;
+  if (t < FRONT_T_LO) {
+    setLine("front", clamp(S.g.h1 - (FRONT_T_MID * u) / H, 0.02, 0.98));
+    return true;
+  }
+  return false;
 }
 
 /* ⭐⭐⭐ v2.0.0 — **세로선 눈금은 얼굴에 붙은 자로 읽습니다** (원장님 지시 2026-08-29)
@@ -3722,15 +3744,9 @@ function autoFromDrawing() {
   {
     const fy = frontDecide(img);
     if (fy !== null) setY("front", fy);
-    else {
-      /* 판독 실패 — 밴드 값이 넘버링 범위(눈 위 7~16 눈금) 밖이면 눈꺼풀·이마를 읽은 것.
-         원장님 룰대로 **넘버링 중앙(11.7)** 으로 대체합니다. 범위 안이면 밴드 값을 믿습니다. */
-      const u = frontTickPx();
-      if (u) {
-        const t = (S.g.h1 - S.g.front) * H / u;          // 지금 앞머리가 눈 위 몇 눈금인가
-        if (t < FRONT_T_LO || t > FRONT_T_HI) setY("front", S.g.h1 * H - FRONT_T_MID * u);
-      }
-    }
+    /* 어떤 경로로 왔든 마지막에 **하한 집행** — 눈 위 7 눈금 미만이면 앞머리가 아니다.
+       (상한 대체는 뺐습니다 — 크게 확대한 사진에서는 눈썹이 정당하게 16 을 넘습니다.) */
+    frontFloor();
   }
   setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
@@ -5009,4 +5025,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
-  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor };   /* v1.97.0 — 예비 동공 정렬 검사용 */
