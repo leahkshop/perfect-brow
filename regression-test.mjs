@@ -3732,6 +3732,36 @@ console.log("\n[밸런스 판정]");
       `앞머리 ${r.fy} (눈썹 아랫선 ${r.expFront.toFixed(0)} 에 섬=${atBrow} · 주름 ${r.crease.toFixed(0)} 아님=${notCrease} · 화장 ${r.shadow.toFixed(0)} 아님=${notShadow})`);
   }
 
+  /* 156. ⭐⭐ v2.1.1 — **앞머리 넘버링 대체값** (원장님 지시 2026-08-29 폰 스크린샷:
+       「빨간 선은 눈으로부터 올라와 대체값이 필요할 때 사용할 넘버링, 파란색이 옳바른」)
+     ① 판독 없는 시작 배치: 앞머리 = **눈 위 11.7 눈금** (동공 비율 0.78 짐작 폐지)
+     ② 눈금 1칸 = 이너 자(내안각→센터)의 1/13.15 — 이너와 **같은 자** */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1000);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H;
+      const cx = 0.53, cy = 0.56, half = 0.22;
+      S.landmarks = null;
+      PBx.placeLinesFromEyes ? PBx.placeLinesFromEyes(cx, cy, half) : null;
+      const aspect = W / H;
+      const unitN = (half * 0.52) / 13.15;                       /* R_INNER = 0.52 */
+      const exp = cy - PBx.FRONT_T_MID * unitN * aspect;
+      const ticks = (cy - S.g.front) / (unitN * aspect);
+      return { front: S.g.front, exp, ticks, mid: PBx.FRONT_T_MID,
+               lo: PBx.FRONT_T_LO, hi: PBx.FRONT_T_HI, hasFn: !!PBx.frontTickPx };
+    });
+    await ctx.close();
+    const ok = Math.abs(r.front - r.exp) < 0.005 && Math.abs(r.ticks - r.mid) < 0.2
+      && r.mid > 9 && r.mid < 14 && r.lo === 7 && r.hi === 16 && r.hasFn;
+    check("156. 앞머리 넘버링 — 판독 없는 배치는 눈 위 11.7 눈금 (이너와 같은 자 · 범위 7~16 잠금)",
+      ok, `front ${r.front.toFixed(4)} (기대 ${r.exp.toFixed(4)}) · 눈 위 ${r.ticks.toFixed(1)} 눈금(기대 ${r.mid}) · 경계 ${r.lo}/${r.hi}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

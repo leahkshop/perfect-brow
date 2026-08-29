@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.1.0";
+const APP_VERSION = "v2.1.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2182,7 +2182,9 @@ function placeLinesFromEyes(cx, cy, half) {
   const up = (f) => clamp(cy - half * f * aspect, 0.02, 0.98);
   g.h2 = up(0.92);              // 눈썹 산 (Arch)
   g.archThickness = up(0.66);
-  g.front = up(0.78);           // 눈썹 앞머리
+  /* v2.1.1 — 앞머리는 동공 비율(0.78) 짐작이 아니라 **넘버링**으로 (위 FRONT_T_MID 주석):
+     눈 위로 11.7 눈금. 1 눈금 = (내안각 반간격)/13.15 — 이너 자와 같은 자입니다. */
+  g.front = clamp(cy - FRONT_T_MID * ((half * R_INNER) / 13.15) * aspect, 0.02, 0.98);
   g.frontThickness = up(0.55);
   g.h3 = up(0.72);              // 눈썹 꼬리 (Tail)
   g.innerAngle = clamp(cy + half * 1.45 * aspect, 0.05, 0.95); // 코끝 부근
@@ -3181,6 +3183,22 @@ const FRONT_DARK_MIN = 25;    // 이 대비도 없으면 검은 것이 없는 �
 const FRONT_WIN = 9;          // 두께 창 (px)
 const FRONT_HIT = 7;          // 창 안에서 이만큼 어두워야 눈썹 (얇은 선 방어)
 const FRONT_SKIN = 5;         // 검은 것 **바로 앞에 피부가 이만큼 이어져야** 인정
+/* ⭐ v2.1.1 — **앞머리 넘버링 (대체값)** — 원장님 지시 2026-08-29 (폰 스크린샷의 빨간 선):
+   「빨간 선은 눈으로부터 올라와 **대체값이 필요할 때 사용할 넘버링**, 파란색이 옳바른 (자리)」
+   이너의 43 과 같은 구조를 **세로**로 만듭니다. 자는 같은 자 — 「내안각→센터」의 1/13.15
+   가 1 눈금이고, **눈(동공 높이)에서 위로** 몇 눈금인지로 앞머리를 셉니다.
+   확정 케이스 5장 실측: 9.4 · 11.4 · 11.7 · 11.7 · 13.5 → **중앙값 11.7 눈금**.
+     · 판독이 아예 없는 시작 배치(placeLinesFromEyes)는 이 넘버링으로 놓는다
+     · 판독(밴드)이 있어도 이 범위(7~16)를 벗어나면 눈꺼풀·이마를 읽은 것 → 11.7 로 대체
+   ⛔ 동공 간격 비율(up 0.78)로 되돌리지 마세요 — 얼굴마다 흔들리던 바로 그 짐작입니다. */
+const FRONT_T_MID = 11.7;     // 눈 위 눈금 — 대체값 (확정 케이스 중앙값)
+const FRONT_T_LO = 7;         // 이보다 가까우면 눈꺼풀을 읽은 것
+const FRONT_T_HI = 16;        // 이보다 멀면 이마·머리카락을 읽은 것
+/* 눈금 1칸의 세로 px = (내안각→센터 px)/13.15. anchor 는 화면 폭 비율이므로 ×W */
+function frontTickPx() {
+  const a = innerAnchor();
+  return a ? (a * S.dim.W) / 13.15 : null;
+}
 function frontDecide(img) {
   const { W, H } = S.dim;
   if (!img || !W || !H) return null;
@@ -3676,7 +3694,19 @@ function autoFromDrawing() {
   /* ⭐ v2.1.0 — 앞머리 = 눈 위에서 올라가 처음 만나는 「두꺼운 검은 것」 (위 frontDecide).
      이너(v2)가 정해진 다음에 불러야 합니다 — 훑는 열이 이너 자리이기 때문입니다.
      실패하면 기존 밴드 판독 값이 그대로 남습니다. */
-  { const fy = frontDecide(img); if (fy !== null) setY("front", fy); }
+  {
+    const fy = frontDecide(img);
+    if (fy !== null) setY("front", fy);
+    else {
+      /* 판독 실패 — 밴드 값이 넘버링 범위(눈 위 7~16 눈금) 밖이면 눈꺼풀·이마를 읽은 것.
+         원장님 룰대로 **넘버링 중앙(11.7)** 으로 대체합니다. 범위 안이면 밴드 값을 믿습니다. */
+      const u = frontTickPx();
+      if (u) {
+        const t = (S.g.h1 - S.g.front) * H / u;          // 지금 앞머리가 눈 위 몇 눈금인가
+        if (t < FRONT_T_LO || t > FRONT_T_HI) setY("front", S.g.h1 * H - FRONT_T_MID * u);
+      }
+    }
+  }
   setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
      그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
@@ -4942,6 +4972,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   /* v1.94.0 — 고유색이 LOOK_DEF 를 따라가도록 참조로 연결 (기본값이 바뀌어도 안 어긋나게) */
   LINE_COLORS: { eye: "#3A3F4A", arch: LOOK_DEF.arch, tail: LOOK_DEF.tail, inner: LOOK_DEF.inner, innerDim: "#C9D1D6", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
+  placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
   applyLayout, openPicker, endPicking, setLang,
@@ -4952,4 +4983,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
-  frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
+  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx };   /* v1.97.0 — 예비 동공 정렬 검사용 */
