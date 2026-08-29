@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v94";  /* v1.93.0 — 아래 도크 자동 맞춤(기기 폭별) · 무조건 가로 · dvh 폴백/rot90 잠금 위치 버그 수정 */
+const VERSION = "pb-v95";  /* v1.94.0 — 원장님 선 설정을 초기 셋팅(LOOK_DEF)으로 저장 (2026-08-29 확정) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

@@ -2495,15 +2495,16 @@ console.log("\n[밸런스 판정]");
     });
     await ctx.close();
     /* v1.81.0 — 세로선 색이 분리됐습니다: 이너 = 민트 · **아우터 = 먹색**(원장님 지시 2026-08-27) */
-    const offAll = o132.off.front === "#5EEAD4" && o132.off.arch === "#2E8BFF"
-      && o132.off.tail === "#A855F7" && o132.off.inner === "#5EEAD4" && o132.off.outer === "#14161B";
+    /* v1.94.0 — 원장님 재확정 기본색 (2026-08-29): 이너 묶음 라임 · 아치 민트 · 꼬리 파랑 */
+    const offAll = o132.off.front === "#A3E635" && o132.off.arch === "#5EEAD4"
+      && o132.off.tail === "#2E8BFF" && o132.off.inner === "#5EEAD4" && o132.off.outer === "#14161B";
     const offNoBlink = o132.off.blink === 0;
     /* 조용한 선은 **얇은 회색**이라 굵은 토막 검색에서는 아예 안 잡힙니다 (null) — 둘 다 조용으로 봅니다 */
     const quiet = (c) => c === null || c === "#14161B";
-    const onFlow = o132.on.front === "#5EEAD4" && quiet(o132.on.arch) && quiet(o132.on.tail);
+    const onFlow = o132.on.front === "#A3E635" && quiet(o132.on.arch) && quiet(o132.on.tail);
     const onBlink = o132.on.blink > 0;
     const grabOne = o132.drag.front === o132.grabCore
-      && o132.drag.arch === "#2E8BFF" && o132.drag.tail === "#A855F7";
+      && o132.drag.arch === "#5EEAD4" && o132.drag.tail === "#2E8BFF";
     check("132. 가이드 OFF=전부 고유색 · ON=한 줄씩 플로우 · 잡은 선만 잡은 색",
       offAll && offNoBlink && onFlow && onBlink && grabOne,
       `끔: 앞머리 ${o132.off.front}/아치 ${o132.off.arch}/꼬리 ${o132.off.tail}/이너 ${o132.off.inner}/아우터 ${o132.off.outer} 깜빡임 ${o132.off.blink} · `
@@ -2597,11 +2598,12 @@ console.log("\n[밸런스 판정]");
       return { plain, picked, settled, other, grabCore: S.look.dragCore };
     });
     await ctx.close();
+    /* v1.94.0 — 원장님 재확정 기본색: 앞머리(이너 묶음) 라임 · 아치 민트 · 꼬리 파랑 */
     const introOk = intro.on === true && intro.cur === null && intro.blink1 > 4
-      && intro.arch === "#2E8BFF" && intro.tail === "#A855F7" && intro.front === "#5EEAD4";
+      && intro.arch === "#5EEAD4" && intro.tail === "#2E8BFF" && intro.front === "#A3E635";
     const startedOk = after.on === false && after.cur === after.first && after.sel === after.first;
     const pickOk = marks.picked.w > marks.plain.w * 1.15 && marks.picked.o > marks.plain.o + 0.15;
-    const settleOk = marks.settled.c === marks.grabCore && marks.other.c === "#2E8BFF";
+    const settleOk = marks.settled.c === marks.grabCore && marks.other.c === "#5EEAD4";
     check("134. 전체라인 인사 1회 깜빡임 · 선택하면 굵고 밝게 · 움직인 선은 잡은 선 색으로 남음",
       introOk && startedOk && pickOk && settleOk,
       `인사: 켜짐=${intro.on} 차례없음=${intro.cur === null} blink1 ${intro.blink1}개 색 ${intro.front}/${intro.arch}/${intro.tail} · `
@@ -2984,6 +2986,10 @@ console.log("\n[밸런스 판정]");
     const r = await p.evaluate(() => {
       const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H, g = S.g;
       S.intro = false;
+      /* v1.94.0 — 기본 가로 길이가 8%로 짧아져 자 시작점이 세로선에 붙습니다.
+         이 테스트는 **잡는 범위**를 재는 것이므로 중립 길이(0.19)로 고정합니다. */
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };
+      PBx.render();
       const hit = (x, y) => { const h = PBx.hitTest(x, y); return h ? h.key || h.type : null; };
       /* 교차점 좌표: 아치선 x 에서 아치엣지·아치두께 높이 */
       const vx = g.v6 * W;
@@ -3477,8 +3483,8 @@ console.log("\n[밸런스 판정]");
     check("102. 이너 묶음 — 조용=얇은 회색 · 강조=민트 한 줄 · 선 색 = 레일 띠 색",
       d.dimFront && d.dimFront.c === "#14161B"        /* v1.55.0 — 조용한 자도 회색 한 줄 */
         && d.dimInner && d.dimInner.c === "#14161B"   /* v1.52.0 — 조용한 세로선은 전체 회색 */
-        && d.litFront && d.litFront.c === "#5EEAD4" && d.litFront.op >= 0.99
-        && d.litInner && d.litInner.c === "#5EEAD4"
+        && d.litFront && d.litFront.c === "#A3E635" && d.litFront.op >= 0.99   /* v1.94.0 — 이너 묶음 = 라임 */
+        && d.litInner && d.litInner.c === "#5EEAD4"                             /* 세로 이너는 민트 그대로 */
         && d.litFront.w > d.dimFront.w + 1          /* 강조는 실제로 굵어져야 한다 */
         && d.dimTail && d.dimTail.c === "#14161B"   /* v1.55.0 — 조용한 꼬리 자도 회색 */
         && d.dotMatches,                            /* 선 색 = 레일 버튼 띠 색 */
@@ -3581,7 +3587,9 @@ console.log("\n[밸런스 판정]");
       S.sel = "h3"; PBx.render();
       const litTail = seg("h3");
       return { dimArch, dimTail, dimOuter, litArch, litTail,
-               nativeKept: spec("h2").color === "#2E8BFF" && spec("h3").color === "#A855F7" };
+               /* v1.94.0 — 원장님 재확정: 아치 민트 · 꼬리 파랑. 고유색은 이제 LOOK_DEF(설정)가
+                  기준이고 spec.color 는 설정이 없을 때의 안전망일 뿐이라 **LOOK_DEF 를** 봅니다. */
+               nativeKept: PBx.LOOK_DEF.arch === "#5EEAD4" && PBx.LOOK_DEF.tail === "#2E8BFF" };
     });
     await ctx.close();
 
@@ -3599,8 +3607,8 @@ console.log("\n[밸런스 판정]");
         && g104.dimArch && g104.dimArch.c === "#14161B"
         && g104.dimTail && g104.dimTail.c === "#14161B"
         && g104.dimOuter && g104.dimOuter.c === "#14161B"   /* v1.52.0 — 조용한 세로선은 회색 */
-        && g104.litArch && g104.litArch.c === "#2E8BFF"
-        && g104.litTail && g104.litTail.c === "#A855F7",
+        && g104.litArch && g104.litArch.c === "#5EEAD4"
+        && g104.litTail && g104.litTail.c === "#2E8BFF",
       `연한 아치 ${g104.dimArch && g104.dimArch.c}@${g104.dimArch && g104.dimArch.op} · 연한 꼬리 ${g104.dimTail && g104.dimTail.c} · `
       + `연한 아우터 ${g104.dimOuter && g104.dimOuter.c} · 강조 아치 ${g104.litArch && g104.litArch.c} · 강조 꼬리 ${g104.litTail && g104.litTail.c}`);
   }
@@ -3709,7 +3717,7 @@ console.log("\n[밸런스 판정]");
       const hQuietAllGrey = quietH.length > 0 && quietH.every((l) => l.c === GREY && l.w <= 1.2);
       S.sel = "front"; PBx.render();
       const litH = hsOf().filter((l) => l.w > 1.2);
-      const hLitOneColor = litH.length === 1 && litH[0].c === "#5EEAD4";
+      const hLitOneColor = litH.length === 1 && litH[0].c === "#A3E635";   /* v1.94.0 — 이너 묶음 = 라임 */
       S.sel = "h1"; PBx.render();
       const colorSeg = hLitOneColor, greySeg = hQuietAllGrey, overshoot = 0.5;
       /* ② 세로선 — 조용할 땐 **전체가 회색 한 줄**(색 토막 없음), 잡으면 전체 고유색 (v1.52.0) */
@@ -3968,7 +3976,7 @@ console.log("\n[밸런스 판정]");
     await ctx.close();
     check("109. 설정 — 색상표 8색 · 세로선 목록 · 굵기/테두리/잡은선 굵기 슬라이더 · 테두리 4종 · 선택 강조",
       r.palOk
-        && r.baseC === "#5EEAD4" && r.baseRail === "#5EEAD4"
+        && r.baseC === "#A3E635" && r.baseRail === "#A3E635"   /* v1.94.0 — 이너 묶음 기본 = 라임 */
         && r.changedC === "#FF4D94" && r.changedRail === "#FF4D94"
         && r.edgeThicker && r.edgeLightPair[0] === "#14161B" && r.edgeDarkPair[0] === "#FFFFFF"
         && r.autoLight === "#14161B" && r.autoDark === "#FFFFFF"
@@ -4071,11 +4079,14 @@ console.log("\n[밸런스 판정]");
        + 테두리 색 목록을 「없음·흰색·검정·먹색」으로 정하셔서 기본이 `auto` → `none` 이 됐습니다.
        ⛔ 나머지 값(얇게 0.8 · 짧게 0.14 · 75% · 잡은 선)은 v1.60.0 그대로입니다 — 바꾸려면
           원장님 확인을 먼저 받으세요. 이 테스트를 고쳐서 통과시키지 마세요. */
+    /* ⚠️ v1.94.0 갱신 — 원장님 지시 2026-08-29 「지금 선 설정을 초기 셋팅으로 저장」
+       (스크린샷 픽셀 판독): 이너 라임 · 아치 민트 · 꼬리 파랑 · 굵기 0.75 · 길이 0.04(8%)
+       · 투명도 55% · 잡은 선 = 흰색 심 · 없음 · 85% · 65%. 세로선·테두리는 v1.81.0 그대로. */
     const LOCKED = {
-      inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
+      inner: "#A3E635", arch: "#5EEAD4", tail: "#2E8BFF",
       vInner: "#5EEAD4", vArch: "#14161B", vTail: "#14161B",
-      edge: 0, edgeC: "none", weight: 0.8, hlen: 0.14, alpha: 0.75,
-      dragCore: "#14161B", dragEdge: "none", dragW: 0.8, dragOp: 0.95,
+      edge: 0, edgeC: "none", weight: 0.75, hlen: 0.04, alpha: 0.55,
+      dragCore: "#FFFFFF", dragEdge: "none", dragW: 0.85, dragOp: 0.65,
     };
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -4095,7 +4106,7 @@ console.log("\n[밸런스 판정]");
       return { same, extra, freshSame, keepsGeom, got: D };
     }, LOCKED);
     await ctx.close();
-    check("112. 원장님 확정 기본 세팅 — 얇게·짧게·75% · 테두리 없음 · 세로선 이너 민트/아치선·아우터 먹색",
+    check("112. 원장님 확정 기본 세팅(2026-08-29) — 라임·민트·파랑 · 0.75/8%/55% · 잡은 선 흰색 85%/65%",
       r.same && r.extra.length === 0 && r.freshSame && r.keepsGeom,
       `LOOK_DEF 일치=${r.same} · 예상 밖 항목 [${r.extra}] · 새 기기 시작값 일치=${r.freshSame} · 추천조합이 굵기/길이/투명도 안 건드림=${r.keepsGeom} · `
       + `굵기 ${r.got.weight} 길이 ${r.got.hlen} 투명도 ${r.got.alpha} 테두리 ${r.got.edge}/${r.got.edgeC} · 잡은선 ${r.got.dragCore}/${r.got.dragEdge}/${r.got.dragW}/${r.got.dragOp}`);

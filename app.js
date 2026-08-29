@@ -363,7 +363,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.93.0";
+const APP_VERSION = "v1.94.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -596,6 +596,8 @@ const V_PALETTE = [
 const LOOK_KEY = "pb_look_v1";
 /* ⚠️⚠️ v1.60.0 — **원장님이 실제 앱에서 맞춰 확정한 기본값** (2026-08-23 · 스크린샷 픽셀 판독)
    「지금 내가 앱에 설정한 선을 기본으로 셋팅하고 못 박아줘」
+   ▶ v1.94.0 (2026-08-29) 에서 원장님이 **다시 확정**했습니다 — 아래 값 설명은 그날 기준
+     역사 기록이고, 현재 값은 LOOK_DEF 바로 위 v1.94.0 주석이 기준입니다.
 
    이 값은 취향이 아니라 **시술 현장에서 눈으로 맞춘 결과**입니다. 임의로 바꾸지 마세요:
    · 선 굵기 얇게(0.8) · 가로 길이 짧게(0.14) · 투명도 75%
@@ -613,10 +615,17 @@ const LOOK_KEY = "pb_look_v1";
      「가이드가 꺼진상태에서 이너라인은 제외한 세로색상은 기본적으로 먹색을 유지」
    · 테두리 색은 **없음 / 흰색 / 검정 / 먹색** 네 가지 (「자동」 폐지 — 원장님이 목록을 지정하셨습니다)
    · 선 굵기·테두리 굵기는 **슬라이더**라 값이 연속입니다 (3단 세그먼트 폐지) */
-const LOOK_DEF = { inner: "#5EEAD4", arch: "#2E8BFF", tail: "#A855F7",
+/* ⚠️⚠️ v1.94.0 — **원장님이 다시 확정한 기본값** (2026-08-29 · 스크린샷 픽셀 판독)
+   「지금 선 설정을 초기 셋팅으로 저장」
+   · 기본 선 색: 이너 = **라임** · 아치 = **민트** · 꼬리 = **파랑** (한 자리씩 이동)
+   · 세로선: 이너 민트 · 아치선/아우터 먹색 (v1.81.0 그대로)
+   · 굵기 0.75 · 가로 길이 0.04(슬라이더 8%) · 투명도 55% — 더 얇고 짧고 연하게
+   · 잡은 선 = **흰색 심** · 테두리 없음 · 굵기 85% · 투명도 65%
+   ⛔ 값을 바꾸려면 원장님 확인을 먼저 받으세요. 회귀 112 가 이 값을 통째로 잠급니다. */
+const LOOK_DEF = { inner: "#A3E635", arch: "#5EEAD4", tail: "#2E8BFF",
                    vInner: "#5EEAD4", vArch: "#14161B", vTail: "#14161B",
-                   edge: 0, edgeC: "none", weight: 0.8, hlen: 0.14, alpha: 0.75,
-                   dragCore: "#14161B", dragEdge: "none", dragW: 0.8, dragOp: 0.95 };
+                   edge: 0, edgeC: "none", weight: 0.75, hlen: 0.04, alpha: 0.55,
+                   dragCore: "#FFFFFF", dragEdge: "none", dragW: 0.85, dragOp: 0.65 };
 /* 맨 위 3개 조합 — 첫 칸은 늘 「현재 세트」(지금 값), 나머지 둘은 상황별 추천 */
 const LOOK_COMBOS = [
   { id: "now",    name: "set_c_now",    desc: "set_c_now_d" },
@@ -4260,7 +4269,8 @@ if ("serviceWorker" in navigator) {
 { const el = document.getElementById("verTag"); if (el) el.textContent = "Perfect Brow " + APP_VERSION; }
 
 window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
-  LINE_COLORS: { eye: "#3A3F4A", arch: "#2E8BFF", tail: "#A855F7", inner: "#5EEAD4", innerDim: "#C9D1D6", neutral: "#14161B" },
+  /* v1.94.0 — 고유색이 LOOK_DEF 를 따라가도록 참조로 연결 (기본값이 바뀌어도 안 어긋나게) */
+  LINE_COLORS: { eye: "#3A3F4A", arch: LOOK_DEF.arch, tail: LOOK_DEF.tail, inner: LOOK_DEF.inner, innerDim: "#C9D1D6", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
