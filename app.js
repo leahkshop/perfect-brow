@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.1.3";
+const APP_VERSION = "v2.2.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3242,11 +3242,15 @@ function frontDecide(img) {
         for (let j = 0; j < FRONT_WIN; j++) if (dark[i + j]) hit++;
         if (hit >= FRONT_HIT) {
           let i0 = i; while (i0 < i + FRONT_WIN && !dark[i0]) i0++;   // 창 안 첫 어두운 줄
-          cands.push(yB - i0);                                        // 후보 (아래→위 순서)
+          /* ⭐ v2.2.0 — 이 덩어리의 **윗끝**도 같이 잰다 (원장님 지시: 「앞머리에서 더 올라가
+             검은색이 끝나는 지점 = 눈썹 윗선 = 앞두께」). 한 줄 끊김은 넘어간다. */
+          let j = i0, last = i0;
+          while (j + 1 < dark.length && (dark[j + 1] || dark[j + 2])) { j++; if (dark[j]) last = j; }
+          cands.push({ y: yB - i0, top: yB - last });                 // 후보 (아래→위 순서)
           /* 이 덩어리를 지나쳐 계속 — 위에 진짜 눈썹이 또 있는지 본다 */
           while (i + FRONT_WIN <= dark.length) {
             let h2 = 0;
-            for (let j = 0; j < FRONT_WIN; j++) if (dark[i + j]) h2++;
+            for (let j2 = 0; j2 < FRONT_WIN; j2++) if (dark[i + j2]) h2++;
             if (h2 < 2) break;
             i++;
           }
@@ -3269,13 +3273,15 @@ function frontDecide(img) {
          원장님 폰에서 앞머리가 눈꺼풀에 내려앉았습니다. 이제 **7 눈금 미만은 후보 자격이
          없습니다.** 범위 안에 아무것도 없으면 이 열은 포기합니다 (→ 대체값 경로). */
       const eyePx = S.g.h1 * H;
-      for (const y of cands) { const t = (eyePx - y) / u0; if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = y; break; } }
+      for (const c of cands) { const t = (eyePx - c.y) / u0; if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = c; break; } }
     } else pick = cands.length ? cands[0] : null;
     if (pick !== null) ys.push(pick);
   }
   if (ys.length < 3) return null;
-  ys.sort((a, b) => a - b);
-  return ys[Math.floor(ys.length / 2)];
+  /* 앞머리 = 아랫끝들의 중앙값 · 앞두께 = 윗끝들의 중앙값 */
+  const bots = ys.map((c) => c.y).sort((a, b) => a - b);
+  const tops = ys.map((c) => c.top).sort((a, b) => a - b);
+  return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)] };
 }
 
 /* ⭐⭐ v2.1.3 — **최종 하한 집행** — 어떤 경로로 왔든(판독·밴드·이전 값) 앞머리가
@@ -3283,6 +3289,24 @@ function frontDecide(img) {
    원장님: 「판독이 애매한 경우에도 말도 안 되는 위치에 있으면 안 된다」
    ⚠️ 상한(16)은 집행하지 않습니다 — 크게 확대한 사진(회귀 120 의 모양 C)에서는 눈썹이
       정당하게 16 눈금을 넘습니다. 위쪽 오독은 후보 선택(≤16)이 이미 막습니다. */
+/* ⭐ v2.2.0 — **앞두께 넘버링** (원장님 승인 2026-08-29: 「진행」)
+   앞두께 = 앞머리에서 위로 몇 눈금(두께)인가. 케이스 실측으로 확정한 범위:
+   두께가 이 범위를 벗어나면 파우더 번짐·이마 그늘을 읽은 것 → 보통값으로 대체. */
+const FT_T_MID = 4.7;   // 앞머리 위 눈금 — 보통 두께 (실측 4.8·4.6·3.4·4.9 의 중앙값)
+const FT_T_MIN = 2;     // 이보다 얇으면 잘못 읽은 것
+const FT_T_MAX = 8;     // 이보다 두꺼우면 번짐·그늘까지 읽은 것
+function ftGuard() {
+  const u = frontTickPx();
+  if (!u) return false;
+  const H = S.dim.H;
+  const th = ((S.g.front - S.g.frontThickness) * H) / u;   // 앞두께가 앞머리 위 몇 눈금인가
+  if (th < FT_T_MIN || th > FT_T_MAX) {
+    setLine("frontThickness", clamp(S.g.front - (FT_T_MID * u) / H, 0.02, 0.98));
+    return true;
+  }
+  return false;
+}
+
 function frontFloor() {
   const u = frontTickPx();
   if (!u) return false;
@@ -3742,11 +3766,17 @@ function autoFromDrawing() {
      이너(v2)가 정해진 다음에 불러야 합니다 — 훑는 열이 이너 자리이기 때문입니다.
      실패하면 기존 밴드 판독 값이 그대로 남습니다. */
   {
-    const fy = frontDecide(img);
-    if (fy !== null) setY("front", fy);
+    const fd = frontDecide(img);
+    if (fd) {
+      setY("front", fd.y);
+      /* ⭐ v2.2.0 — 같은 열의 윗끝 = **앞두께** (검은색이 끝나는 지점 · 눈썹 윗선) */
+      if (fd.top !== null && fd.top < fd.y) setY("frontThickness", fd.top);
+    }
     /* 어떤 경로로 왔든 마지막에 **하한 집행** — 눈 위 7 눈금 미만이면 앞머리가 아니다.
        (상한 대체는 뺐습니다 — 크게 확대한 사진에서는 눈썹이 정당하게 16 을 넘습니다.) */
     frontFloor();
+    /* 앞두께도 상식 검사 — 두께가 2~8 눈금 밖이면 보통값(4.7)으로 */
+    ftGuard();
   }
   setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
@@ -5025,4 +5055,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
-  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, ftGuard };   /* v1.97.0 — 예비 동공 정렬 검사용 */

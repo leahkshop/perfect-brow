@@ -3723,17 +3723,20 @@ console.log("\n[밸런스 판정]");
       S.g.v1 = C(420, 0).x / W; S.g.v2 = C(338, 0).x / W;
       S.g.h1 = (C(0, 248).y + PBx.FRONT_LASH_GAP * H) / H;   /* 출발점이 화장 덩어리 안 */
       const img = PBx.photoPixels();
-      const fy = PBx.frontDecide(img);
-      return { fy, expFront: C(320, 178).y, crease: C(320, 205).y, shadow: C(320, 240).y };
+      const fd = PBx.frontDecide(img);
+      return { fy: fd ? fd.y : null, ft: fd ? fd.top : null,
+               expFront: C(320, 178).y, expTop: C(320, 148).y, crease: C(320, 205).y, shadow: C(320, 240).y };
     });
     await ctx.close();
     fs.unlinkSync(f155);
     const atBrow = r.fy !== null && Math.abs(r.fy - r.expFront) < 7;
     const notCrease = r.fy === null || Math.abs(r.fy - r.crease) > 8;
     const notShadow = r.fy === null || Math.abs(r.fy - r.shadow) > 8;
-    check("155. 앞머리 판독 — 피부가 이어지다 처음 만나는 「두꺼운 검은 것」 (주름·눈화장은 아니다)",
-      atBrow && notCrease && notShadow,
-      `앞머리 ${r.fy} (눈썹 아랫선 ${r.expFront.toFixed(0)} 에 섬=${atBrow} · 주름 ${r.crease.toFixed(0)} 아님=${notCrease} · 화장 ${r.shadow.toFixed(0)} 아님=${notShadow})`);
+    /* v2.2.0 — 같은 열의 윗끝 = 앞두께 (검은색이 끝나는 지점 = 눈썹 윗선 148) */
+    const atTop = r.ft !== null && Math.abs(r.ft - r.expTop) < 7;
+    check("155. 앞머리·앞두께 판독 — 피부 다음 「두꺼운 검은 것」의 아랫끝·윗끝 (주름·눈화장은 아니다)",
+      atBrow && notCrease && notShadow && atTop,
+      `앞머리 ${r.fy} (아랫선 ${r.expFront.toFixed(0)}=${atBrow}) · 앞두께 ${r.ft} (윗선 ${r.expTop.toFixed(0)}=${atTop}) · 주름 아님=${notCrease} · 화장 아님=${notShadow}`);
   }
 
   /* 156. ⭐⭐ v2.1.1 — **앞머리 넘버링 대체값** (원장님 지시 2026-08-29 폰 스크린샷:
@@ -3793,7 +3796,8 @@ console.log("\n[밸런스 판정]");
       S.innerAnchor = (9 * 13.15) / W;               /* 눈금 1칸 = 9 캔버스 px */
       S.g.v1 = C(500, 0).x / W; S.g.v2 = C(420, 0).x / W;
       const img = PBx.photoPixels();
-      const fy = PBx.frontDecide(img);
+      const fd = PBx.frontDecide(img);
+      const fy = fd ? fd.y : null;
       return { fy, expBrow: C(320, 200).y, shadow: C(320, 240).y,
                tBrow: fy !== null ? (eyeC - fy) / 9 : null };
     });
