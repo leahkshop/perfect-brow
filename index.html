@@ -286,9 +286,11 @@ body.land.compact .rgap{height:11px}
    왼쪽(모든 라인 숨김·여러라인)과 오른쪽(밸런스·왼쪽·오른쪽) 사이 **가운데 칸 안에서만** 놓입니다.
    ⛔ max-width 를 다시 키우지 마세요 — 회귀 83 의 「라벨 겹침」과 별개로 눈으로 겹칩니다. */
 /* v1.95.0 — 안내는 정보일 뿐, 터치를 삼키면 안 됩니다 (배경 탭 = 다음 단계 · 회귀 148)
-   v1.96.0 — 밸런스 묶음이 왼쪽 위로 오면서 위 첫 줄이 길어져, 안내는 **한 칸 아래(44px)** 로.
-   같은 줄에 두면 영어 UI + 밸런스 켬 상태에서 칩과 겹칩니다. */
-.guidetip{position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:22;max-width:42%;
+   ⭐ v1.97.3 — 안내는 **맨 위, 카메라(화면) 끝**에 붙입니다 (원장님 지시 2026-08-29:
+   「이 설명을 맨위 카메라 끝으로 옮겨라」— v1.96.0 의 44px 내림을 대체).
+   터치는 통과(pointer-events:none)하고 z-index 가 칩(20)보다 위라, 밸런스를 켠 영어 UI 에서
+   드물게 겹쳐 보여도 조작은 막지 않습니다. */
+.guidetip{position:absolute;top:2px;left:50%;transform:translateX(-50%);z-index:22;max-width:42%;
   display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
 /* v1.92.0 — 영어가 기본이 되면서 문구가 길어졌습니다. **두 줄까지 접히게** 둡니다 —
    nowrap 이면 좁은 폰에서 문장 끝이 잘립니다 (회귀 119 가 잡습니다) */
