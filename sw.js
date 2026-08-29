@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v98";  /* v1.97.0 — 예비 동공 정렬: 얼굴 인식 실패 사진도 동공을 찾아 같은 크기·자리로 */
+const VERSION = "pb-v99";  /* v1.97.1 — 사진 기준점 42% → 45% (원장님 실기기 확인) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

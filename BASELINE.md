@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 기준 버전 | **v1.97.0** |
+| 기준 버전 | **v1.97.1** |
 | 확정일 | 2026-08-27 |
 | 라이브 주소 | https://leahkshop.github.io/perfect-brow/ |
 | 저장소 | https://github.com/leahkshop/perfect-brow |
@@ -627,8 +627,10 @@ halfIn = (|내안각L − v1| + |내안각R − v1|) / 2     // 좌·우 실측�
   되돌리기가 초기화 바로 아래. 칩 크기(34px)로 축소 (왼쪽 도크 특대 46px 폐지).
 - **위아래 바**: 왼쪽 4px · `transform:translateY(22px)` 로 길이 그대로 조금 아래
   (원장님 확인: 「늘리라는 게 아니고 길이 유지하고 조금 더 밑으로」).
-- **사진 기준점**: `CENTER_BIAS = 0.42` — centerX = workLeft + 0.42×(workRight−workLeft).
+- **사진 기준점**: `CENTER_BIAS` — centerX = workLeft + BIAS×(workRight−workLeft).
   50%는 오른손 액션 공간까지 얼굴이 밀려 보였습니다. ⛔ 0.5 로 되돌리지 마세요.
+  · v1.96.0 = **0.42** → v1.97.1 = **0.45** (원장님 실기기 확인 2026-08-29 「조금만 더 오른쪽으로」).
+    회귀 6·44 는 이 상수를 직접 읽으므로(PB.centerX) 값만 바꾸면 따라옵니다.
 - 안내(.guidetip)는 top 44px 로 한 칸 내림 — 위 첫 줄(여러라인+밸런스 칸)과 겹치지 않게.
 - 회귀 6·24·39·44·83 갱신.
 
