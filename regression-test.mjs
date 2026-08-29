@@ -217,9 +217,9 @@ console.log("[세로 모드 · 기능]");
   await p.evaluate(([a, b]) => { window.PB.alignFromPupils(a, b); window.PB.render(); }, [A, B]);
   await p.waitForTimeout(200);
   const st = await p.evaluate(() => ({ ...window.PB.S.p, v1: window.PB.S.g.v1, h1: window.PB.S.g.h1 }));
-  /* 기준점 = 메인 작업 영역의 한가운데. v1.95.0 — 바가 왼쪽으로 가서 작업 영역이
-     [workLeft ~ workRight] 입니다 (왼쪽 바 오른쪽 끝 ~ 거의 전폭) */
-  const cxExp = await p.evaluate(() => (window.PB.workLeft() + window.PB.workRight()) / 2);
+  /* 기준점: v1.96.0 — 작업 영역의 42% 지점 (원장님 지시 「더 왼쪽으로」 · CENTER_BIAS).
+     앱의 centerX() 를 그대로 기준으로 씁니다. */
+  const cxExp = await p.evaluate(() => window.PB.centerX());
   check("6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 0.60",
     near(st.rot, -6, 0.3) && near(st.v1, cxExp, 0.003) && near(st.h1, 0.60, 0.001),
     `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 ${cxExp.toFixed(3)}) h1=${st.h1.toFixed(3)}`);
@@ -619,27 +619,34 @@ console.log("[세로 모드 · 기능]");
 
   /* 39. 오른쪽 도크 순서 (v1.45.0 · 원장님 지시 2026-08-21)
      위에서부터 **초기화 → 위아래 조절 바 → 다시실행 → 되돌리기**. */
-  /* v1.95.0 (원장님 지시 2026-08-29) — 위아래 바·다시실행·되돌리기는 **왼쪽** 세로 중앙,
-     초기화는 **오른쪽 위** 밸런스 행 높이. ⛔ 바를 오른쪽으로 되돌리지 마세요 — 오른손 액션 공간. */
+  /* v1.96.0 (원장님 지시 2026-08-29) — 왼쪽엔 위아래 바만(조금 더 왼쪽·아래) ·
+     오른쪽 위 = 초기화, 그 밑 1행 = [다시실행][되돌리기](되돌리기가 초기화 바로 아래) ·
+     밸런스 묶음 = 여러라인 오른쪽 배경 칸. ⛔ 바를 오른쪽으로 되돌리지 마세요 — 오른손 액션 공간. */
   const placed = await p.evaluate(() => {
     const r = (id) => document.getElementById(id).getBoundingClientRect();
     const u = r("btnUndo"), rd = r("btnRedo"), v = r("posCtlV"), rs = r("btnReset");
     const st = document.getElementById("stage").getBoundingClientRect();
-    const bal = document.querySelector(".ov-bal").getBoundingClientRect();
+    const mu = r("btnMulti"), bb = r("balBox");
+    const bbStyle = getComputedStyle(document.getElementById("balBox"));
     return {
-      order: v.bottom <= rd.top + 1 && rd.bottom <= u.top + 1,
+      rowUnderReset: u.top >= rs.bottom - 1 && u.top - rs.bottom < 24
+        && Math.abs(u.right - rs.right) < 24 && rd.right <= u.left + 1
+        && Math.abs(u.top - rd.top) < 2,
       dockLeft: v.left - st.left < st.width * 0.2,
-      inRDock: document.getElementById("rightDock").contains(document.getElementById("btnUndo"))
+      barOnly: document.getElementById("rightDock").contains(document.getElementById("posCtlV"))
+            && !document.getElementById("rightDock").contains(document.getElementById("btnUndo"))
             && !document.getElementById("rightDock").contains(document.getElementById("btnReset")),
-      resetTopRight: st.right - rs.right < st.width * 0.1 && Math.abs(rs.top - bal.top) < 14,
+      resetTopRight: st.right - rs.right < st.width * 0.1 && rs.top - st.top < 24,
+      balBoxOk: bb.left - mu.right >= 4 && Math.abs(bb.top + bb.height / 2 - (mu.top + mu.height / 2)) < 12
+        && bbStyle.backgroundColor !== "rgba(0, 0, 0, 0)" && bbStyle.backgroundColor !== "transparent",
       removed: !document.getElementById("btnAlign") && !document.getElementById("btnRotate")
                && !document.getElementById("phSlider") && !document.getElementById("btnLock2")
                && !document.querySelector(".topbar") && !document.querySelector(".panels"),
     };
   });
-  check("39. 왼쪽 도크 = 위아래 바·다시실행·되돌리기 · 초기화 = 오른쪽 위(밸런스 행) · 삭제 버튼 정리",
-    placed.order && placed.dockLeft && placed.inRDock && placed.resetTopRight && placed.removed,
-    `순서=${placed.order} 왼쪽도크=${placed.dockLeft}/${placed.inRDock} 초기화 오른쪽위=${placed.resetTopRight} 삭제완료=${placed.removed}`);
+  check("39. 왼쪽=위아래 바만 · 오른쪽 위=초기화+다시실행/되돌리기 1행 · 밸런스=여러라인 옆 칸 · 삭제 정리",
+    placed.rowUnderReset && placed.dockLeft && placed.barOnly && placed.resetTopRight && placed.balBoxOk && placed.removed,
+    `초기화밑 1행=${placed.rowUnderReset} 왼쪽도크=${placed.dockLeft}/${placed.barOnly} 초기화 오른쪽위=${placed.resetTopRight} 밸런스칸=${placed.balBoxOk} 삭제완료=${placed.removed}`);
 
   // 41. 되돌리기 — 직전 작업 1단계씩, 두 번 누르면 그 전 작업까지
   const undoTest = await p.evaluate(async () => {
@@ -1737,7 +1744,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     const r = (id) => el(id).getBoundingClientRect();
     const st = r("stage"), chg = r("btnChange"), exp = r("btnExport"), lock = r("btnLock");
     const rst = r("btnReset"), ctlV = r("posCtlV"), rd = r("rightDock");
-    const rw2 = document.getElementById("refWrap") ? r("refWrap") : null;   /* 밸런스 묶음 (v1.95.0 초기화 정렬 기준) */
+    const rw2 = r("btnBalance");   /* 밸런스 칩 (초기화가 같은 위 행에 있는지 기준 · 항상 표시됨) */
     const bal = r("btnBalance"), ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
     const cs = getComputedStyle(el("btnReset"));
     return {
@@ -1753,9 +1760,12 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
          v1.50.0 — **사진저장은 더 이상 채움이 아니다** (원장님 지시: 「시작시 사진저장에 색상 죽일것」).
          대신 **사진잠금이 채움**으로 시선을 잡는다. 되돌리지 마세요 — 105 번도 함께 잠급니다. */
       /* v1.95.0 — 초기화는 오른쪽 위 작은 칩: 밸런스 행과 같은 높이 줄에 · 칩 크기(28~40px) */
-      resetPresetSize: Math.abs(rst.top - (rw2 ? rw2.top : rst.top)) < 14 && rst.height >= 26 && rst.height <= 40,
+      resetPresetSize: Math.abs(rst.top - rw2.top) < 14 && rst.height >= 26 && rst.height <= 40,
       exportQuiet: !getComputedStyle(el("btnExport")).backgroundImage.includes("gradient"),
-      undoBigger: r("btnUndo").height > 34 && r("btnRedo").height > 34,
+      /* v1.96.0 — 다시실행·되돌리기는 초기화 밑 1행 칩 (특대 크기 폐지) */
+      undoBigger: (() => { const u = r("btnUndo"), rd2 = r("btnRedo"), rs2 = r("btnReset");
+        return u.height >= 26 && u.height <= 40 && u.top >= rs2.bottom - 1
+            && Math.abs(u.right - rs2.right) < 24 && rd2.right <= u.left + 1; })(),
       undoFilled: getComputedStyle(el("btnUndo")).backgroundImage.includes("gradient")
                   || getComputedStyle(el("btnUndo")).backgroundColor !== "rgba(0, 0, 0, 0)",
       lockAlone: el("centerDock").querySelectorAll("button").length === 1,   /* v1.89.0 — 잠금 홀로 가운데 */
@@ -1765,8 +1775,10 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       aiSpecial: getComputedStyle(el("btnSnap")).backgroundImage.includes("gradient"),
       aiLockEmoji: (el("btnSnap").querySelector(".ailock") || {}).textContent === "🔒",
       aiSize: Math.abs(r("btnSnap").height - chg.height) < 6,
-      /* v1.89.0 — 밸런스·왼쪽·오른쪽은 오른쪽 끝 정렬 (초기화 왼쪽까지) */
-      balRight: st.right - r("refWrap").right < 170 && r("refWrap").right < r("btnReset").left,
+      /* v1.96.0 — 밸런스 묶음 = 여러라인 오른쪽, 간격 두고 배경 있는 칸 (원장님 지시 2026-08-29) */
+      balRight: (() => { const bb = r("balBox"), mu = r("btnMulti");
+        const cssBB = getComputedStyle(el("balBox"));
+        return bb.left - mu.right >= 4 && cssBB.backgroundColor !== "rgba(0, 0, 0, 0)"; })(),
       favHidden: el("favRow").hidden,
       /* v1.51.0 — 잠금 중심은 **캔버스 정중앙이 아니라 센터 세로선(v1)** 위에 온다 (원장님 지시) */
       lockOnCenterLine: Math.abs((lock.left + lock.right) / 2 - st.left
@@ -1803,7 +1815,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       && place.resetTop && /255, 107, 122/.test(place.resetDarkRed)
       && place.resetPresetSize && place.exportQuiet && place.undoBigger && place.undoFilled
       && place.lockAlone && place.lockOnCenterLine
-      && place.balLeftOfCentre > 0.6 && place.balRight     /* v1.89.0 — 오른쪽 끝 정렬 */
+      && place.balLeftOfCentre < 0.55 && place.balRight    /* v1.96.0 — 왼쪽 위 여러라인 옆 */
       && place.aiInBarrow && place.aiLeftOfBar && place.aiSpecial && place.aiLockEmoji && place.aiSize
       && place.favHidden
       && place.dockGaps.every((g) => g > 8) && place.labelHitsTop === false,

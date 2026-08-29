@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.95.0";
+const APP_VERSION = "v1.96.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -572,7 +572,11 @@ function workRight() {
   const W = S.dim.W;
   return W ? 1 - 8 / W : 1;
 }
-const centerX = () => (workLeft() + workRight()) / 2;
+/* v1.96.0 — 사진 기준점을 작업 영역의 **42% 지점**으로 (원장님 지시 2026-08-29:
+   「사진 중앙 정렬은 지금보다 더 왼쪽으로 — 오른쪽으로 너무 치우침」).
+   한가운데(50%)는 오른손 액션 공간까지 얼굴이 밀려 보였습니다. */
+const CENTER_BIAS = 0.42;
+const centerX = () => { const l = workLeft(), r = workRight(); return l + (r - l) * CENTER_BIAS; };
 /* 인체 계측 평균비 — 동공 간 거리 기준 (동공 오프셋 = 1.0) */
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
 const R_OUTER = 1.50;     // 눈꼬리(외안각)
@@ -4382,4 +4386,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
   updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
-  workLeft, workRight };   /* v1.95.0 — 작업 영역 검사용 */
+  workLeft, workRight, centerX };   /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */

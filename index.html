@@ -212,8 +212,10 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
 .ov-tr{top:8px;right:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 /* 밸런스 (v1.29.0) — 위쪽 **중앙에서 약간 왼쪽**. 왼쪽 칩 줄과 떨어뜨려
    "선을 다루는 것들"과 "판정"을 눈으로 구분합니다. */
-/* v1.89.0 — 오른쪽 끝 정렬 (원장님 지시). 초기화(오른쪽 도크 맨 위)와 겹치지 않게 그 왼쪽까지 */
-.ov-bal{top:8px;left:auto;right:calc(var(--redge,8px) + 82px);transform:none;display:flex;gap:6px;align-items:center;justify-content:flex-end}
+/* v1.96.0 — 밸런스 묶음은 여러라인 오른쪽의 **배경 있는 칸** (원장님 지시 2026-08-29).
+   v1.89.0 오른쪽 끝 정렬(.ov-bal)은 폐지 — 오른쪽 위는 초기화·다시실행·되돌리기 자리입니다. */
+.balbox{display:flex;gap:4px;align-items:center;margin-left:10px;padding:3px 5px;
+  border-radius:12px;background:rgba(255,255,255,.07);border:1px solid var(--hair)}
 .refwrap{display:flex;gap:4px;align-items:center}
 /* 기준 쪽 — **왼쪽/오른쪽을 각각** 둡니다. 토글 하나면 지금 어느 쪽인지 눌러 보기 전엔 모릅니다 */
 .chip.ref{padding:5px 9px;font-size:10px;opacity:.92}
@@ -283,8 +285,10 @@ body.land.compact .rgap{height:11px}
 /* v1.92.0 — 영어 문구가 길어 오른쪽 끝 밸런스 묶음과 겹쳤습니다.
    왼쪽(모든 라인 숨김·여러라인)과 오른쪽(밸런스·왼쪽·오른쪽) 사이 **가운데 칸 안에서만** 놓입니다.
    ⛔ max-width 를 다시 키우지 마세요 — 회귀 83 의 「라벨 겹침」과 별개로 눈으로 겹칩니다. */
-/* v1.95.0 — 안내는 정보일 뿐, 터치를 삼키면 안 됩니다 (배경 탭 = 다음 단계 · 회귀 148) */
-.guidetip{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:22;max-width:42%;
+/* v1.95.0 — 안내는 정보일 뿐, 터치를 삼키면 안 됩니다 (배경 탭 = 다음 단계 · 회귀 148)
+   v1.96.0 — 밸런스 묶음이 왼쪽 위로 오면서 위 첫 줄이 길어져, 안내는 **한 칸 아래(44px)** 로.
+   같은 줄에 두면 영어 UI + 밸런스 켬 상태에서 칩과 겹칩니다. */
+.guidetip{position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:22;max-width:42%;
   display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
 /* v1.92.0 — 영어가 기본이 되면서 문구가 길어졌습니다. **두 줄까지 접히게** 둡니다 —
    nowrap 이면 좁은 폰에서 문장 끝이 잘립니다 (회귀 119 가 잡습니다) */
@@ -330,8 +334,15 @@ body.land.compact #editor .guidetip .chip{font-size:9.5px;padding:5px 9px}
    「선 움직임을 오른손으로만 움직이는데 드래그 바 때문에 손 액션 공간이 별로 없다」).
    #rightDock 라는 id 는 역사적 이름으로 남겨 둡니다 — 코드 전반이 이 id 로 작업 영역을 잽니다.
    ⛔ right 로 되돌리지 마세요 — workLeft() 가 이 도크 위치로 작업 영역 왼쪽 끝을 잡습니다. */
-.rdock{position:absolute;left:var(--redge);top:0;bottom:var(--bdock,152px);height:48%;min-height:185px;
-  margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px}
+/* v1.96.0 — 바만 남기고 **조금 더 왼쪽(4px)·조금 더 아래(translateY 22px)** (원장님 지시 2026-08-29
+   「지금보다 조금 왼쪽으로 더 붙이기 · 길이 유지하고 조금 더 밑으로」). 길이(48%)는 그대로입니다. */
+.rdock{position:absolute;left:4px;top:0;bottom:var(--bdock,152px);height:48%;min-height:185px;
+  margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px;
+  transform:translateY(22px)}
+/* v1.96.0 — 다시실행·되돌리기 행: 초기화 바로 밑, 오른쪽 끝 정렬 (되돌리기가 초기화 바로 아래) */
+.urow{position:absolute;top:48px;right:var(--redge);z-index:30;display:flex;gap:6px;justify-content:flex-end}
+.urow .dockbtn{height:34px;min-width:56px;flex-direction:row;gap:4px;font-size:10px;border-radius:11px}
+.urow .dockbtn i{width:14px;height:14px}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
 .posctl.axis-v .pslot{flex:1;width:34px}
 .posctl.axis-v input[type=range]{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
@@ -451,7 +462,9 @@ body.dock-min .modebtns button{padding:0 5px;font-size:8.5px}
 .dockbtn:active{background:rgba(255,255,255,.10)}
 /* v1.45.0 원장님 지시 — 되돌리기·다시실행은 「더 행동적인 요소」: 더 크게, 쓸 수 있을 땐
    짙은 그라데이션(--grad-deep) 채움 + 흰 글자로 "누르는 버튼"임을 드러낸다 */
-#btnUndo, #btnRedo{height:46px;min-width:62px;font-size:10.5px;border-radius:14px;gap:3px}
+/* v1.96.0 — 초기화 밑 1행 칩 크기 (왼쪽 도크의 특대 크기 폐지) */
+#btnUndo, #btnRedo{height:34px;min-width:56px;font-size:10px;border-radius:11px;flex-direction:row;gap:4px}
+#btnUndo i, #btnRedo i{width:14px;height:14px}
 /* v1.95.0 — 초기화는 오른쪽 위 모서리, 밸런스 행(top:8px)과 같은 높이 (원장님 지시 2026-08-29) */
 #btnReset{position:absolute;top:8px;right:var(--redge);z-index:30;
   flex-direction:row;gap:4px;font-size:10px}
@@ -731,11 +744,13 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .posctl.axis-h .plabel{min-width:60px;font-size:9.5px}
   body.land.compact #editor .posctl.axis-v .plabel{width:34px;font-size:8.5px;padding:2px 3px}  /* v1.53.0 — 왼쪽 배치는 기본 규칙을 따름 */
   body.land.compact #editor .posctl.axis-h input[type=range]{height:30px}
-  body.land.compact #editor .rdock{height:58%;min-height:135px;gap:5px}
+  body.land.compact #editor .rdock{height:58%;min-height:135px;gap:5px;transform:translateY(10px)}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
   /* v1.45.0 — compact에서도 초기화=프리셋 크기 · 되돌리기·다시실행 더 크게 (기본 .dockbtn 28px 를 이긴다) */
   body.land.compact #editor .dockbtn.danger{height:30px;min-width:50px;font-size:9px}
-  body.land.compact #editor #btnUndo, body.land.compact #editor #btnRedo{height:38px;min-width:52px;font-size:9px}
+  body.land.compact #editor .urow{top:42px}
+  body.land.compact #editor .urow .dockbtn{height:30px;min-width:50px;font-size:9px}
+  body.land.compact #editor #btnUndo, body.land.compact #editor #btnRedo{height:30px;min-width:50px;font-size:9px}
   body.land.compact #editor .menurow button{height:46px;min-width:52px;font-size:9px;padding:0 6px}
   body.land.compact #editor .menurow button#btnLookCycle{min-width:34px;padding:0 1px;font-size:8px}
   body.land.compact #editor .dockbtn.big{height:40px;min-width:48px;font-size:9px}
@@ -793,18 +808,16 @@ body:not(.land) #railLang{display:none}
       <button class="chip" id="btnMulti" data-i18n="editor_multi">여러라인</button>
       <!-- 여러라인의 후속 버튼 (v1.19.0) — 여러라인이 꺼져 있으면 hidden -->
       <button class="chip" id="btnAllSel" data-i18n="editor_all_lines" hidden>전체라인</button>
-    </div>
-
-    <!-- 밸런스 (v1.26.0 · 자리 v1.29.0) — 위쪽 **중앙에서 약간 왼쪽**.
-         기준 쪽은 후속 버튼이라 밸런스를 켜야 나오고, **왼쪽/오른쪽을 각각 눌러** 고릅니다
-         (토글 하나면 지금 어느 쪽이 기준인지 눌러 보기 전엔 모릅니다). -->
-    <!-- v1.89.0 — 밸런스·왼쪽·오른쪽은 **오른쪽 끝 정렬** (원장님 지시 2026-08-28).
-         AI 눈썹 맞춤(구 드로잉 맞춤)은 아래 도크의 좌우 바 왼쪽으로 이사했습니다. -->
-    <div class="ov ov-bal">
-      <button class="chip" id="btnBalance" data-i18n="editor_balance_check">밸런스</button>
-      <span class="refwrap" id="refWrap" hidden>
-        <button class="chip ref" id="btnRefL" data-i18n="bal_left">왼쪽</button>
-        <button class="chip ref" id="btnRefR" data-i18n="bal_right">오른쪽</button>
+      <!-- ⭐ v1.96.0 — 밸런스·왼쪽·오른쪽은 **여러라인 오른쪽, 간격 두고 배경 있는 칸** 하나에
+           (원장님 지시 2026-08-29: 「배경이 조금 있는 칸을 넣어 하나 박스에 넣고
+             여러라인 오른쪽에 간격을 조금 두고 배치」). v1.89.0 의 오른쪽 끝 정렬을 대체합니다 —
+           오른쪽 위는 이제 초기화·다시실행·되돌리기 자리입니다. -->
+      <span class="balbox" id="balBox">
+        <button class="chip" id="btnBalance" data-i18n="editor_balance_check">밸런스</button>
+        <span class="refwrap" id="refWrap" hidden>
+          <button class="chip ref" id="btnRefL" data-i18n="bal_left">왼쪽</button>
+          <button class="chip ref" id="btnRefR" data-i18n="bal_right">오른쪽</button>
+        </span>
       </span>
     </div>
 
@@ -817,16 +830,20 @@ body:not(.land) #railLang{display:none}
          「초기화 버튼은 오른쪽 그대로 위 밸런스 행에 버튼 위치 맞출것」).
          나머지 도크(위아래 바·다시실행·되돌리기)는 왼쪽으로 갔습니다. -->
     <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
+    <!-- ⭐ v1.96.0 — 다시실행·되돌리기는 **초기화 밑 1행** (원장님 지시 2026-08-29:
+         「초기화 밑에가 되돌리기, 되돌리기 왼쪽에 다시실행」). 왼쪽 도크에는 위아래 바만 남습니다. -->
+    <div class="urow" id="undoRow">
+      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
+      <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
+    </div>
     <div class="rdock" id="rightDock">
-      <!-- v1.95.0 순서 — 위아래 조절 바 · 다시실행 · 되돌리기 (왼쪽 세로 중앙) -->
+      <!-- v1.96.0 — 왼쪽 도크에는 위아래 조절 바 하나만 (조금 더 왼쪽 · 조금 더 아래) -->
       <div class="posctl axis-v" id="posCtlV">
         <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
         <button class="pbtn" id="posPlusV">▲</button>
         <div class="pslot" id="pSlotV"><input type="range" id="posSliderV" min="0" max="1" step="0.0005" value="0.5" /></div>
         <button class="pbtn" id="posMinusV">▼</button>
       </div>
-      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
-      <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
     </div>
 
     <!-- 아래 도크 (v1.11.0) — 사진보정 버튼 / 좌우 드래그 바 / 메뉴 버튼. 모두 오른쪽 정렬 -->
