@@ -3689,6 +3689,49 @@ console.log("\n[밸런스 판정]");
       + `자 만들기=${r.ok} · 그 자로 읽은 눈금 ${r.tick}(40) / 센터 ${r.mid}(53)`);
   }
 
+  /* 155. ⭐⭐⭐ v2.1.0 — **앞머리 판독 룰** (원장님 지시 2026-08-29)
+       「눈 윗부분에서 올라가면 **피부색이 이어지다가** 어느 한 지점에서 **검은색**으로
+         보이는 지점이 앞머리다」
+     ① 앞머리는 눈썹 앞부분 **아랫선**에 선다
+     ② **얇은 검은 선**(쌍꺼풀 주름 5px)은 검은색이어도 눈썹이 아니다 — 두께 창이 거른다
+     ③ 출발점에 붙은 **눈 화장**(섀도 덩어리)은 「피부가 먼저」 규칙이 거른다
+     ⛔ 셋 중 하나라도 되돌리면 앞머리가 주름·눈두덩에 내려앉습니다. */
+  {
+    const f155 = path.join(ROOT, ".front-rule.svg");
+    const up = [], dn = [];
+    for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+    fs.writeFileSync(f155, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/>`
+      + `<line x1="120" y1="205" x2="360" y2="205" stroke="#3a2a20" stroke-width="5"/>`   /* 쌍꺼풀 주름 — 검고 얇다 */
+      + `<rect x="120" y="232" width="240" height="22" fill="#5a463a"/></svg>`);          /* 눈 화장 — 출발점에 붙은 덩어리 */
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", f155);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H;
+      S.landmarks = null; S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 }; PBx.render();
+      const C = (ix, iy) => PBx.imgToCanvas(ix, iy, S.p);
+      /* 이너를 눈썹 안쪽 끝(340) 근처에, 센터를 그 오른쪽에 두고, 눈(h1)을 화장 아래에 둔다 */
+      S.g.v1 = C(420, 0).x / W; S.g.v2 = C(338, 0).x / W;
+      S.g.h1 = (C(0, 248).y + PBx.FRONT_LASH_GAP * H) / H;   /* 출발점이 화장 덩어리 안 */
+      const img = PBx.photoPixels();
+      const fy = PBx.frontDecide(img);
+      return { fy, expFront: C(320, 178).y, crease: C(320, 205).y, shadow: C(320, 240).y };
+    });
+    await ctx.close();
+    fs.unlinkSync(f155);
+    const atBrow = r.fy !== null && Math.abs(r.fy - r.expFront) < 7;
+    const notCrease = r.fy === null || Math.abs(r.fy - r.crease) > 8;
+    const notShadow = r.fy === null || Math.abs(r.fy - r.shadow) > 8;
+    check("155. 앞머리 판독 — 피부가 이어지다 처음 만나는 「두꺼운 검은 것」 (주름·눈화장은 아니다)",
+      atBrow && notCrease && notShadow,
+      `앞머리 ${r.fy} (눈썹 아랫선 ${r.expFront.toFixed(0)} 에 섬=${atBrow} · 주름 ${r.crease.toFixed(0)} 아님=${notCrease} · 화장 ${r.shadow.toFixed(0)} 아님=${notShadow})`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

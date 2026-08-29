@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.0.2";
+const APP_VERSION = "v2.1.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3154,6 +3154,82 @@ function detectFaceRef(img, a, b) {
   return { a: cl / W, c: (cl + cr) / 2 / W };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⭐⭐⭐ v2.1.0 — **앞머리 판독 룰** (원장님 지시 2026-08-29, 이너 룰과 같은 방식)
+   ───────────────────────────────────────────────────────────────────────────
+   원장님 말씀 그대로 (프롬프트로 읽으세요):
+
+     「눈 윗부분부터 올라가서 이너 부분에 닿는 첫 검은 선.
+       눈 윗부분에서 올라가면 **피부색이 이어지다가 어느 한 지점에서 검은색으로
+       보이는 지점**이 앞머리다」
+
+   구현 — 이너 세로선 자리에서 **세로로** 훑습니다:
+     ① 눈(h1) 위로 FRONT_LASH_GAP 띄운 곳에서 시작 — 속눈썹·아이라인을 건너뛴다
+     ② 이너에서 눈썹 몸통 방향으로 FRONT_COLS 개 열을 잡고, 열마다 **아래→위**로 걷는다
+     ③ 「검은색」의 잣대 = 피부와 그 열의 제일 어두운 값의 **중간** (최소 FRONT_DARK_MIN)
+        — 눈꺼풀 그늘은 어둡지만 「검은색」의 절반에 못 미쳐 통과한다
+     ④ 창(9줄) 안에 7줄 이상 어두워야 인정 — **얇은 선(쌍꺼풀 주름·아이라인)은
+        검은색이어도 눈썹이 아니다.** 두께가 눈썹의 증거다 (이너 룰과 같은 교훈)
+     ⑤ 열들의 중앙값 = 앞머리. 3열 미만이면 포기 → 기존 밴드 판독을 그대로 둔다
+   ⛔ ④를 빼지 마세요 — 쌍꺼풀 주름(5px 선)에 앞머리가 내려앉습니다. 회귀 155 가 잡습니다. */
+const FRONT_COLS = 5;         // 이너에서 눈썹 방향으로 훑는 열 수
+const FRONT_SPAN = 0.05;      // 그 열들이 퍼지는 폭 (화면 비율)
+const FRONT_LASH_GAP = 0.07;  // 눈(h1) 위로 이만큼 띄우고 시작 — 속눈썹·아이라인 방어
+const FRONT_UP = 0.42;        // h1 에서 위로 이 비율까지만 올라간다
+const FRONT_HALF = 0.5;       // 「검은색」 문턱 = 피부 ↔ 제일 어두운 값의 중간
+const FRONT_DARK_MIN = 25;    // 이 대비도 없으면 검은 것이 없는 열 (시도 자체를 안 한다)
+const FRONT_WIN = 9;          // 두께 창 (px)
+const FRONT_HIT = 7;          // 창 안에서 이만큼 어두워야 눈썹 (얇은 선 방어)
+const FRONT_SKIN = 5;         // 검은 것 **바로 앞에 피부가 이만큼 이어져야** 인정
+function frontDecide(img) {
+  const { W, H } = S.dim;
+  if (!img || !W || !H) return null;
+  const cx = S.g.v1 * W, ix = S.g.v2 * W;
+  const dir = ix < cx ? -1 : 1;                          // 눈썹 몸통 방향 = 센터 반대쪽
+  const yB = Math.round((S.g.h1 - FRONT_LASH_GAP) * H);  // 시작(아래)
+  const yT = Math.max(2, Math.round((S.g.h1 - FRONT_UP) * H));
+  if (yB - yT < FRONT_WIN + 6 || yB >= H) return null;
+  const ys = [];
+  for (let k = 1; k <= FRONT_COLS; k++) {
+    const x = Math.round(ix + dir * (FRONT_SPAN * W * k) / FRONT_COLS);
+    if (x < 0 || x >= W) continue;
+    const col = [];                                       // col[0] = 맨 아래(yB)
+    for (let y = yB; y >= yT; y--) col.push(lumaAt(img, W, x, y));
+    const sorted = col.slice().sort((a, b) => a - b);
+    const skin = sorted[Math.floor(sorted.length * 0.75)];
+    const darkest = sorted[Math.floor(sorted.length * 0.03)];
+    if (skin - darkest < FRONT_DARK_MIN) continue;        // 검은 것이 없는 열
+    /* ⚠️ 문턱은 **상대값만** 씁니다 — 절대값(예: 피부−40)을 섞으면 조명이 어두운 사진에서
+       눈썹의 절반이 문턱 위에 남아 두께 창(7/9)을 못 채웁니다 (실측: 8장 중 6장 실패).
+       얇은 검은 선(주름·아이라인) 방어는 문턱이 아니라 **두께 창**의 몫입니다. */
+    const thr = skin - (skin - darkest) * FRONT_HALF;
+    const dark = col.map((v) => v < thr);
+    /* ⚠️ 원장님 룰의 핵심은 순서입니다 — 「**피부색이 이어지다가** … 검은색」.
+       출발점이 눈 화장(섀도·라이너·속눈썹) 속이면 그 검은 것부터 잡아 버립니다
+       (실측: 짙은 화장 사진 2장에서 앞머리가 눈두덩에 내려앉았습니다).
+       그래서 검은 창 **바로 앞(아래)에 피부가 FRONT_SKIN 줄 이상** 이어져 있어야 인정합니다. */
+    let light = 0;
+    for (let i = 0; i + FRONT_WIN <= dark.length; i++) {
+      if (light >= FRONT_SKIN) {
+        let hit = 0;
+        for (let j = 0; j < FRONT_WIN; j++) if (dark[i + j]) hit++;
+        if (hit >= FRONT_HIT) {
+          let i0 = i; while (i0 < i + FRONT_WIN && !dark[i0]) i0++;   // 창 안 첫 어두운 줄
+          ys.push(yB - i0);                                           // = 눈썹 아랫선
+          break;
+        }
+      }
+      /* 피부 세기는 **너그럽게** — 잔털·주근깨 한 줄로 끊기지 않게, 두 줄 연속 어두울 때만
+         0 으로 되돌립니다 (실측: 결 눈썹 사진에서 잔털이 피부 구간을 계속 끊어 실패했습니다). */
+      if (dark[i]) { if (i > 0 && dark[i - 1]) light = 0; }
+      else light++;
+    }
+  }
+  if (ys.length < 3) return null;
+  ys.sort((a, b) => a - b);
+  return ys[Math.floor(ys.length / 2)];
+}
+
 /* ⭐⭐⭐ v2.0.0 — **세로선 눈금은 얼굴에 붙은 자로 읽습니다** (원장님 지시 2026-08-29)
    예전에는 `v × 100`, 즉 **화면 좌표**를 그대로 보여 줬습니다. 자동 정렬을 내안각 기준으로
    바꿔도(위 INNER_FRAC) 기기 폭·도크 폭에 따라 센터가 조금씩 움직이고, `fitBrowsInFrame`
@@ -3597,6 +3673,10 @@ function autoFromDrawing() {
       setLine("v2", clamp(S.g.v1 - half, 0.02, 0.98));
     }
   }
+  /* ⭐ v2.1.0 — 앞머리 = 눈 위에서 올라가 처음 만나는 「두꺼운 검은 것」 (위 frontDecide).
+     이너(v2)가 정해진 다음에 불러야 합니다 — 훑는 열이 이너 자리이기 때문입니다.
+     실패하면 기존 밴드 판독 값이 그대로 남습니다. */
+  { const fy = frontDecide(img); if (fy !== null) setY("front", fy); }
   setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
   /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
      그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
@@ -4871,4 +4951,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
-  findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
+  frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT };   /* v1.97.0 — 예비 동공 정렬 검사용 */
