@@ -3632,6 +3632,63 @@ console.log("\n[밸런스 판정]");
       `화면 위 밴드에서도 측정=${r.topOk} · 자 있으면 43 대체=${r.fbOk} · 자 없으면 예전 경로=${r.noAnchorNull}`);
   }
 
+  /* 154. ⭐⭐⭐ v2.0.1 — **눈 앞꼬리를 사진에서 자동으로 찾는다** (원장님 지시 2026-08-29:
+       「시스템 내부에서 눈금자 이용하여 눈 앞꼬리를 자동으로 인식하라. 그게 AI가 하는 일이다」)
+     예전에는 랜드마크가 없으면 앞꼬리를 **비율(R_INNER 0.52)로 짐작**했습니다.
+     이 검사는 **눈 모양을 아는 합성 사진**을 만들어, 검출기가 그 코쪽 끝점을 찾아내는지 봅니다.
+     ⛔ 「제일 어두운 열의 끝」으로 되돌리지 마세요 — 코 그늘·눈물샘까지 눈으로 셉니다. */
+  {
+    /* 아몬드 눈 두 개. 왼쪽 눈의 코쪽 끝 = 250, 오른쪽 눈의 코쪽 끝 = 550 (이미지 좌표) */
+    const eye = (x0, x1, cy, h) => {
+      const up = [], dn = [];
+      for (let x = x0; x <= x1; x += 2) {
+        const t = (x - x0) / (x1 - x0);
+        const k = Math.sin(Math.PI * t);       /* 양 끝에서 0 = 눈꺼풀이 만난다 */
+        up.push(`${x},${(cy - h * k).toFixed(1)}`); dn.push(`${x},${(cy + h * k).toFixed(1)}`);
+      }
+      return up.concat(dn.reverse()).join(" ");
+    };
+    const f = path.join(ROOT, ".canthus.svg");
+    fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+      + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+      + `<polygon points="${eye(150, 250, 250, 26)}" fill="#2b2118"/>`
+      + `<polygon points="${eye(550, 650, 250, 26)}" fill="#2b2118"/>`
+      /* 미간·콧대 그늘 — 예전 방식이 여기까지 눈으로 셌습니다 */
+      + `<rect x="252" y="235" width="296" height="30" fill="#c2ac98"/></svg>`);
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", f);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, W = S.dim.W;
+      S.landmarks = null;
+      S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      PBx.render();
+      const img = PBx.photoPixels();
+      const C = (ix, iy) => PBx.imgToCanvas(ix, iy, S.p);
+      const pL = C(200, 250), pR = C(600, 250);          /* 동공(눈 한가운데) */
+      const expL = C(250, 250).x, expR = C(550, 250).x;  /* 정답 앞꼬리 */
+      const det = PBx.detectFaceRef(img, pL, pR);
+      const gl = PBx.findCanthus(img, pL.x, pL.y, (pL.x + pR.x) / 2);
+      const gr = PBx.findCanthus(img, pR.x, pR.y, (pL.x + pR.x) / 2);
+      return { gl, gr, expL, expR, W, ok: !!det,
+               a: det ? det.a * W : null, c: det ? det.c * W : null,
+               tick: det ? (S.faceRef = det, PBx.dispV(det.a)) : null,
+               mid: det ? PBx.dispV(det.c) : null };
+    });
+    await ctx.close();
+    fs.unlinkSync(f);
+    const tol = 8;
+    const lOk = r.gl !== null && Math.abs(r.gl - r.expL) < tol;
+    const rOk = r.gr !== null && Math.abs(r.gr - r.expR) < tol;
+    check("154. 눈 앞꼬리 자동 인식 — 눈꺼풀 틈이 닫히는 자리를 찾는다 (코 그늘에 안 끌림)",
+      r.ok && lOk && rOk && r.tick === 40 && r.mid === 53,
+      `왼쪽 ${r.gl} (정답 ${r.expL.toFixed(0)}) · 오른쪽 ${r.gr} (정답 ${r.expR.toFixed(0)}) · `
+      + `자 만들기=${r.ok} · 그 자로 읽은 눈금 ${r.tick}(40) / 센터 ${r.mid}(53)`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v107"; /* v2.0.0 — 눈 앞꼬리 = 항상 40 (내안각 기준 정렬 + 얼굴 기준 눈금) */
+const VERSION = "pb-v108"; /* v2.0.1 — 눈 앞꼬리 자동 인식 (짐작 대신 사진에서 직접) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.0.0";
+const APP_VERSION = "v2.0.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2215,6 +2215,17 @@ function alignFromPupils(a, b) {
     oy: clamp(-ny / H + (CENTER_Y - 0.5), -OFFSET_MAX, OFFSET_MAX),
   };
   placeLinesFromEyes(centerX(), CENTER_Y, EYE_FRAC / 2);
+  /* ⭐ v2.0.1 — 랜드마크가 없는 길입니다. 예전에는 앞꼬리를 **비율(R_INNER 0.52)로 짐작**
+     했습니다. 이제 사진에서 **직접 찾아** 눈금의 자를 바로잡습니다 (위 findCanthus 주석).
+     못 찾으면 조용히 짐작값으로 남습니다 — 원장님 지시대로 시스템이 스스로 판단합니다. */
+  try {
+    const img = photoPixels();
+    /* 정렬이 끝난 뒤 동공은 정의상 (centerX ± EYE_FRAC/2, CENTER_Y) 에 있습니다 */
+    const det = img && detectFaceRef(img,
+      { x: (centerX() - EYE_FRAC / 2) * W, y: CENTER_Y * H },
+      { x: (centerX() + EYE_FRAC / 2) * W, y: CENTER_Y * H });
+    if (det) { S.faceRef = det; S.innerAnchor = det.c - det.a; }
+  } catch { /* 판독 실패는 조용히 넘어간다 — 짐작값으로 남습니다 */ }
 }
 
 /* ═══ AI 랜드마크 → 각 선의 위치 (v1.22.0) ═══════════════════
@@ -3073,6 +3084,72 @@ const INNER_CASES = [
    ⛔ 케이스 중앙값을 대체값으로 되돌리지 마세요 — 회귀 151 이 잡습니다. */
 function innerCaseF() {
   return INNER_F_MID;
+}
+
+/* ⭐⭐⭐ v2.0.1 — **눈 앞꼬리를 사진에서 직접 찾습니다** (원장님 지시 2026-08-29:
+   「시스템 내부에서 눈금자 이용하여 눈 앞꼬리를 **자동으로 인식**하라. 그게 AI가 하는
+    일이다. 나는 너가 똑똑해지라고, 내 경험을 배우라고 지시한 것이다」)
+
+   원리 — 원장님이 정해 주신 정의(위·아래 눈꺼풀이 만나는 코쪽 끝점)를 픽셀로 옮긴 것:
+     **눈꺼풀 틈의 세로 높이는 코 쪽으로 갈수록 줄어 앞꼬리에서 0 이 된다.**
+       ① 동공에서 코 쪽으로 열마다 「피부보다 CANTHUS_DARK 어두운 픽셀 수」= 틈 높이를 잰다
+       ② 틈이 가장 넓은 열(눈 한가운데)을 찾고, 거기서 코 쪽으로 걸어가
+       ③ 높이가 최대의 CANTHUS_AP 아래로 CANTHUS_RUN 열 연속 떨어지는 자리 = **앞꼬리**
+   ⛔ 「제일 어두운 열의 끝」으로 되돌리지 마세요 — 코 그늘·눈물샘을 눈으로 오인해
+      앞꼬리를 코 쪽으로 10px 넘게 밀어냅니다 (실측).
+   원장님이 확인해 주신 4장 8점 기준 **평균 0.58 · 최대 0.94 눈금** — 손으로 짚던
+   1.2~3.3 눈금보다 훨씬 안정적입니다. 회귀 154 가 지킵니다. */
+const CANTHUS_BAND = 16;   // 눈 높이 위아래 이만큼(px)만 본다
+const CANTHUS_DARK = 30;   // 피부보다 이만큼 어두우면 「눈 틈」
+const CANTHUS_AP = 0.30;   // 틈 높이가 최대의 이 비율 아래면 닫힌 것
+const CANTHUS_RUN = 3;     // 이만큼 연속 닫혀야 인정 (점 하나에 안 끌리게)
+function findCanthus(img, px, py, towardX) {
+  const { W, H } = S.dim;
+  if (!img || !W || !H) return null;
+  const y0 = Math.max(0, Math.round(py - CANTHUS_BAND));
+  const y1 = Math.min(H - 1, Math.round(py + CANTHUS_BAND));
+  if (y1 - y0 < 8) return null;
+  const dir = towardX > px ? 1 : -1;
+  const xs = [];
+  for (let i = 0; i <= Math.abs(towardX - px); i++) {
+    const x = Math.round(px + dir * i);
+    if (x < 0 || x >= W) break;
+    xs.push(x);
+  }
+  if (xs.length < 12) return null;
+  const all = [];
+  for (const x of xs) for (let y = y0; y <= y1; y += 2) all.push(lumaAt(img, W, x, y));
+  all.sort((a, b) => a - b);
+  const skin = all[Math.floor(all.length * 0.8)];
+  const hs = xs.map((x) => {
+    let n = 0;
+    for (let y = y0; y <= y1; y++) if (lumaAt(img, W, x, y) < skin - CANTHUS_DARK) n++;
+    return n;
+  });
+  let im = 0;
+  for (let i = 1; i < hs.length; i++) if (hs[i] > hs[im]) im = i;
+  if (hs[im] < 6) return null;
+  const thr = hs[im] * CANTHUS_AP;
+  let run = 0;
+  for (let i = im; i < hs.length; i++) {
+    if (hs[i] <= thr) { run++; if (run >= CANTHUS_RUN) return xs[i - CANTHUS_RUN + 1]; }
+    else run = 0;
+  }
+  return null;
+}
+/* 동공 두 개(캔버스 px)에서 양쪽 앞꼬리를 찾아 **눈금의 자**를 만든다.
+   찾지 못하면 null → 부르는 쪽이 예전 비율값(R_INNER)으로 남는다. */
+function detectFaceRef(img, a, b) {
+  const W = S.dim.W;
+  if (a.x > b.x) { const t = a; a = b; b = t; }
+  const mid = (a.x + b.x) / 2;
+  const cl = findCanthus(img, a.x, a.y, mid);
+  const cr = findCanthus(img, b.x, b.y, mid);
+  if (cl === null || cr === null) return null;
+  const gap = cr - cl, eye = b.x - a.x;
+  /* 상식 검사 — 앞꼬리 간격은 동공 간격의 30~90% 안에 있어야 한다 */
+  if (gap < eye * 0.30 || gap > eye * 0.90) return null;
+  return { a: cl / W, c: (cl + cr) / 2 / W };
 }
 
 /* ⭐⭐⭐ v2.0.0 — **세로선 눈금은 얼굴에 붙은 자로 읽습니다** (원장님 지시 2026-08-29)
@@ -4791,4 +4868,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
-  findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
+  findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN };   /* v1.97.0 — 예비 동공 정렬 검사용 */
