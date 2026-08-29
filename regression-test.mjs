@@ -3536,6 +3536,43 @@ console.log("\n[밸런스 판정]");
       + `경계 40/43/45/48=${bounds} (rise ${r151.rise} · mult ${r151.mult}) · 못읽으면 항상 43=${fb} · 케이스 ${r151.cases}개(사진 미저장=${r151.hasPhoto})`);
   }
 
+  /* 152. ⭐⭐ v1.99.2 — **이너 판독이 조용히 통째로 꺼지지 않는다** (원장님 사진 4장 테스트 2026-08-29)
+     ① 잉크를 재는 창은 **화면 위로 넘치면 잘라서** 씁니다. 예전에는 넘치면 그 열을 버렸는데,
+        자동 정렬한 가로 화면에서는 눈썹이 위쪽에 앉아 **모든 열이 버려져** 판독이 통째로
+        건너뛰어졌습니다 — 옅은 눈썹 사진 4장 중 3장이 그랬습니다.
+     ② 자(내안각→센터)가 있으면 **언제나** 이너 전용 판독이 답을 냅니다. 밴드를 못 믿을 때
+        `growEnd` 로 되돌아가면 다시 미간 맨살(46.7·48)에 섭니다.
+     ⛔ 둘 다 되돌리지 마세요. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      const img = PBx.photoPixels();
+      /* ① 화면 **맨 위**에 붙은 밴드 — 넓은 창이 위로 넘친다 */
+      const band = [];
+      for (let x = 60; x < 200; x += 4) band.push({ x, top: 4, bot: 22, dark: 20, ink: 300 });
+      const prof = PBx.innerProfile(img, band, -1);
+      const v = prof ? prof.inkAt(120) : null;
+      /* ② 자가 있으면 언제나 답이 나온다 */
+      S.landmarks = null; S.innerAnchor = 0.1315;
+      const fb = PBx.innerFallback();
+      S.innerAnchor = 0;
+      const none = PBx.innerFallback();
+      return { topOk: v !== null && isFinite(v),
+               fbOk: !!fb && Math.abs(fb.f - PBx.INNER_F_MID) < 1e-9,
+               noAnchorNull: none === null };
+    });
+    await ctx.close();
+    check("152. 이너 판독 — 눈썹이 화면 위에 붙어도 잉크를 재고, 자가 있으면 언제나 답을 낸다",
+      r.topOk && r.fbOk && r.noAnchorNull,
+      `화면 위 밴드에서도 측정=${r.topOk} · 자 있으면 43 대체=${r.fbOk} · 자 없으면 예전 경로=${r.noAnchorNull}`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

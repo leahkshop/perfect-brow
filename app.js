@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.99.1";
+const APP_VERSION = "v1.99.2";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3041,11 +3041,17 @@ const INNER_RUN  = 2;         // 연속 이만큼 통과해야 인정 (점 하�
       숫자만 남깁니다. 케이스가 3개 이상 모이면 「읽을 수 없을 때의 답」이 43 대신
       **케이스들의 중앙값**이 됩니다 = 「가장 잘 쓰이는 지점」. */
 const INNER_CASES = [
-  /* id · 날짜 · f(원장님 정답) · 앱(그때 판독) · 메모 — **숫자만. 사진은 저장하지 않습니다.** */
-  { id: 1, at: "2026-08-29", f: 0.304, app: 44.2, note: "앱 44 · 굵은 선이 시작하는 자리 (재현 기준 사진)" },
-  { id: 2, at: "2026-08-29", f: 0.608, app: 48.0, note: "앱 48 · 짙은 파우더 반영구 — 잉크가 하드 맥시멈까지 간다" },
-  { id: 3, at: "2026-08-29", f: 0.532, app: 47.6, note: "앱 47 · 자연 결 눈썹 — 앱이 0.6 눈금 안쪽" },
-  { id: 4, at: "2026-08-29", f: 0.304, app: null, note: "앱 44 · 옅은 반영구 — **판독 실패**, 대체값 43 사용 (원장님: 43도 괜찮다)" },
+  /* id · 눈썹 종류 · f(원장님 정답) · app(그때 판독) — **숫자만. 사진은 저장하지 않습니다.**
+     ⚠️ 2026-08-29 **전부 다시 쟀습니다.** 그 전 값은 제가 내안각을 잘못 짚어 최대 3눈금
+        어긋나 있었습니다 (아래 innerAnchor 주석). */
+  { id: 1, at: "2026-08-29", kind: "드로잉(굵은 선)",   f: 0.410, app: 45.1 },
+  { id: 2, at: "2026-08-29", kind: "짙은 파우더 반영구", f: 0.555, app: 48.0 },
+  { id: 3, at: "2026-08-29", kind: "자연 결 눈썹",      f: 0.456, app: 46.7 },
+  { id: 4, at: "2026-08-29", kind: "옅은 반영구",       f: 0.198, app: 40.4 },
+  { id: 5, at: "2026-08-29", kind: "옅은 자연 눈썹 ①",  f: 0.137, app: 43.0 },
+  { id: 6, at: "2026-08-29", kind: "옅은 자연 눈썹 ②",  f: 0.183, app: 42.2 },
+  { id: 7, at: "2026-08-29", kind: "옅은 자연 눈썹 ③",  f: 0.144, app: 47.2 },
+  { id: 8, at: "2026-08-29", kind: "옅은 자연 눈썹 ④",  f: 0.388, app: 45.4 },
 ];
 /* ⚠️ **대체값은 43 으로 고정합니다** (원장님 재확인 2026-08-29, 케이스 4를 보시고:
      「44가 맞다 하지만 **판독 안될 경우 43도 괜찮아 보인다**」).
@@ -3057,6 +3063,14 @@ function innerCaseF() {
   return INNER_F_MID;
 }
 
+/* ⚠️⚠️ **내안각(40)의 정의** — 원장님 확인 2026-08-29
+   「위·아래 눈꺼풀이 만나는 **코쪽 끝점**」 = 눈물샘(caruncle)의 안쪽 끝입니다.
+   눈물샘이 **시작하는** 자리가 아닙니다. 두 자리는 사진마다 6~14px 차이가 나고,
+   1 눈금이 4~15px 이므로 그대로 두면 **눈금이 최대 3칸** 어긋납니다.
+   원장님 지적: 「너는 눈앞꼬리를 40으로 잡는데, 각 사진마다 41 혹은 43으로 잡으니
+   대체값이 항상 변하게 되고 그러면 더 형편없는 대체값이 된다」
+   앱은 MediaPipe 랜드마크 **133 / 362** 를 씁니다 — 그 점이 바로 이 정의의 자리입니다.
+   ⛔ 다른 인덱스(눈물샘 시작·속눈썹 끝)로 바꾸지 마세요. 눈금 전체가 틀어집니다. */
 /* 내안각 → 센터 거리 (화면 폭 비율). 랜드마크가 있으면 실측, 없으면 배치 때 저장한 값. */
 function innerAnchor() {
   const lm = S.landmarks, W = S.dim.W;
@@ -3105,8 +3119,15 @@ function innerProfile(img, band, sgn) {
     if (xi < 0 || xi >= W) return null;
     const cy = midY(x);
     const t = Math.round(cy - th / 2), b = Math.round(cy + th / 2);
-    const bt = Math.round(cy - 2.2 * th), bb = Math.round(cy + 2.2 * th);
-    if (t < 0 || b >= H || bt < 0 || bb >= H) return null;
+    if (t < 0 || b >= H) return null;                  // 눈썹 자리 자체가 화면 밖
+    /* ⭐ v1.99.2 — 피부 기준을 재는 **넓은 창은 화면 안으로 자릅니다**.
+       예전에는 넓은 창이 화면 위로 넘치면 그 열을 통째로 버렸는데, 자동 정렬한
+       가로 화면에서는 눈썹이 위쪽에 앉아 **모든 열이 버려졌습니다** — 그래서
+       옅은 눈썹 사진 4장 중 3장이 이너 판독을 통째로 건너뛰었습니다 (2026-08-29).
+       ⛔ 다시 `return null` 로 되돌리지 마세요 — 회귀 152 가 잡습니다. */
+    const bt = Math.max(0, Math.round(cy - 2.2 * th));
+    const bb = Math.min(H - 1, Math.round(cy + 2.2 * th));
+    if (bb - bt < th) return null;                     // 피부를 잴 여유가 없다
     const big = [];
     for (let y = bt; y <= bb; y++) big.push(lumaAt(img, W, xi, y));
     const s = big.slice().sort((p, q) => p - q), k = Math.floor(s.length * 0.6);
@@ -3194,8 +3215,21 @@ function innerDecide(img, band) {
                rise: (v - skinInk) / span, mult: v / Math.max(1e-6, skinInk), why: "read" };
     }
   }
-  /* ④ 읽지 못했다 — 중간(43) 또는 케이스 중앙값 */
+  /* ④ 읽지 못했다 — 중간(43) */
   return { f: innerCaseF(), sgn, anchor, rise: 0, mult: 0, why: "fallback" };
+}
+
+/* ⭐⭐ v1.99.2 — **자가 없을 때만 예전 경로**입니다.
+   `innerDecide` 는 밴드를 못 믿을 때(눈썹과 맨살이 구분 안 될 때)도 null 을 돌려줬고,
+   그러면 `growEnd` 가 다시 눈꺼풀 그늘을 따라갔습니다 — 옅은 눈썹 사진에서 실제로
+   이너가 **46.7 · 48**(미간 맨살)에 섰습니다 (2026-08-29 원장님 사진 4장 테스트).
+   원장님 룰은 그때 「자동으로 선택할 수 없을 경우 중간 43을 선택한다」입니다.
+   → 자(anchor)만 있으면 **언제나** 답을 냅니다. 못 읽으면 43.
+   ⛔ 이 안전판을 빼지 마세요 — 회귀 152 가 잡습니다. */
+function innerFallback() {
+  const anchor = innerAnchor();
+  if (!anchor) return null;
+  return { f: INNER_F_MID, sgn: -1, anchor, rise: 0, mult: 0, why: "no-band" };
 }
 
 
@@ -3430,7 +3464,7 @@ function autoFromDrawing() {
      `growEnd` 는 눈꺼풀 그늘을 따라 미간 맨살(앱 48)까지 걸어갔습니다.
      판독이 아예 안 되면 예전 경로를 쓰되 **40~48 밖으로는 못 나가게** 자릅니다. */
   {
-    const dec = innerDecide(img, pts);
+    const dec = innerDecide(img, pts) || innerFallback();
     S.innerRead = dec || null;
     if (dec) {
       setLine("v2", clamp(S.g.v1 - dec.anchor * (1 - dec.f), 0.02, 0.98));
@@ -4712,7 +4746,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
-  updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF,
+  updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, CENTER_Y };   /* v1.97.0 — 예비 동공 정렬 검사용 */
