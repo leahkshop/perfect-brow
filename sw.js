@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v95";  /* v1.94.0 — 원장님 선 설정을 초기 셋팅(LOOK_DEF)으로 저장 (2026-08-29 확정) */
+const VERSION = "pb-v96";  /* v1.95.0 — 놓은 선·서브 라인 설정 · 위아래 바/되돌리기 왼쪽 이동 · 배경 탭=다음 단계 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

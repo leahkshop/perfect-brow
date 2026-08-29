@@ -217,11 +217,9 @@ console.log("[세로 모드 · 기능]");
   await p.evaluate(([a, b]) => { window.PB.alignFromPupils(a, b); window.PB.render(); }, [A, B]);
   await p.waitForTimeout(200);
   const st = await p.evaluate(() => ({ ...window.PB.S.p, v1: window.PB.S.g.v1, h1: window.PB.S.g.h1 }));
-  /* 기준점 = 메인 작업 영역(캔버스 왼쪽 ~ 오른쪽 드래그 바)의 한가운데 (v1.17.0) */
-  const cxExp = await p.evaluate(() => {
-    const d = document.getElementById("rightDock");
-    return (d.offsetLeft - 8) / window.PB.S.dim.W / 2;
-  });
+  /* 기준점 = 메인 작업 영역의 한가운데. v1.95.0 — 바가 왼쪽으로 가서 작업 영역이
+     [workLeft ~ workRight] 입니다 (왼쪽 바 오른쪽 끝 ~ 거의 전폭) */
+  const cxExp = await p.evaluate(() => (window.PB.workLeft() + window.PB.workRight()) / 2);
   check("6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 0.60",
     near(st.rot, -6, 0.3) && near(st.v1, cxExp, 0.003) && near(st.h1, 0.60, 0.001),
     `rot=${st.rot.toFixed(2)}° v1=${st.v1.toFixed(3)}(기대 ${cxExp.toFixed(3)}) h1=${st.h1.toFixed(3)}`);
@@ -422,7 +420,7 @@ console.log("[세로 모드 · 기능]");
     `Δox=${((a23.p.ox - b23.p.ox) * box2.width).toFixed(1)}px, 선 불변=${a23.g.h1 === b23.g.h1 && a23.g.v2 === b23.g.v2}`);
 
   const st0W = await p.evaluate(() => window.PB.S.dim.W);
-  // 24. 세로 조절자 = 오른쪽(스와이프 여백 확보) · 세로 중앙, ▲ 위 / ▼ 아래
+  // 24. 세로 조절자 = **왼쪽**(v1.95.0 원장님 지시 — 오른손 액션 공간 확보) · 세로 중앙, ▲ 위 / ▼ 아래
   const ctlV = await p.evaluate(() => {
     window.PB.S.sel = "h1"; window.PB.render();
     const c = document.getElementById("posCtlV").getBoundingClientRect();
@@ -431,14 +429,14 @@ console.log("[세로 모드 · 기능]");
     const dn = document.getElementById("posMinusV").getBoundingClientRect();
     const dockTop = document.getElementById("bottomDock").getBoundingClientRect().top;
     const mid = (c.top + c.bottom) / 2, region = (st.top + dockTop) / 2;
-    return { vert: c.height > c.width, rightEdge: st.right - c.right,
+    return { vert: c.height > c.width, leftEdge: c.left - st.left,
              centered: Math.abs(mid - region) < st.height * 0.10,
              upAbove: up.top < dn.top,
              glyph: document.getElementById("posPlusV").textContent + document.getElementById("posMinusV").textContent };
   });
-  check("24. 세로 조절자 — 오른쪽 끝 · 세로 중앙 (▲위/▼아래)",
-    ctlV.vert && ctlV.rightEdge > st0W * 0.015 && ctlV.rightEdge < st0W * 0.08 && ctlV.centered && ctlV.upAbove && ctlV.glyph === "▲▼",
-    `세로=${ctlV.vert} 우측여백=${ctlV.rightEdge.toFixed(0)}px 세로중앙=${ctlV.centered} 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
+  check("24. 세로 조절자 — 왼쪽 끝 · 세로 중앙 (▲위/▼아래)",
+    ctlV.vert && ctlV.leftEdge >= 0 && ctlV.leftEdge < st0W * 0.08 && ctlV.centered && ctlV.upAbove && ctlV.glyph === "▲▼",
+    `세로=${ctlV.vert} 좌측여백=${ctlV.leftEdge.toFixed(0)}px 세로중앙=${ctlV.centered} 위화살표위=${ctlV.upAbove} ${ctlV.glyph}`);
 
   // 25. 가로 조절자 = 아래 · 오른쪽 정렬, ◀ 왼쪽 / ▶ 오른쪽
   const ctlH = await p.evaluate(() => {
@@ -621,20 +619,27 @@ console.log("[세로 모드 · 기능]");
 
   /* 39. 오른쪽 도크 순서 (v1.45.0 · 원장님 지시 2026-08-21)
      위에서부터 **초기화 → 위아래 조절 바 → 다시실행 → 되돌리기**. */
+  /* v1.95.0 (원장님 지시 2026-08-29) — 위아래 바·다시실행·되돌리기는 **왼쪽** 세로 중앙,
+     초기화는 **오른쪽 위** 밸런스 행 높이. ⛔ 바를 오른쪽으로 되돌리지 마세요 — 오른손 액션 공간. */
   const placed = await p.evaluate(() => {
     const r = (id) => document.getElementById(id).getBoundingClientRect();
     const u = r("btnUndo"), rd = r("btnRedo"), v = r("posCtlV"), rs = r("btnReset");
+    const st = document.getElementById("stage").getBoundingClientRect();
+    const bal = document.querySelector(".ov-bal").getBoundingClientRect();
     return {
-      order: rs.bottom <= v.top + 1 && v.bottom <= rd.top + 1 && rd.bottom <= u.top + 1,
-      inRDock: document.getElementById("rightDock").contains(document.getElementById("btnUndo")),
+      order: v.bottom <= rd.top + 1 && rd.bottom <= u.top + 1,
+      dockLeft: v.left - st.left < st.width * 0.2,
+      inRDock: document.getElementById("rightDock").contains(document.getElementById("btnUndo"))
+            && !document.getElementById("rightDock").contains(document.getElementById("btnReset")),
+      resetTopRight: st.right - rs.right < st.width * 0.1 && Math.abs(rs.top - bal.top) < 14,
       removed: !document.getElementById("btnAlign") && !document.getElementById("btnRotate")
                && !document.getElementById("phSlider") && !document.getElementById("btnLock2")
                && !document.querySelector(".topbar") && !document.querySelector(".panels"),
     };
   });
-  check("39. 오른쪽 도크 순서 = 초기화·위아래 바·다시실행·되돌리기 · 삭제 버튼 정리",
-    placed.order && placed.inRDock && placed.removed,
-    `순서=${placed.order} 오른쪽도크=${placed.inRDock} 삭제완료=${placed.removed}`);
+  check("39. 왼쪽 도크 = 위아래 바·다시실행·되돌리기 · 초기화 = 오른쪽 위(밸런스 행) · 삭제 버튼 정리",
+    placed.order && placed.dockLeft && placed.inRDock && placed.resetTopRight && placed.removed,
+    `순서=${placed.order} 왼쪽도크=${placed.dockLeft}/${placed.inRDock} 초기화 오른쪽위=${placed.resetTopRight} 삭제완료=${placed.removed}`);
 
   // 41. 되돌리기 — 직전 작업 1단계씩, 두 번 누르면 그 전 작업까지
   const undoTest = await p.evaluate(async () => {
@@ -1638,9 +1643,9 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     const hitChip = rects.some((r) => r.x < cx + chip.offsetWidth && r.x + r.w > cx
       && r.y < cy + chip.offsetHeight && r.y + r.h > cy);
     return {
-      /* v1.53.0 — 여백이 2%로 줄어 라벨이 바 **왼쪽**(캔버스 안쪽)으로 이동 */
-      rightOfBar: l.right <= bar.left + 1, inside: l.left >= st.left - 1 && l.right <= st.right + 1,
-      gap: Math.round(bar.left - l.right),
+      /* v1.95.0 — 바가 왼쪽으로 가서 라벨은 바 **오른쪽**(캔버스 안쪽)입니다 */
+      rightOfBar: l.left >= bar.right - 1, inside: l.left >= st.left - 1 && l.right <= st.right + 1,
+      gap: Math.round(l.left - bar.right),
       count: rects.length, top: Math.min(...rects.map((r) => r.y)), hitChip,
     };
   });
@@ -1670,19 +1675,21 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     window.PB.render();
     const narrow = span();
     S.g = { ...window.PB.DEFAULT_GUIDE }; window.PB.render();
-    return { wide, narrow, dockL: document.getElementById("rightDock").offsetLeft, W };
+    const dk = document.getElementById("rightDock");
+    return { wide, narrow, dockR: dk.offsetLeft + dk.offsetWidth, W };
   });
   const wideLen = hLine.wide.maxX - hLine.wide.minX;
   const narrowLen = hLine.narrow.maxX - hLine.narrow.minX;
-  check(`48. ${dev.n} — 가로 자 길이 = 눈썹 구간 (바를 넘지 않음)`,
-    hLine.wide.n >= 4 && hLine.wide.maxX <= hLine.dockL + 1
+  /* v1.95.0 — 바가 왼쪽이라 자는 **왼쪽 바 밑으로** 들어가면 안 됩니다 (workLeft 검사) */
+  check(`48. ${dev.n} — 가로 자 길이 = 눈썹 구간 (왼쪽 바를 넘지 않음)`,
+    hLine.wide.n >= 4 && hLine.wide.minX >= hLine.dockR - 1
       && narrowLen < wideLen * 0.85                       // 눈썹을 좁히면 자도 짧아진다
       && narrowLen > wideLen * 0.4,
-    `넓은눈썹 ${Math.round(wideLen)}px → 좁은눈썹 ${Math.round(narrowLen)}px (캔버스 ${hLine.W}px, 바 ${hLine.dockL}px)`);
+    `넓은눈썹 ${Math.round(wideLen)}px → 좁은눈썹 ${Math.round(narrowLen)}px (캔버스 ${hLine.W}px, 바 오른끝 ${hLine.dockR}px)`);
 
   // 47. 컨트롤 영역 스크림 — 터치를 막지 않고, 가이드 선보다 아래에 깔린다 (v1.16.0)
   const scrim = await p.evaluate(() => {
-    const b = document.querySelector(".scrim-b"), r = document.querySelector(".scrim-r");
+    const b = document.querySelector(".scrim-b"), r = document.querySelector(".scrim-l");   /* v1.95.0 — 바가 왼쪽 */
     const g = document.getElementById("guides"), st = document.getElementById("stage");
     if (!b || !r) return { ok: false };
     const kids = [...st.children];
@@ -1694,15 +1701,15 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       noTouch: getComputedStyle(b).pointerEvents === "none" && getComputedStyle(r).pointerEvents === "none",
       belowGuides: kids.indexOf(b) < kids.indexOf(g) && kids.indexOf(r) < kids.indexOf(g),
       coversDocks: br.top <= bd.top + 2 && br.top <= ld.top + 2,
-      coversBar: rr.left <= document.getElementById("posCtlV").getBoundingClientRect().left + 2,
+      coversBar: rr.right >= document.getElementById("posCtlV").getBoundingClientRect().right - 2,
     };
   });
   check(`47. ${dev.n} — 컨트롤 영역 스크림 (터치 통과 · 선이 위)`,
     scrim.ok && scrim.noTouch && scrim.belowGuides && scrim.coversDocks && scrim.coversBar,
     `터치통과=${scrim.noTouch} 선위=${scrim.belowGuides} 아래도크덮음=${scrim.coversDocks} 세로바덮음=${scrim.coversBar}`);
 
-  check(`45. ${dev.n} — 세로 조절자 값 라벨이 바 왼쪽(안쪽) · 캔버스 안`,
-    lab.rightOfBar && lab.inside, `바 왼쪽=${lab.rightOfBar}(간격 ${lab.gap}px) 캔버스안=${lab.inside}`);
+  check(`45. ${dev.n} — 세로 조절자 값 라벨이 바 오른쪽(안쪽) · 캔버스 안`,
+    lab.rightOfBar && lab.inside, `바 오른쪽=${lab.rightOfBar}(간격 ${lab.gap}px) 캔버스안=${lab.inside}`);
   /* v1.46.2 — 세로선 이름 배지는 **전부 숨김** (원장님 지시). 색이 곧 이름표. */
   check(`46. ${dev.n} — 세로선 이름 배지 없음 (v1.46.2 숨김)`,
     lab.count === 0 && !lab.hitChip,
@@ -1730,6 +1737,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
     const r = (id) => el(id).getBoundingClientRect();
     const st = r("stage"), chg = r("btnChange"), exp = r("btnExport"), lock = r("btnLock");
     const rst = r("btnReset"), ctlV = r("posCtlV"), rd = r("rightDock");
+    const rw2 = document.getElementById("refWrap") ? r("refWrap") : null;   /* 밸런스 묶음 (v1.95.0 초기화 정렬 기준) */
     const bal = r("btnBalance"), ld = r("leftDock"), cd = r("centerDock"), bd = r("bottomDock");
     const cs = getComputedStyle(el("btnReset"));
     return {
@@ -1744,7 +1752,8 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
       /* v1.45.0 — 초기화 = 프리셋 버튼과 같은 크기 · 되돌리기·다시실행 더 크게 + 채움 배경
          v1.50.0 — **사진저장은 더 이상 채움이 아니다** (원장님 지시: 「시작시 사진저장에 색상 죽일것」).
          대신 **사진잠금이 채움**으로 시선을 잡는다. 되돌리지 마세요 — 105 번도 함께 잠급니다. */
-      resetPresetSize: Math.abs(rst.height - r("btnGuide").height) < 2,   /* v1.89.0 — 프리셋 숨김 → 가이드와 비교 */
+      /* v1.95.0 — 초기화는 오른쪽 위 작은 칩: 밸런스 행과 같은 높이 줄에 · 칩 크기(28~40px) */
+      resetPresetSize: Math.abs(rst.top - (rw2 ? rw2.top : rst.top)) < 14 && rst.height >= 26 && rst.height <= 40,
       exportQuiet: !getComputedStyle(el("btnExport")).backgroundImage.includes("gradient"),
       undoBigger: r("btnUndo").height > 34 && r("btnRedo").height > 34,
       undoFilled: getComputedStyle(el("btnUndo")).backgroundImage.includes("gradient")
@@ -2595,7 +2604,7 @@ console.log("\n[밸런스 판정]");
       /* 움직임이 끝났다고 표시 → 잡은 선 색으로 남는다 */
       PBx.S.doneSet = ["front"]; S.sel = "h1"; PBx.render();
       const settled = seg("front"), other = seg("h2");
-      return { plain, picked, settled, other, grabCore: S.look.dragCore };
+      return { plain, picked, settled, other, grabCore: S.look.dragCore, doneC: S.look.doneC };
     });
     await ctx.close();
     /* v1.94.0 — 원장님 재확정 기본색: 앞머리(이너 묶음) 라임 · 아치 민트 · 꼬리 파랑 */
@@ -2603,13 +2612,14 @@ console.log("\n[밸런스 판정]");
       && intro.arch === "#5EEAD4" && intro.tail === "#2E8BFF" && intro.front === "#A3E635";
     const startedOk = after.on === false && after.cur === after.first && after.sel === after.first;
     const pickOk = marks.picked.w > marks.plain.w * 1.15 && marks.picked.o > marks.plain.o + 0.15;
-    const settleOk = marks.settled.c === marks.grabCore && marks.other.c === "#5EEAD4";
+    /* v1.95.0 — 놓은 선은 **놓은 선 색(doneC)** 으로 남습니다 (잡은 선과 분리) */
+    const settleOk = marks.settled.c === marks.doneC && marks.other.c === "#5EEAD4";
     check("134. 전체라인 인사 1회 깜빡임 · 선택하면 굵고 밝게 · 움직인 선은 잡은 선 색으로 남음",
       introOk && startedOk && pickOk && settleOk,
       `인사: 켜짐=${intro.on} 차례없음=${intro.cur === null} blink1 ${intro.blink1}개 색 ${intro.front}/${intro.arch}/${intro.tail} · `
       + `끝난 뒤 첫 스텝=${after.cur}(${startedOk}) · `
       + `선택 굵기 ${marks.plain.w.toFixed(2)}→${marks.picked.w.toFixed(2)} 투명도 ${marks.plain.o}→${marks.picked.o} · `
-      + `움직인 선 ${marks.settled.c}(잡은색 ${marks.grabCore}) / 안 움직인 선 ${marks.other.c}`);
+      + `움직인 선 ${marks.settled.c}(놓은색 ${marks.doneC}) / 안 움직인 선 ${marks.other.c}`);
   }
 
   /* 135. ⭐ v1.81.0 — **가이드 순서를 원장님이 바꿀 수 있다** (원장님 지시 2026-08-27
@@ -2764,17 +2774,18 @@ console.log("\n[밸런스 판정]");
       document.querySelector('.lbtn[data-key="h2"]').click();
       PBx.render();
       const backDead = seg("front");
-      return { dead, plain, picked, pulseOnce, held, backDead, own: S.look.inner, grab: S.look.dragCore };
+      return { dead, plain, picked, pulseOnce, held, backDead, own: S.look.inner, grab: S.look.dragCore,
+               done: S.look.doneC };   /* v1.95.0 — 죽은(놓은) 선은 놓은 선 색 */
     });
     await ctx.close();
-    const okRevive = r.dead && r.picked && r.dead.c === r.grab && r.picked.c === r.own;
+    const okRevive = r.dead && r.picked && r.dead.c === r.done && r.picked.c === r.own;   /* v1.95.0 doneC */
     const okLouder = r.picked && r.plain && r.picked.w > r.plain.w + 0.01 && r.picked.o >= r.plain.o;
     check("137. 고르면 되살아난다 — 죽은 선도 고르면 고유색·더 굵게·한 번 반짝 · 잡는 동안은 잡은 선 색",
       okRevive && okLouder && r.pulseOnce
-        && r.held && r.held.c === r.grab && r.backDead && r.backDead.c === r.grab,
+        && r.held && r.held.c === r.grab && r.backDead && r.backDead.c === r.done,
       `죽은 앞머리 ${r.dead && r.dead.c} → 고르면 ${r.picked && r.picked.c}(고유 ${r.own}) · `
       + `굵기 ${r.plain && r.plain.w.toFixed(2)}→${r.picked && r.picked.w.toFixed(2)} 투명도 ${r.plain && r.plain.o}→${r.picked && r.picked.o} · `
-      + `한 번 반짝=${r.pulseOnce}(${r.picked && r.picked.cls}) · 잡는 중 ${r.held && r.held.c} · 놓고 다른 선 고르면 ${r.backDead && r.backDead.c}`);
+      + `한 번 반짝=${r.pulseOnce}(${r.picked && r.picked.cls}) · 잡는 중 ${r.held && r.held.c}(잡은색 ${r.grab}) · 놓고 다른 선 고르면 ${r.backDead && r.backDead.c}(놓은색 ${r.done})`);
   }
 
   /* 138. ⭐ v1.84.0 — **고른 선 말고는 한 단계 물러난다** (원장님 확인 2026-08-27 · B안)
@@ -3178,6 +3189,157 @@ console.log("\n[밸런스 판정]");
       noOverlap && forced && dvhLast && noRect,
       results.map((r2) => `${r2.vw}px:${r2.tier}(L${r2.gapL}/R${r2.gapR})`).join(" · ")
       + ` · 강제가로=${forced} · dvh마지막=${dvhLast} · rect금지=${noRect}`);
+  }
+
+  /* 146. ⭐ v1.95.0 — **놓은 선 설정** (원장님 지시 2026-08-29: 「놓은선 기본 설정 추가 —
+     선 굵기·색상·투명도. 놓은선은 체크를 마무리하고 전체를 보는 선」)
+     · 놓은 선(doneSet)은 doneC/doneW/doneOp 로 그려진다 — 잡은 선 값과 **완전 분리**
+     · 설정 시트에 색상표·굵기·투명도 컨트롤이 있다
+     ⛔ drawDone 을 drawGrab 으로 합치지 마세요 — 잡은 선을 바꾸면 놓은 선까지 같이 바뀝니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, H = S.dim.H;
+      S.intro = false; S.guideOn = false; S.guideCur = null; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1,
+                 dragCore: "#14161B", dragW: 1.4, dragOp: 0.9,
+                 doneC: "#FF4D94", doneW: 0.6, doneOp: 0.4 };
+      S.multi = false; S.selSet = []; S.sel = "h1"; S.doneSet = ["front"];
+      PBx.render();
+      const seg = (key) => {
+        const y = S.g[key] * H;
+        const q = [...document.getElementById("guides").querySelectorAll("line")]
+          .map((l) => ({ c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+                         o: +(l.getAttribute("stroke-opacity") || 1),
+                         y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2"),
+                         x1: +l.getAttribute("x1"), x2: +l.getAttribute("x2") }))
+          .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1 && Math.abs(l.x2 - l.x1) > 2);
+        return q.sort((a, b) => b.w - a.w)[0] || null;
+      };
+      const done = seg("front");
+      /* 잡은 선 값을 바꿔도 놓은 선은 안 변한다 (분리) */
+      S.look.dragW = 0.7; S.look.dragCore = "#FFFFFF"; PBx.render();
+      const done2 = seg("front");
+      /* 설정 컨트롤 존재 + 값 동기화 */
+      PBx.buildLookUI();
+      const ui = {
+        sw: document.querySelectorAll("#swDoneC button.sw").length,
+        w: document.getElementById("rngDoneW") ? +document.getElementById("rngDoneW").value : -1,
+        op: document.getElementById("rngDoneOp") ? +document.getElementById("rngDoneOp").value : -1,
+      };
+      const base = (PBx.H_SPECS.find((q2) => q2.key === "front").w + 1.8);
+      return { done, done2, ui, expW: base * 0.6 };
+    });
+    await ctx.close();
+    check("146. 놓은 선 — doneC/doneW/doneOp 로 그림 · 잡은 선과 분리 · 설정 컨트롤",
+      r.done && r.done.c === "#FF4D94" && Math.abs(r.done.w - r.expW) < 0.01 && Math.abs(r.done.o - 0.4) < 0.01
+        && r.done2 && r.done2.c === "#FF4D94" && Math.abs(r.done2.w - r.expW) < 0.01
+        && r.ui.sw === 8 && r.ui.w === 60 && r.ui.op === 40,
+      `놓은 선 ${r.done && r.done.c}/${r.done && r.done.w.toFixed(2)}(기대 ${r.expW.toFixed(2)})/${r.done && r.done.o} · `
+      + `잡은선 바꿔도 유지=${r.done2 && r.done2.c === "#FF4D94"} · 색상표 ${r.ui.sw}칸 · 슬라이더 ${r.ui.w}%/${r.ui.op}%`);
+  }
+
+  /* 147. ⭐ v1.95.0 — **서브 라인 설정** (원장님 지시 2026-08-29: 「아치엣지와 아치두께에서
+     뻗어 이너라인까지 닿는 서브 라인의 굵기·투명도」)
+     자→이너선 옅은 연결선의 굵기(subW)·투명도(subOp)가 설정을 따른다. 색은 먹색 고정. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S, H = S.dim.H;
+      S.intro = false; S.guideOn = false; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1, subW: 2.4, subOp: 0.5 };
+      S.multi = false; S.selSet = []; S.sel = "h1"; S.doneSet = [];
+      PBx.render();
+      const subs = (key) => {
+        const y = S.g[key] * H;
+        return [...document.getElementById("guides").querySelectorAll("line")]
+          .map((l) => ({ c: l.getAttribute("stroke"), w: +l.getAttribute("stroke-width"),
+                         o: +(l.getAttribute("stroke-opacity") || 1),
+                         y1: +l.getAttribute("y1"), y2: +l.getAttribute("y2") }))
+          .filter((l) => Math.abs(l.y1 - l.y2) < 0.5 && Math.abs(l.y1 - y) < 1
+                      && l.c === "#14161B" && l.o < 0.95 && l.o > 0.2);
+      };
+      const q = subs("h2");
+      const ui = {
+        w: document.getElementById("rngSubW") ? 1 : 0,
+        op: document.getElementById("rngSubOp") ? 1 : 0,
+      };
+      return { n: q.length, w: q[0] && q[0].w, o: q[0] && q[0].o, ui };
+    });
+    await ctx.close();
+    check("147. 서브 라인 — 자→이너 연결선 굵기·투명도가 설정(subW/subOp)을 따름",
+      r.n >= 1 && Math.abs(r.w - 2.4) < 0.01 && Math.abs(r.o - 0.5) < 0.01 && r.ui.w === 1 && r.ui.op === 1,
+      `연결선 ${r.n}개 · 굵기 ${r.w} (기대 2.4) · 투명도 ${r.o} (기대 0.5) · 슬라이더 존재=${r.ui.w === 1 && r.ui.op === 1}`);
+  }
+
+  /* 148. ⭐ v1.95.0 — **배경 한 번 탭 = 이 단계 확인하고 다음으로** (원장님 지시 2026-08-29:
+     「이미 맞은 라인을 움직이지 않아도 될 경우 가이드 블링킹 이후 한 번 배경을 클릭하면
+       다음으로 넘어가라 — 그래서 설명도 넘어가라」)
+     · 가이드 켜짐 + 차례 있음 + 배경(선 없는 곳) 탭 → 그 단계 끝냄(doneSet) + 다음 차례 + 안내 이동
+     · 선 위 탭은 그대로 선택 (건너뛰지 않는다) · 인사 중에는 안 넘어간다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fd);
+    /* 얼굴 AI(자동 정렬)가 **끝난 뒤** 상태를 굳힙니다 — AI 가 늦게 끝나 선 위치가 바뀌면
+       미리 골라 둔 배경 지점이 선 위가 되어 탭이 「선택」으로 판정됩니다 (실제로 겪음) */
+    await p.waitForTimeout(3200);
+    const pre = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      S.intro = false; S.guideOn = true; S.doneSet = [];
+      S.guideCur = PBx.GUIDE_FLOW[0]; S.g = { ...PBx.DEFAULT_GUIDE };
+      S.look = { ...PBx.LOOK_DEF, weight: 1, hlen: 0.19, alpha: 1 };
+      PBx.render(); PBx.updateGuideTip();
+      /* 배경 지점: 어떤 선에서도 먼 곳을 찾는다 (스테이지 좌표) */
+      const W = S.dim.W, H = S.dim.H;
+      /* 오버레이(밸런스 칩·초기화·도크·안내)를 피해 가운데 띠에서 찾는다 */
+      let bg = null;
+      for (let yy = 0.14; yy < 0.58 && !bg; yy += 0.02)
+        for (let xx = 0.35; xx < 0.88 && !bg; xx += 0.02)
+          if (!PBx.hitTest(xx * W, yy * H)) bg = { x: xx * W, y: yy * H };
+      const st = document.getElementById("stage").getBoundingClientRect();
+      const tip0 = (document.getElementById("guideTip") || {}).textContent || "";
+      return { first: S.guideCur, second: PBx.GUIDE_FLOW[1] || null, bg, sx: st.x, sy: st.y, tip0 };
+    });
+    /* ① 배경 탭 → 다음 단계 */
+    const t1 = await p.context().newCDPSession(p);
+    const tap = async (x, y) => {
+      await t1.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y, id: 0 }] });
+      await t1.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await p.waitForTimeout(250);
+    };
+    /* rot90 화면이 아니므로(테스트 뷰포트는 실제 가로) 스테이지 좌표 = 화면 좌표 + 오프셋 */
+    await tap(pre.sx + pre.bg.x, pre.sy + pre.bg.y);
+    const a1 = await p.evaluate(() => ({ cur: window.PB.S.guideCur, done: [...window.PB.S.doneSet],
+      tip: (document.getElementById("guideTip") || {}).textContent || "" }));
+    /* ② 인사 중 배경 탭 → 안 넘어간다 */
+    const a2 = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      S.guideCur = null; S.doneSet = []; PBx.startIntro(); PBx.render();
+      return { intro: S.intro };
+    });
+    await tap(pre.sx + pre.bg.x, pre.sy + pre.bg.y);
+    const a3 = await p.evaluate(() => ({ intro: window.PB.S.intro, cur: window.PB.S.guideCur,
+      done: [...window.PB.S.doneSet] }));
+    await ctx.close();
+    const skipOk = a1.cur === pre.second && a1.done.includes(pre.first);
+    const tipMoved = pre.second ? a1.tip !== pre.tip0 && a1.tip.length > 0 : true;
+    const introSafe = a2.intro === true && a3.intro === true && a3.done.length === 0;
+    check("148. 배경 한 번 탭 = 단계 확인·다음으로 (안내도 이동) · 인사 중엔 안 넘어감",
+      skipOk && tipMoved && introSafe,
+      `탭 후 차례 ${a1.cur}(기대 ${pre.second}) · 끝냄 [${a1.done}] · 안내 이동=${tipMoved} · 인사 보호=${introSafe}`);
   }
 
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
@@ -4087,6 +4249,9 @@ console.log("\n[밸런스 판정]");
       vInner: "#5EEAD4", vArch: "#14161B", vTail: "#14161B",
       edge: 0, edgeC: "none", weight: 0.75, hlen: 0.04, alpha: 0.55,
       dragCore: "#FFFFFF", dragEdge: "none", dragW: 0.85, dragOp: 0.65,
+      /* v1.95.0 — 놓은 선(체크 마친 선)·서브 라인 기본값 (원장님 지시 2026-08-29).
+         기본값은 기존 화면과 동일하게 보이도록 잡은 선·연결선 값과 같습니다. */
+      doneC: "#FFFFFF", doneW: 0.85, doneOp: 0.65, subW: 1, subOp: 0.16,
     };
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();

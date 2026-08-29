@@ -60,8 +60,11 @@ const I18N = {
     tip_archThickness: "아치두께 — 산 <b>아랫선</b>에 얹으세요 (위아래 바)",
     tip_v4: "꼬리 아우터 — <b>십자 안쪽 위 모서리</b>를 꼬리 끝에 맞추세요 (좌우 바)",
     tip_h3: "꼬리 높이 — 꼬리 끝 <b>아랫선</b>에 얹으세요 (위아래 바)",
-    set_tab_base: "기본 선 · 차례", set_tab_grab: "잡은 선 · 움직일 때",
+    set_tab_base: "기본 선 · 차례", set_tab_grab: "잡은 선 · 놓은 선",
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
+    /* v1.95.0 — 놓은 선 · 서브 라인 (원장님 지시 2026-08-29) */
+    set_dline_hd: "놓은 선 — 체크를 마친 선", set_color: "색상", set_sub: "서브 라인",
+    set_dline_note: "놓은 선 = 체크를 마무리하고 놓아 둔 선 — 전체 그림을 볼 때의 모습입니다.",
     set_backed: "이전 설정으로 되돌렸습니다", set_inner: "이너 묶음", set_arch: "아치 묶음", set_tail: "꼬리 묶음",
     line_hidden: "숨김 — 다시 누르면 나옵니다",
     editor_tip: "안내", ai_name: "눈썹정렬",
@@ -222,8 +225,11 @@ const I18N = {
     tip_archThickness: "Arch thickness — put it on the <b>lower</b> edge of the arch",
     tip_v4: "Tail outer — put the <b>inner-upper corner</b> on the tail tip (left/right bar)",
     tip_h3: "Tail height — put it on the <b>lower</b> edge of the tail tip",
-    set_tab_base: "Base lines", set_tab_grab: "Grabbed line",
+    set_tab_base: "Base lines", set_tab_grab: "Grab · Done",
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
+    /* v1.95.0 — done line · sub line */
+    set_dline_hd: "Done line — after checking", set_color: "Color", set_sub: "Sub line",
+    set_dline_note: "A done line is one you have finished checking and set down — how it looks when viewing the whole.",
     set_backed: "Restored previous settings", set_inner: "Inner", set_arch: "Arch", set_tail: "Tail",
     line_hidden: "hidden — tap again to show",
     editor_tip: "Tips", ai_name: "Align",   /* v1.92.0 — 좁은 폰에서 잠금(센터선)과 부딪히지 않는 폭 */
@@ -363,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v1.94.0";
+const APP_VERSION = "v1.95.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -550,12 +556,23 @@ const EYE_FRAC = 0.44;    // 자동 정렬 시 동공 간 거리 / 캔버스 폭
    세로는 위쪽에 눈썹을 그릴 여유를 두려고 55% (CENTER_Y). */
 const WORK_GAP = 8;              // 드래그 바 왼쪽에서 띄우는 여유
 const CENTER_Y = 0.60;
-function workRight() {           // 0~1 정규화. 도크가 아직 없으면 1(전체)
+/* ⭐ v1.95.0 — **위아래 바가 왼쪽으로** 갔습니다 (원장님 지시 2026-08-29:
+   「선 움직임을 사실 오른손으로만 움직이는데 드래그 바 때문에 손 액션 공간이 별로 없다」).
+   그래서 작업 영역이 [workLeft ~ workRight] 로 바뀝니다:
+   · workLeft  = 왼쪽 바(#rightDock — 이름은 역사, 자리만 왼쪽) 오른쪽 끝 + 여유
+   · workRight = 오른쪽은 위 모서리 초기화 버튼뿐이라 **거의 전폭**(작은 여백만)
+   ⛔ workRight 를 다시 #rightDock 위치로 계산하지 마세요 — 도크가 왼쪽이라 0.5 로
+      붕괴해 얼굴이 반쪽에 구겨집니다 (실제 사고 방지 주석). */
+function workLeft() {            // 0~1 정규화. 도크가 아직 없으면 0(전체)
   const d = $("rightDock"), W = S.dim.W;
-  if (!d || !d.offsetWidth || !W) return 1;
-  return clamp((d.offsetLeft - WORK_GAP) / W, 0.5, 1);
+  if (!d || !d.offsetWidth || !W) return 0;
+  return clamp((d.offsetLeft + d.offsetWidth + WORK_GAP) / W, 0, 0.5);
 }
-const centerX = () => workRight() / 2;
+function workRight() {
+  const W = S.dim.W;
+  return W ? 1 - 8 / W : 1;
+}
+const centerX = () => (workLeft() + workRight()) / 2;
 /* 인체 계측 평균비 — 동공 간 거리 기준 (동공 오프셋 = 1.0) */
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
 const R_OUTER = 1.50;     // 눈꼬리(외안각)
@@ -622,10 +639,16 @@ const LOOK_KEY = "pb_look_v1";
    · 굵기 0.75 · 가로 길이 0.04(슬라이더 8%) · 투명도 55% — 더 얇고 짧고 연하게
    · 잡은 선 = **흰색 심** · 테두리 없음 · 굵기 85% · 투명도 65%
    ⛔ 값을 바꾸려면 원장님 확인을 먼저 받으세요. 회귀 112 가 이 값을 통째로 잠급니다. */
+/* ⭐ v1.95.0 — 원장님 지시 2026-08-29 「놓은선 기본 설정 추가 — 선 굵기·색상·투명도.
+     놓은선은 체크를 마무리하고 전체를 보는 선」 + 서브 라인(자→이너 연결선) 굵기·투명도.
+   · doneC/doneW/doneOp = **놓은 선**(체크 끝낸 선 · S.doneSet) 전용 — 잡은 선과 값 분리
+   · subW/subOp = 가로 자에서 이너선까지 잇는 **서브 라인**(옅은 연결선)
+   기본값은 기존 화면과 똑같이 보이도록 잡은 선 값(흰색·85%·65%)과 연결선 값(1px·16%)을 그대로. */
 const LOOK_DEF = { inner: "#A3E635", arch: "#5EEAD4", tail: "#2E8BFF",
                    vInner: "#5EEAD4", vArch: "#14161B", vTail: "#14161B",
                    edge: 0, edgeC: "none", weight: 0.75, hlen: 0.04, alpha: 0.55,
-                   dragCore: "#FFFFFF", dragEdge: "none", dragW: 0.85, dragOp: 0.65 };
+                   dragCore: "#FFFFFF", dragEdge: "none", dragW: 0.85, dragOp: 0.65,
+                   doneC: "#FFFFFF", doneW: 0.85, doneOp: 0.65, subW: 1, subOp: 0.16 };
 /* 맨 위 3개 조합 — 첫 칸은 늘 「현재 세트」(지금 값), 나머지 둘은 상황별 추천 */
 const LOOK_COMBOS = [
   { id: "now",    name: "set_c_now",    desc: "set_c_now_d" },
@@ -880,6 +903,14 @@ function drawGrab(frag, x1, y1, x2, y2, w) {
   if (e !== "none") drawLine(frag, x1, y1, x2, y2, e, gw + GRAB_RING, 0.95 * op);
   drawLine(frag, x1, y1, x2, y2, L.dragCore || HALF_GREY, gw, op);
 }
+/* ⭐ v1.95.0 — **놓은 선** (체크를 마무리하고 놓아 둔 선 · 원장님 지시 2026-08-29).
+   잡은 선과 값이 **완전 분리**입니다 — 설정의 「놓은 선」 색·굵기·투명도를 그대로 그립니다.
+   ⛔ drawGrab 으로 되돌리지 마세요 — 잡은 선 굵기를 바꾸면 놓은 선까지 같이 바뀝니다. */
+function drawDone(frag, x1, y1, x2, y2, w) {
+  const L = S.look || {};
+  drawLine(frag, x1, y1, x2, y2, L.doneC || "#FFFFFF",
+           w * (L.doneW != null ? L.doneW : 1), L.doneOp != null ? L.doneOp : 1);
+}
 const SEG_HALF = 0.19;           // 자 반폭 기본값 — 실제 값은 S.look.hlen (v1.56.0 설정)
 const segHalf = () => (S.look && S.look.hlen) || SEG_HALF;
 const BROW_PAD = 0.022;          // 눈 기준선이 아우터 바깥으로 더 나가는 여유
@@ -889,7 +920,7 @@ const VPAD_TIGHT = 0.025;        // 짧은 세로선의 여유 — 눈까지 내
 /* 그 가로선의 좌·우 토막 [x0px, x1px]. 그리는 범위 = 잡는 범위 = 재는 범위 (BASELINE 1-11) */
 function segPx(sp) {
   const { W } = S.dim, g = S.g;
-  const cl0 = (t) => clamp(t, 0, workRight()) * W;
+  const cl0 = (t) => clamp(t, workLeft(), workRight()) * W;   /* v1.95.0 — 왼쪽 바 밑으로 안 들어감 */
   if (!sp.anchor) {                                      // 눈 기준선 — 눈썹 구간을 좌우로 관통
     const lo = Math.min(g.v2, g.v4, g.v6) - BROW_PAD;
     return [[cl0(lo), cl0(2 * g.v1 - lo)]];
@@ -1009,9 +1040,11 @@ function renderGuides() {
         for (const [seg, tgt] of [[segs[0], xi], [segs[1], xi2]]) {
           const xa = Math.min(seg[0], seg[1], tgt), xb = Math.max(seg[0], seg[1], tgt);
           if (xb - xa < 2) continue;
+          /* v1.95.0 — 서브 라인 굵기·투명도는 설정(subW/subOp)을 따른다 (원장님 지시 2026-08-29) */
           frag.appendChild(mk("line", {
             x1: xa, y1: y, x2: xb, y2: y, stroke: HAIR,
-            "stroke-width": 1, "stroke-opacity": 0.16,
+            "stroke-width": (S.look && S.look.subW) || 1,
+            "stroke-opacity": S.look && S.look.subOp != null ? S.look.subOp : 0.16,
           }));
         }
       }
@@ -1031,7 +1064,8 @@ function renderGuides() {
         }
         /* ⚠️ v1.55.0 — 세 상태 (위 상수 주석 참고). 자를 색/회색으로 쪼개지 않는다 */
         if (bad) { drawLine(frag, xa, y, xb, y, BAL_RED, sp.w + 2.2, 1); return; }
-        if (grabbed(sp) || settled(sp)) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
+        if (grabbed(sp)) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
+        if (settled(sp)) { drawDone(frag, xa, y, xb, y, sp.w + 1.8); return; }   /* v1.95.0 놓은 선 */
         if (sel) { drawLive(frag, xa, y, xb, y, liveColor(sp), (sp.w + 1.8) * S.look.weight, blinkOf(sp), boost(sp)); return; }
         drawLine(frag, xa, y, xb, y, HALF_GREY, HALF_W, HALF_OP);
       });
@@ -1054,7 +1088,8 @@ function renderGuides() {
       const lc = lineColor(sp, sel);
       const draw = (x) => {
         if (full) {
-          if (grabbed(sp) || settled(sp)) { drawGrab(frag, x, 0, x, H, w); return; }
+          if (grabbed(sp)) { drawGrab(frag, x, 0, x, H, w); return; }
+          if (settled(sp)) { drawDone(frag, x, 0, x, H, w); return; }            /* v1.95.0 놓은 선 */
           if (sel) { drawLive(frag, x, 0, x, H, lc, w * S.look.weight, blinkOf(sp), boost(sp)); return; }
           drawLine(frag, x, 0, x, H, lc, w, op); return;
         }
@@ -1064,7 +1099,8 @@ function renderGuides() {
         }));
         /* v1.52.0 — 잡은(강조) 세로선은 **전체 길이 고유색**: "세로줄 = 좌우 이동" 신호.
            조용할 땐 **전체가 회색 한 줄** — 색과 토막이 없어 자의 색 토막과 헷갈리지 않는다 */
-        if (grabbed(sp) || settled(sp)) { drawGrab(frag, x, by0, x, by1, w); return; }
+        if (grabbed(sp)) { drawGrab(frag, x, by0, x, by1, w); return; }
+        if (settled(sp)) { drawDone(frag, x, by0, x, by1, w); return; }          /* v1.95.0 놓은 선 */
         if (sel) { drawLive(frag, x, by0, x, by1, lc, w * S.look.weight, blinkOf(sp), boost(sp)); return; }
         drawLine(frag, x, by0, x, by1, HALF_GREY, VGREY_W, VGREY_OP);
       };
@@ -1164,7 +1200,7 @@ function renderGuides() {
       const y = g[pr.h] * H, arm = Math.max(16, Math.min(W, H) * 0.045);
       const ay = pr.up ? y - arm : y + arm;
       for (const [x, inward] of [[g[pr.v] * W, 1], [(2 * g.v1 - g[pr.v]) * W, -1]]) {
-        if (x < 2 || x > workRight() * W) continue;
+        if (x < workLeft() * W + 2 || x > workRight() * W) continue;   /* v1.95.0 — 왼쪽 바 회피 */
         const d = `M ${x + inward * arm} ${y} L ${x} ${y} L ${x} ${ay}`;
         const hex = liveColor(specOf(pr.h));
         /* ⚠️ v1.68.0 — 표식의 테두리는 **설정의 「테두리」를 그대로 따른다** (원장님 지시 2026-08-24:
@@ -1468,6 +1504,8 @@ touch.addEventListener("pointermove", (e) => {
        이미 있어 중복이고 사진을 가립니다. 여러라인 개수 안내만 유지. */
     if (S.multi && gDrag.keys.length > 1) showHud(`${gDrag.keys.length}${t("sel_count")}`);
   } else if (gMode === "pan" && gDrag) {
+    /* v1.95.0 — 배경 탭(3px 미만) 판정용. 팬 동작 자체는 그대로 즉시 따라간다 */
+    if (!gDrag.moved && Math.hypot(sp.x - gDrag.x0, sp.y - gDrag.y0) >= 3) gDrag.moved = true;
     /* 손가락 이동량을 1:1 로 따라간다. 확대할수록 더 멀리 밀 수 있어야 하므로
        한계도 배율에 비례시킨다 (panLimit). */
     const lim = panLimit();
@@ -1511,11 +1549,23 @@ function endPointer(e) {
   }
   const guideKey = gMode === "line" && gDrag && gDrag.moved ? gDrag.key : null;
   const gKeys = gMode === "line" && gDrag && gDrag.moved ? gDrag.keys : null;
+  /* ⭐ v1.95.0 — **배경 한 번 탭 = 이 단계 확인하고 다음으로** (원장님 지시 2026-08-29:
+     「이미 맞은 라인을 움직이지 않아도 될 경우 가이드 블링킹 이후 한 번 배경을 클릭하면
+       다음으로 넘어가라 — 그래서 설명도 넘어가라」).
+     · 배경 탭 = 선을 안 잡았고(3px 데드존 안) 움직이지도 않은 한 손가락 탭
+       (잠금 해제 상태의 팬 탭, 잠금 상태의 빈 곳 탭 — 둘 다)
+     · 지금 차례 선을 「끝냄」으로 표시하고(놓은 선 색이 된다) 다음 차례로 — 설명도 따라간다
+     · 인사(초기화셋팅) 중에는 안 넘어간다 — 인사는 선을 움직여야만 일찍 끝난다 (v1.88.0) */
+  const bgTap = gDrag && !gDrag.moved && !S.intro && S.guideOn && S.guideCur
+    && GUIDE_FLOW.includes(S.guideCur)
+    && (gMode === "pan" || (gMode === "line" && !gDrag.tapKey));
+  const skipKey = bgTap ? S.guideCur : null;
   if (pts.size < 2) { gMode = pts.size === 1 ? null : null; gDrag = null; }
   if (pts.size === 0) {
     commitEdit();   /* 손을 다 떼면 한 작업으로 확정 */
     /* v1.81.0 — 실제로 움직인 선만 「끝냄」으로 표시한다 (탭만 한 것은 표시하지 않는다) */
     if (guideKey) { (gKeys || [guideKey]).forEach(markDone); guideAdvance(guideKey); }
+    else if (skipKey) { markDone(skipKey); guideAdvance(skipKey); }
   }
 }
 
@@ -2369,7 +2419,9 @@ function fitBrowsInFrame(lm) {
     const lmXs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
     const half = browTailHalf(lm, S.p, g.v1);
     const lo = Math.min(...lmXs, g.v1 - half), hi = Math.max(...lmXs, g.v1 + half);
-    const left = FRAME_PAD * WRn, right = WRn - FRAME_PAD * WRn;
+    /* v1.95.0 — 작업 영역이 [workLeft ~ workRight] 라 여백도 그 폭 기준으로 잰다 */
+    const WLn = workLeft(), span = WRn - WLn;
+    const left = WLn + FRAME_PAD * span, right = WRn - FRAME_PAD * span;
     const c = g.v1;
     const need = Math.max((c - lo) / Math.max(c - left, 1e-6), (hi - c) / Math.max(right - c, 1e-6));
     if (need <= 1.001) return;                     // 들어옴
@@ -3322,7 +3374,9 @@ function buildLookUI() {
     }
   }
   /* v1.57.0 — 잡은 선(드래그)의 심·테두리. v1.59.0 — 테두리에 **없음** 추가 (사선 스와치) */
-  [["swDragC", "dragCore", ["#FFFFFF"]], ["swDragE", "dragEdge", [APRICOT, "none"]]].forEach(([id, key, extra]) => {
+  [["swDragC", "dragCore", ["#FFFFFF"]], ["swDragE", "dragEdge", [APRICOT, "none"]],
+   /* v1.95.0 — 놓은 선 색 (원장님 지시 2026-08-29). 팔레트 8색 그대로 */
+   ["swDoneC", "doneC", []]].forEach(([id, key, extra]) => {
     const box = $(id); if (!box) return; box.innerHTML = "";
     [...PALETTE.map((p) => p.hex), ...extra].forEach((hex) => {
       const b = swatchBtn(hex === "none" ? "transparent" : hex, L[key] === hex, () => lookSet({ [key]: hex }));
@@ -3358,6 +3412,19 @@ function buildLookUI() {
     $("dragWVal").textContent = Math.round((L.dragW != null ? L.dragW : 1) * 100) + "%";
     $("rngDragOp").value = Math.round((L.dragOp != null ? L.dragOp : 1) * 100);
     $("dragOpVal").textContent = Math.round((L.dragOp != null ? L.dragOp : 1) * 100) + "%";
+  }
+  /* v1.95.0 — 놓은 선 · 서브 라인 슬라이더 값 동기화 (원장님 지시 2026-08-29) */
+  if ($("rngDoneW")) {
+    $("rngDoneW").value = Math.round((L.doneW != null ? L.doneW : 1) * 100);
+    $("doneWVal").textContent = Math.round((L.doneW != null ? L.doneW : 1) * 100) + "%";
+    $("rngDoneOp").value = Math.round((L.doneOp != null ? L.doneOp : 1) * 100);
+    $("doneOpVal").textContent = Math.round((L.doneOp != null ? L.doneOp : 1) * 100) + "%";
+  }
+  if ($("rngSubW")) {
+    $("rngSubW").value = Math.round((L.subW != null ? L.subW : 1) * 100);
+    $("subWVal").textContent = Math.round((L.subW != null ? L.subW : 1) * 100) + "%";
+    $("rngSubOp").value = Math.round((L.subOp != null ? L.subOp : 0.16) * 100);
+    $("subOpVal").textContent = Math.round((L.subOp != null ? L.subOp : 0.16) * 100) + "%";
   }
   lookPreview();
 }
@@ -3456,6 +3523,12 @@ function lookPreview() {
   const L = S.look, f = document.createDocumentFragment();
   const grabTab = S.lookTab === "grab";
   const put = (x1, y1, x2, y2, hex, w, forceGrab) => {
+    if (forceGrab === "done") {                       /* v1.95.0 — 놓은 선 미리보기 (drawDone 과 같은 규칙) */
+      f.appendChild(mk("line", { x1, y1, x2, y2, stroke: L.doneC || "#FFFFFF",
+        "stroke-width": w * (L.doneW != null ? L.doneW : 1),
+        "stroke-opacity": L.doneOp != null ? L.doneOp : 1, "stroke-linecap": "round" }));
+      return;
+    }
     if (forceGrab) {                                  /* 잡은 선 탭 — drawGrab 과 같은 규칙 */
       const gw = w * (L.dragW || 1), op = L.dragOp != null ? L.dragOp : 1, e = L.dragEdge || "none";
       if (e !== "none") f.appendChild(mk("line", { x1, y1, x2, y2, stroke: e, "stroke-width": gw + 4,
@@ -3494,7 +3567,9 @@ function lookPreview() {
     };
     Object.keys(seg).forEach((k) => {
       const y = hy(k), c = groupColor(k) || specOf(k).color;
-      put(seg[k][0], y, seg[k][1], y, c, wOf(k), grabTab && k === "h2");
+      /* 잡은 선 탭 — 아치는 잡은 모습, 아치두께는 **놓은 선** 모습 (v1.95.0: 한 화면에서 둘 다 확인) */
+      put(seg[k][0], y, seg[k][1], y, c, wOf(k),
+          grabTab && k === "h2" ? true : grabTab && k === "archThickness" ? "done" : false);
     });
     /* 이름표 — 자 바로 옆에 그 선의 색으로. 「이름 ↔ 색 ↔ 자리」가 한눈에 붙는다 */
     const lab = (k, x, anchor) => pvText(f, x, hy(k) + 4, labelOf(k), groupColor(k) || specOf(k).color, anchor);
@@ -3598,6 +3673,35 @@ $("rngDragOp").addEventListener("input", (e) => {
   lookPreview(); render();
 });
 $("rngDragOp").addEventListener("change", () => { saveLook(); buildLookUI(); });
+/* ⭐ v1.95.0 — 놓은 선 굵기·투명도 + 서브 라인 굵기·투명도 (원장님 지시 2026-08-29) */
+if ($("rngDoneW")) {
+  $("rngDoneW").addEventListener("input", (e) => {
+    S.look.doneW = clamp(+e.target.value / 100, 0.3, 1.8);
+    $("doneWVal").textContent = e.target.value + "%";
+    lookPreview(); render();
+  });
+  $("rngDoneW").addEventListener("change", () => { saveLook(); buildLookUI(); });
+  $("rngDoneOp").addEventListener("input", (e) => {
+    S.look.doneOp = +e.target.value / 100;
+    $("doneOpVal").textContent = e.target.value + "%";
+    lookPreview(); render();
+  });
+  $("rngDoneOp").addEventListener("change", () => { saveLook(); buildLookUI(); });
+}
+if ($("rngSubW")) {
+  $("rngSubW").addEventListener("input", (e) => {
+    S.look.subW = clamp(+e.target.value / 100, 0.4, 3);
+    $("subWVal").textContent = e.target.value + "%";
+    lookPreview(); render();
+  });
+  $("rngSubW").addEventListener("change", () => { saveLook(); buildLookUI(); });
+  $("rngSubOp").addEventListener("input", (e) => {
+    S.look.subOp = +e.target.value / 100;
+    $("subOpVal").textContent = e.target.value + "%";
+    lookPreview(); render();
+  });
+  $("rngSubOp").addEventListener("change", () => { saveLook(); buildLookUI(); });
+}
 /* 탭 — 기본 선 / 잡은 선 (v1.59.0) */
 /* ═══ 가이드 순서 편집 (v1.81.0 · 원장님 지시 2026-08-27) ═══════════════════
    「가이드 - 순서 변경가능 기능 추가」
@@ -4277,4 +4381,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
-  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly };
+  updateGuideTip, trimOutside, browBoxes, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
+  workLeft, workRight };   /* v1.95.0 — 작업 영역 검사용 */

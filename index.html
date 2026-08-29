@@ -189,8 +189,9 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
 .scrim{position:absolute;pointer-events:none;z-index:1}
 .scrim-b{left:0;right:0;bottom:0;height:calc(var(--bdock,120px) + 30px);
   background:linear-gradient(to top,var(--scrim) 0%,var(--scrim) 45%,var(--scrim-m) 74%,rgba(6,8,13,0) 100%)}
-.scrim-r{top:0;bottom:0;right:0;width:calc(var(--redge) + 62px);
-  background:linear-gradient(to left,var(--scrim) 0%,var(--scrim-m) 55%,rgba(6,8,13,0) 100%)}
+/* v1.95.0 — 위아래 바가 왼쪽으로 가서 스크림도 **왼쪽**에 깝니다 (원장님 지시 2026-08-29) */
+.scrim-l{top:0;bottom:0;left:0;width:calc(var(--redge) + 62px);
+  background:linear-gradient(to right,var(--scrim) 0%,var(--scrim-m) 55%,rgba(6,8,13,0) 100%)}
 #guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 /* ⚠️ v1.55.0 지시등 (원장님 지시 2026-08-22) — 「느린 블링킹 한 번, 4초에 한 번씩
    다음 움직임 전까지 계속 반복. 고유색으로 밝았다 조금 투명해진다」
@@ -238,8 +239,9 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
 /* v1.50.0 — 배경을 **어두운 판**으로 (원장님 지시 「초기화도 바꿔줘」). 붉은 채움으로 만들지
    않는 이유: 초기화는 눌리면 전부 지워지므로 **눈에 덜 띄어야** 합니다(3장). 어두운 판은
    밝은 사진 위에서도 글자가 읽히게만 하고, 시선을 끌지는 않습니다. */
+/* v1.95.0 — 초기화가 오른쪽 위 단독 칩이 되면서 도크용 특대 크기·당김(margin-top:-14px)을 뺐습니다 */
 .dockbtn.danger{color:var(--danger);border-color:var(--danger-b);background:rgba(10,13,20,.68);
-  height:50px;min-width:68px;border-radius:13px;margin-top:-14px}
+  height:34px;min-width:56px;border-radius:11px}
 .dockbtn.danger:active{background:rgba(255,107,122,.34)}
 .rgap{flex:0 0 auto;height:16px}
 body.land.compact .rgap{height:11px}
@@ -281,8 +283,9 @@ body.land.compact .rgap{height:11px}
 /* v1.92.0 — 영어 문구가 길어 오른쪽 끝 밸런스 묶음과 겹쳤습니다.
    왼쪽(모든 라인 숨김·여러라인)과 오른쪽(밸런스·왼쪽·오른쪽) 사이 **가운데 칸 안에서만** 놓입니다.
    ⛔ max-width 를 다시 키우지 마세요 — 회귀 83 의 「라벨 겹침」과 별개로 눈으로 겹칩니다. */
+/* v1.95.0 — 안내는 정보일 뿐, 터치를 삼키면 안 됩니다 (배경 탭 = 다음 단계 · 회귀 148) */
 .guidetip{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:22;max-width:42%;
-  display:flex;flex-direction:column;align-items:center;gap:4px}
+  display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
 /* v1.92.0 — 영어가 기본이 되면서 문구가 길어졌습니다. **두 줄까지 접히게** 둡니다 —
    nowrap 이면 좁은 폰에서 문장 끝이 잘립니다 (회귀 119 가 잡습니다) */
 .guidetip .chip{font-size:10.5px;padding:6px 11px;line-height:1.3;white-space:normal;text-align:center;
@@ -323,7 +326,11 @@ body.land.compact #editor .guidetip .chip{font-size:9.5px;padding:5px 9px}
 
 /* 오른쪽 도크 — 아래 도크 높이(--bdock)를 뺀 영역의 세로 한가운데 */
 /* v1.45.0 — 위아래 조절 바 조금 짧게 (56%→48%) · 순서: 초기화-바-다시실행-되돌리기 (원장님 지시) */
-.rdock{position:absolute;right:var(--redge);top:0;bottom:var(--bdock,152px);height:48%;min-height:185px;
+/* ⭐ v1.95.0 — 위아래 바·다시실행·되돌리기는 **왼쪽**입니다 (원장님 지시 2026-08-29:
+   「선 움직임을 오른손으로만 움직이는데 드래그 바 때문에 손 액션 공간이 별로 없다」).
+   #rightDock 라는 id 는 역사적 이름으로 남겨 둡니다 — 코드 전반이 이 id 로 작업 영역을 잽니다.
+   ⛔ right 로 되돌리지 마세요 — workLeft() 가 이 도크 위치로 작업 영역 왼쪽 끝을 잡습니다. */
+.rdock{position:absolute;left:var(--redge);top:0;bottom:var(--bdock,152px);height:48%;min-height:185px;
   margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
 .posctl.axis-v .pslot{flex:1;width:34px}
@@ -334,7 +341,8 @@ body.land.compact #editor .guidetip .chip{font-size:9.5px;padding:5px 9px}
    왼쪽 배치는 사진 가장자리를 조금 가리지만 그 자리는 스크림이 깔린 가장자리 영역이다.
    ⚠️ width 를 빼고 max-width 만 주면 안 됩니다 — 절대 배치라 shrink-to-fit 이 걸려
    글자가 한 자씩 세로로 쪼개집니다 (BASELINE 1-13 · 기존 경고 그대로 유효). */
-.posctl.axis-v .plabel{right:calc(100% + 6px);left:auto;flex-direction:column;gap:0;
+/* v1.95.0 — 바가 왼쪽이라 값 라벨은 바 **오른쪽**(캔버스 안쪽)에 둡니다 */
+.posctl.axis-v .plabel{left:calc(100% + 6px);right:auto;flex-direction:column;gap:0;
   width:42px;padding:3px 4px;text-align:center;align-items:center;justify-content:center;
   white-space:normal;line-height:1.2;overflow-wrap:anywhere;font-size:9.5px}
 
@@ -444,6 +452,10 @@ body.dock-min .modebtns button{padding:0 5px;font-size:8.5px}
 /* v1.45.0 원장님 지시 — 되돌리기·다시실행은 「더 행동적인 요소」: 더 크게, 쓸 수 있을 땐
    짙은 그라데이션(--grad-deep) 채움 + 흰 글자로 "누르는 버튼"임을 드러낸다 */
 #btnUndo, #btnRedo{height:46px;min-width:62px;font-size:10.5px;border-radius:14px;gap:3px}
+/* v1.95.0 — 초기화는 오른쪽 위 모서리, 밸런스 행(top:8px)과 같은 높이 (원장님 지시 2026-08-29) */
+#btnReset{position:absolute;top:8px;right:var(--redge);z-index:30;
+  flex-direction:row;gap:4px;font-size:10px}
+#btnReset i{width:14px;height:14px}
 #btnUndo:not(:disabled), #btnRedo:not(:disabled){background:var(--grad-deep);border-color:var(--a1);color:#fff}
 #btnUndo:not(:disabled):active, #btnRedo:not(:disabled):active{filter:brightness(1.2)}
 /* 되돌리기 — 자주 쓰는 버튼이라 한 단계 크게 */
@@ -544,7 +556,7 @@ body:not(.land) #railExtra{display:none}
 .sheet-in{width:min(880px,98%);max-height:97%;overflow:auto;background:var(--surface);  /* %-단위: rot90 회전 컨테이너 기준 (vw/vh 는 기기 세로 기준이라 좁아짐) */
   border:1px solid var(--hair);border-radius:14px;padding:8px 10px;color:var(--fg);
   box-shadow:0 24px 60px rgba(0,0,0,.55)}
-.sheet-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
 .sheet-hd h3{margin:0;font-size:13px;font-weight:800}
 .sheet-x{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.06);
   border:1px solid var(--hair);color:var(--fg);font-size:13px}
@@ -553,6 +565,12 @@ body:not(.land) #railExtra{display:none}
    (원장님 지시 2026-08-27 「미리보기를 더 크게」). ⛔ 1fr 1fr 로 되돌리지 마세요 — 이름표가 겹칩니다. */
 .setcols{display:grid;grid-template-columns:1.35fr 1fr;gap:10px}
 .setrow{display:flex;align-items:center;gap:5px;margin:1px 0;flex-wrap:nowrap}
+/* v1.95.0 — 기본 선 탭에 서브 라인 줄이 늘어 좁은 폰(390 높이)에서 스크롤이 나지 않게 촘촘히:
+   줄 간격 0 + 색상 동그라미 한 치수 작게 (22→20 · 세로선 19→18) */
+#lookTabBase .setrow{margin:0}
+#lookTabBase .pal button.sw{width:20px;height:20px}
+#lookTabBase .vpal .vgrp button.sw{width:18px;height:18px}
+#lookTabBase input[type=range].slim{height:18px}
 .setrow>.lb{width:52px;flex:none;font-size:10px;font-weight:700;color:var(--faint)}
 .seg{display:flex;gap:3px}
 .seg button{height:24px;padding:0 8px;border-radius:8px;font-size:10px;font-weight:700;
@@ -599,14 +617,14 @@ body.land.compact .combo i{display:none}
 .combo.mini em{margin-top:1px}
 .combo.mini em s{width:7px;height:7px}
 /* v1.83.0 — 테두리 = 「있으면 좋은」 덤. 배경색 블록으로 본 작업과 갈라 놓습니다. */
-.setblock{margin-top:4px;padding:3px 6px 2px;border-radius:9px;
+.setblock{margin-top:2px;padding:3px 6px 2px;border-radius:9px;
   background:rgba(255,255,255,.05);border:1px solid var(--hair)}
 .setblock-hd{font-size:8.5px;font-weight:800;color:var(--faint);margin-bottom:1px}
 .setblock .seg button{padding:0 6px;white-space:nowrap}
 .setblock input[type=range].slim{min-width:60px}
 input[type=range].slim{flex:1;min-width:90px;accent-color:var(--a1)}
 .rngval{font-size:10px;font-weight:700;width:34px}
-.tabbar{display:flex;gap:4px;margin-bottom:5px}
+.tabbar{display:flex;gap:4px;margin-bottom:3px}
 .tabbar button{flex:1;height:26px;border-radius:9px;font-size:11px;font-weight:800;
   background:rgba(255,255,255,.04);border:1px solid var(--hair);color:rgba(255,255,255,.55)}
 .tabbar button.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);box-shadow:0 0 14px var(--glow)}
@@ -716,7 +734,7 @@ body:not(.land) #railLang{display:none}
   body.land.compact #editor .rdock{height:58%;min-height:135px;gap:5px}
   body.land.compact #editor .dockbtn{height:28px;font-size:8.5px}
   /* v1.45.0 — compact에서도 초기화=프리셋 크기 · 되돌리기·다시실행 더 크게 (기본 .dockbtn 28px 를 이긴다) */
-  body.land.compact #editor .dockbtn.danger{height:46px;min-width:52px;font-size:9px}
+  body.land.compact #editor .dockbtn.danger{height:30px;min-width:50px;font-size:9px}
   body.land.compact #editor #btnUndo, body.land.compact #editor #btnRedo{height:38px;min-width:52px;font-size:9px}
   body.land.compact #editor .menurow button{height:46px;min-width:52px;font-size:9px;padding:0 6px}
   body.land.compact #editor .menurow button#btnLookCycle{min-width:34px;padding:0 1px;font-size:8px}
@@ -729,7 +747,7 @@ body:not(.land) #railLang{display:none}
   body.land.compact .modal input[type=text]{height:42px;margin-bottom:10px}
   body.land.compact .modal-row button{height:42px}
   body.land.compact #editor .scrim-b{height:calc(var(--bdock,110px) + 22px)}
-  body.land.compact #editor .scrim-r{width:calc(var(--redge) + 50px)}
+  body.land.compact #editor .scrim-l{width:calc(var(--redge) + 50px)}
   body.land.compact #editor .menurow button i, body.land.compact #editor .menurow button i svg{width:17px;height:17px}
   body.land.compact #editor .dockbtn i, body.land.compact #editor .dockbtn i svg{width:16px;height:16px}
   body.land.compact #editor .dockbtn.big i, body.land.compact #editor .dockbtn.big i svg{width:19px;height:19px}
@@ -766,7 +784,7 @@ body:not(.land) #railLang{display:none}
     <img id="photo" alt="" />
     <!-- 컨트롤 영역 어둡게 (v1.16.0) — 가이드 SVG 보다 아래에 두어 선은 그대로 밝게 보인다 -->
     <div class="scrim scrim-b"></div>
-    <div class="scrim scrim-r"></div>
+    <div class="scrim scrim-l"></div>
     <svg id="guides" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="touch"></div>
 
@@ -795,12 +813,12 @@ body:not(.land) #railLang{display:none}
 
     <!-- 오른쪽 도크 (v1.12.0) — 되돌리기(크게) + 위아래 드래그 바. 오른쪽 끝 · 세로 중앙
          v1.28.0 — 맨 위에 `사진변경`. 위아래 드래그 바 위쪽 끝선 위입니다. -->
+    <!-- ⭐ v1.95.0 — 초기화는 **오른쪽 위, 밸런스 행 높이** (원장님 지시 2026-08-29:
+         「초기화 버튼은 오른쪽 그대로 위 밸런스 행에 버튼 위치 맞출것」).
+         나머지 도크(위아래 바·다시실행·되돌리기)는 왼쪽으로 갔습니다. -->
+    <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
     <div class="rdock" id="rightDock">
-      <!-- 초기화 (v1.28.1) — 오른쪽 도크 맨 위. `다시 실행` 과 한 칸 띄우고 짙은 빨강으로 분리합니다.
-           위쪽 끝은 시술 중 손이 잘 가지 않는 자리라 실수로 눌릴 일이 적습니다. -->
-      <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
-      <span class="rgap"></span>
-      <!-- v1.45.0 순서 (원장님 지시) — 초기화 · 위아래 조절 바 · 다시실행 · 되돌리기 -->
+      <!-- v1.95.0 순서 — 위아래 조절 바 · 다시실행 · 되돌리기 (왼쪽 세로 중앙) -->
       <div class="posctl axis-v" id="posCtlV">
         <div class="plabel"><span id="selNameV">Eye</span><b id="posValV">50</b></div>
         <button class="pbtn" id="posPlusV">▲</button>
@@ -915,7 +933,7 @@ body:not(.land) #railLang{display:none}
       <div>
         <div class="tabbar">
           <button id="tabBase" class="on" data-i18n="set_tab_base">기본 선 · 차례</button>
-          <button id="tabGrab" data-i18n="set_tab_grab">잡은 선 · 움직일 때</button>
+          <button id="tabGrab" data-i18n="set_tab_grab">잡은 선 · 놓은 선</button>
           <!-- v1.81.0 — 「가이드 - 순서 변경가능 기능 추가」 (원장님 지시 2026-08-27).
                시트를 세로로 늘리지 않으려고 **탭**으로 넣습니다 — 시술 중 스크롤이 없어야 합니다. -->
           <button id="tabOrder" data-i18n="set_order">가이드 순서</button>
@@ -939,6 +957,14 @@ body:not(.land) #railLang{display:none}
           <div class="setrow"><span class="lb" data-i18n="set_hlen">가로 길이</span>
             <input type="range" class="slim" id="rngLen" min="8" max="60" step="2" value="28">
             <span id="lenVal" class="rngval">28%</span></div>
+          <!-- v1.95.0 — 서브 라인 = 자에서 이너선까지 잇는 옅은 연결선 (원장님 지시 2026-08-29).
+               굵기·투명도만 — 색은 조용한 먹색 고정입니다 (시끄러우면 안 되는 선). -->
+          <div class="setrow"><span class="lb" data-i18n="set_sub">서브 라인</span>
+            <input type="range" class="slim" id="rngSubW" min="40" max="300" step="10" value="100">
+            <span id="subWVal" class="rngval">100%</span>
+            <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_alpha">투명도</span>
+            <input type="range" class="slim" id="rngSubOp" min="4" max="60" step="4" value="16">
+            <span id="subOpVal" class="rngval">16%</span></div>
           <!-- v1.83.0 — 테두리는 **덤**입니다 (원장님: 「중요하지 않지만 있으면 좋음」).
                배경색 블록으로 감싸 위 세 줄과 확실히 갈라 놓습니다. ⛔ 블록을 풀지 마세요. -->
           <div class="setblock" id="edgeBlock">
@@ -960,6 +986,19 @@ body:not(.land) #railLang{display:none}
             <input type="range" class="slim" id="rngDragOp" min="50" max="100" step="5" value="95">
             <span id="dragOpVal" class="rngval">95%</span></div>
           <p class="setnote" data-i18n="set_grab_note">잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.</p>
+          <!-- ⭐ v1.95.0 — **놓은 선** (원장님 지시 2026-08-29 「놓은선 기본 설정 추가 —
+               선 굵기·색상·투명도. 놓은선은 체크를 마무리하고 전체를 보는 선」).
+               잡은 선과 값이 완전 분리 — 미리보기에서는 아치두께 자가 놓은 선 모습입니다. -->
+          <div class="setblock" id="doneBlock">
+            <div class="setblock-hd"><span data-i18n="set_dline_hd">놓은 선 — 체크를 마친 선</span></div>
+            <div class="setrow"><span class="lb" data-i18n="set_color">색상</span><span class="pal" id="swDoneC"></span></div>
+            <div class="setrow"><span class="lb" data-i18n="set_weight">선 굵기</span>
+              <input type="range" class="slim" id="rngDoneW" min="30" max="180" step="5" value="85">
+              <span id="doneWVal" class="rngval">85%</span>
+              <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_alpha">투명도</span>
+              <input type="range" class="slim" id="rngDoneOp" min="20" max="100" step="5" value="65">
+              <span id="doneOpVal" class="rngval">65%</span></div>
+          </div>
         </div>
         <!-- v1.81.0 가이드 순서 편집 (원장님 지시 2026-08-27) -->
         <div id="lookTabOrder" hidden>
