@@ -69,6 +69,8 @@ const I18N = {
     line_hidden: "숨김 — 다시 누르면 나옵니다",
     editor_tip: "안내", ai_name: "눈썹정렬",
     ai_auto_on: "AI 눈썹정렬 적용됨 — 되돌리기를 누르면 기본정렬로",
+    /* v3.3.0 — 판독 실패를 조용히 넘기지 않는다 */
+    ai_arch_fail: "사진에서 눈썹을 못 읽었습니다 — 선은 기본정렬 그대로입니다",
     line_step_keep: "지금 차례라 숨기지 않습니다",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
     set_edge_hd: "테두리 — 없어도 되는 덤",
@@ -234,6 +236,7 @@ const I18N = {
     line_hidden: "hidden — tap again to show",
     editor_tip: "Tips", ai_name: "Align",   /* v1.92.0 — 좁은 폰에서 잠금(센터선)과 부딪히지 않는 폭 */
     ai_auto_on: "AI Brow Align applied — Undo for default layout",
+    ai_arch_fail: "Could not read the brow from the photo — lines left at default layout",
     line_step_keep: "kept — this is the current step",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
     set_edge_hd: "Outline — optional extra",
@@ -369,7 +372,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.2.0";
+const APP_VERSION = "v3.3.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2543,7 +2546,23 @@ function autoAiOnLoad() {
   step(() => { ok = autoFromDrawing(); });
   /* 실패하면 아무것도 바뀌지 않고, commitEdit 는 값이 그대로면 기록하지 않으므로
      되돌리기 기록도 더럽혀지지 않는다 — 조용히 기본정렬로 남는다 */
-  if (ok) { showNote(t("ai_auto_on"), 2600); render(); }
+  /* ⭐ v3.3.0 — **판독이 어긋난 것을 조용히 넘기지 않는다** (원장님 지시 2026-08-30).
+     실기기에서 아치선이 몸통 한가운데에 서 있었는데 화면에는 「적용됨」만 떠서, 원장님이
+     값을 직접 재 보시기 전까지 아무도 몰랐습니다. 안전판이 걸렸으면 그 사실을 알립니다.
+     ⛔ 다시 조용하게 만들지 마세요. */
+  if (ok) {
+    /* ⭐ v3.3.0 — **아치선이 무엇을 보고 그 자리에 섰는지 화면에 적는다** (진단용).
+       실기기에서만 나는 증상이라 컨테이너에서 재현이 안 됩니다 — 폰 화면 한 장으로
+       갈래(pixel/corner/floor)와 산꼭대기 눈금을 읽으려는 표시입니다.
+       ⏸ 원인이 잡히면 이 꼬리표는 떼도 됩니다 (알림 자체는 남깁니다). */
+    const a = S.archRead;
+    const tag = a ? `  [v6:${a.from}${a.pkNum !== undefined ? " pk" + a.pkNum : ""}]` : "";
+    showNote(t("ai_auto_on") + tag, 4200);
+    render();
+  } else {
+    showNote(t("ai_arch_fail"), 4200);
+    render();
+  }
 }
 
 /* ═══ v1.97.0 — 예비 동공 정렬 (원장님 지시 2026-08-29) ═══════════════════
@@ -4216,6 +4235,7 @@ function autoFromDrawing() {
        아무 데도 안 남아서였습니다. 회귀 176 이 이 값을 읽습니다. */
     S.archRead = { pkX: seq[pk].x, outX: outI >= 0 ? seq[outI].x : null,
                    floorUnits, minOutPx: MIN_OUT_PX, browSpanUnits,
+                   pkNum: dispV(seq[pk].x / W),
                    from: outI >= 0 ? "pixel" : eyeR ? "corner" : "floor" };
     if (outI >= 0) {
       setLine("v6", clamp(S.g.v1 - Math.abs(seq[outI].x - cx) / W, 0.02, 0.98));
