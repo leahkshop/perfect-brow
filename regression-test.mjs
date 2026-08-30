@@ -3962,6 +3962,195 @@ console.log("\n[밸런스 판정]");
       r161 ? `앞머리 y=${r161.y}(기대 320) · 앞두께 top=${r161.top}(기대 ≈300 · 그라데이션끝 270 금지)` : "판독 실패");
   }
 
+  /* 164. ⭐⭐⭐ v2.7.0 — **아치엣지만 잡힌 경우의 아치두께** (원장님 지시 2026-08-29:
+       「아치엣지가 잡힌다 + 아치두께 안 잡히는 경우 = 아치엣지에서 5칸 아래 위치한다 대체값」)
+     「아치두께가 안 잡힌다」 = **아랫끝이 넘버링 하한(6 눈금) 아래로 새어 내려갔다** —
+     눈꺼풀·속눈썹까지 읽었다는 뜻입니다. 그때 윗끝(아치엣지)이 멀쩡하면 윗끝은 쓰고,
+     두께만 **아치엣지에서 5칸 아래**로 놓습니다.
+     ⛔ **해부학 순서 위반은 여기에 넣지 마세요** — 162ⓒ 가 그것까지 살아나면 바로 잡습니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r164 = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      const W = 400, H = 400;
+      const paint = (rows) => {
+        const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+        const g = cv.getContext("2d");
+        const fill = (v, y0, y1) => { g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y0, W, y1 - y0 + 1); };
+        fill(200, 0, H - 1);
+        rows.forEach(([v, y0, y1]) => fill(v, y0, y1));
+        return g.getImageData(0, 0, W, H);
+      };
+      const setup = (frontY) => {
+        S.dim = { W, H }; S.landmarks = null;
+        S.eyeZero = 360 / H; S.innerAnchor = (9 * 13.15) / W;   /* 0 = y360 · 1 눈금 = 9px */
+        S.g.v1 = 0.9; S.g.front = frontY / H; S.innerRead = null;
+      };
+      /* ⓐ 눈썹 y250~310 — 아랫끝 310 은 눈 위 5.6 눈금(하한 6 미달) = **두께를 못 잡음**.
+            윗끝 250 은 눈 위 12.2 눈금으로 멀쩡 → 아치엣지 250 · 아치두께 250+45=295 */
+      setup(200);
+      const a = PBx.archDecide(paint([[40, 250, 310]]), 200);
+      /* ⓑ 아랫끝이 **멀쩡하면**(눈 위 10 눈금) 대체값 길로 가면 안 된다 — 사진에서 읽은
+            아랫끝 그대로여야 한다 (270 이지 250+45=295 가 아니다) */
+      setup(288);
+      const b = PBx.archDecide(paint([[40, 230, 270]]), 200);
+      return { a, b, k: PBx.AT_FROM_ARCH };
+    });
+    await ctx.close();
+    const okA = r164.a && Math.abs(r164.a.edge - 250) <= 4 && Math.abs(r164.a.thick - 295) <= 5;
+    const okB = r164.b && Math.abs(r164.b.thick - 270) <= 3;   /* 읽은 아랫끝이 이긴다 */
+    check("164. 아치엣지만 잡힌 경우 — 아치두께는 아치엣지에서 5칸 아래 (대체값)",
+      okA && okB && r164.k === 5,
+      `아치엣지 ${r164.a && r164.a.edge}(기대 250) · 아치두께 ${r164.a && r164.a.thick}(기대 295) · `
+      + `아랫끝이 멀쩡하면 읽은 값 ${r164.b && r164.b.thick}(기대 270) · ${r164.k}칸`);
+  }
+
+  /* 163. ⭐⭐⭐ v2.6.0 — **아치 표준값** (원장님 지시 2026-08-29, 실제 사진 5장 판정 뒤:
+       「1번 판독 실패시 표준값 : 아치두께는 앞머리 측정값에서 3칸 위로,
+         아치엣지는 아치두께 위치에서 5칸 위로 측정한다」)
+     v2.5.0 에는 아치 표준값이 없어서 판독이 포기하면 밴드값이 그대로 남았고, 실제 사진 1번에서
+     그 밴드값이 눈썹 위로 4.9 눈금 떠 있었습니다 (원장님 판정: 틀림).
+     ⚠️ 표준값은 **아무 때나** 쓰는 것이 아닙니다 — 실패 이유로 갈립니다:
+       · seen = 0 (산꼭대기에 두꺼운 검은 것이 아예 없다 · 테두리 드로잉·저대비 맨 눈썹)
+         → 밴드가 읽은 것이 유일한 증거이므로 **그대로 둔다**
+       · seen > 0 (뭔가 보이는데 열들이 서로 다른 말을 한다 · 머리카락·그늘)
+         → **표준값**
+     ⛔ 이 갈림(`info.seen > 0`)을 지우면 **회귀 89·94** 가 바로 잡습니다 — 실제로 지워 보니
+        89 아치두께 159(기대 140) · 94 아치두께 156(기대 140) 으로 떨어졌습니다.
+        여기 163 은 그 갈림의 **입력**(seen 세기)과 표준값 **산수**를 잡습니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r163 = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      const W = 400, H = 400;
+      const paint = (rows) => {
+        const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+        const g = cv.getContext("2d");
+        const fill = (v, y0, y1, x0, x1) => {
+          g.fillStyle = `rgb(${v},${v},${v})`;
+          g.fillRect(x0 === undefined ? 0 : x0, y0, (x1 === undefined ? W : x1) - (x0 === undefined ? 0 : x0) + 1, y1 - y0 + 1);
+        };
+        fill(200, 0, H - 1);
+        rows.forEach(([v, y0, y1, x0, x1]) => fill(v, y0, y1, x0, x1));
+        return g.getImageData(0, 0, W, H);
+      };
+      const setup = (frontY) => {
+        S.dim = { W, H }; S.landmarks = null;
+        S.eyeZero = 360 / H; S.innerAnchor = (9 * 13.15) / W;   /* 1 눈금 = 9px */
+        S.g.v1 = 0.9; S.g.front = frontY / H; S.innerRead = null;
+      };
+      /* ⓐ 산수 — 앞머리 y288 · 1 눈금 9px → 아치두께 288-27=261 · 아치엣지 261-45=216 */
+      setup(288);
+      const std = PBx.archStandard(288, 9);
+      /* ⓑ 자(눈금)가 없으면 표준값을 말할 수 없다 → null (밴드가 남는다) */
+      const noRuler = PBx.archStandard(288, null);
+      /* v2.8.0 — 아치엣지 맥시멈: 앞두께 y288 · 1 눈금 9px → 288-45 = 243 보다 위로 못 간다 */
+      const emax = PBx.archEdgeMax(288, 9), emaxNo = PBx.archEdgeMax(288, null);
+      /* ⓒ seen 세기 — 눈썹이 화면 전체에 있으면 5 열 모두 본다 */
+      setup(288);
+      const iAll = { seen: 0 };
+      PBx.archDecide(paint([[40, 230, 270]]), 200, iAll);
+      /* ⓓ seen 세기 — 산꼭대기에 **좁은 머리카락 한 덩이**만 있으면 가운데 열만 본다
+             (열은 산꼭대기 ±ARCH_SPAN×W = ±6.4px 에 퍼진다 → 폭 5px 이면 가운데뿐) */
+      setup(288);
+      const iOne = { seen: 0 };
+      const one = PBx.archDecide(paint([[40, 230, 270, 198, 202]]), 200, iOne);
+      /* ⓔ seen 세기 — 아무것도 어둡지 않으면 0 (테두리 드로잉·저대비 맨 눈썹 자리) */
+      setup(288);
+      const iNone = { seen: 0 };
+      PBx.archDecide(paint([]), 200, iNone);
+      return { std, noRuler, all: iAll.seen, one: iOne.seen, oneRes: one, none: iNone.seen,
+        f: PBx.AT_FROM_FRONT, a: PBx.ARCH_FROM_AT, emax, emaxNo, m: PBx.ARCH_MAX_OVER_FT };
+    });
+    await ctx.close();
+    const okMath = r163.std && Math.abs(r163.std.thick - 261) < 0.01 && Math.abs(r163.std.edge - 216) < 0.01;
+    const okSeen = r163.all >= 3 && r163.one > 0 && r163.one < 3 && r163.none === 0 && r163.oneRes === null;
+    check("163. 아치 표준값 — 판독 실패 시 앞머리에서 3칸·5칸 (실패 이유로 갈린다)",
+      okMath && r163.noRuler === null && okSeen && r163.f === 3 && r163.a === 5
+        && Math.abs(r163.emax - 243) < 0.01 && r163.emaxNo === null && r163.m === 5,
+      `표준값 아치두께 ${r163.std && r163.std.thick}(기대 261) · 아치엣지 ${r163.std && r163.std.edge}(기대 216) · `
+      + `자 없으면 null=${r163.noRuler === null} · seen 전부 ${r163.all}(>=3) / 좁은것 ${r163.one}(1~2, 판독은 포기=${r163.oneRes === null}) / 없음 ${r163.none} · `
+      + `${r163.f}칸·${r163.a}칸 · 아치엣지 맥시멈 ${r163.emax}(기대 243 · 앞두께 위 ${r163.m}칸)`);
+  }
+
+  /* 162. ⭐⭐⭐ v2.5.0 — **아치엣지·아치두께 판독 룰** (원장님 지시 2026-08-29:
+       「앞머리, 앞두께 자동 위치조정 프로그래밍과 **같은 방법으로** 아치엣지 아치두께 고도화해라」)
+     앞머리(155·157·158·161)와 **같은 함수**(darkBlobsUp)를 쓰되, 훑는 자리는 **산꼭대기**이고
+     후보는 넘버링 + 해부학(아치두께 ≤ 앞머리)으로 고릅니다.
+       ① 눈썹 아랫끝 = 아치두께 · 윗끝 = 아치엣지
+       ② 눈 위 6 눈금 안쪽의 **두꺼운 쌍꺼풀 쉐도우**는 아치가 아니다 (넘버링 방어)
+       ③ 덩어리가 **탐색창 천장에 닿으면** 못박음이므로 판독을 포기한다 (밴드 유지)
+       ④ 아치두께가 **앞머리보다 아래**면 후보 자격이 없다 (원장님 해부학 순서 · BASELINE 1-45)
+     ⛔ 넷 중 하나라도 빼면 아치 자가 눈꺼풀·창 경계에 내려앉습니다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+    const p = await ctx.newPage();
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r162 = await p.evaluate(() => {
+      const PBx = window.PB, S = PBx.S;
+      const W = 400, H = 400;
+      const paint = (rows) => {
+        const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+        const g = cv.getContext("2d");
+        const fill = (v, y0, y1) => { g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y0, W, y1 - y0 + 1); };
+        fill(200, 0, H - 1);                     // 피부
+        rows.forEach(([v, y0, y1]) => fill(v, y0, y1));
+        return g.getImageData(0, 0, W, H);
+      };
+      /* 넘버링의 0(동공 중심) = y360 · 1 눈금 = 9px · 앞머리 = 눈 위 8 눈금(y288) */
+      const setup = (frontY) => {
+        S.dim = { W, H }; S.landmarks = null;
+        S.eyeZero = 360 / H; S.innerAnchor = (9 * 13.15) / W;
+        S.g.v1 = 0.9; S.g.front = frontY / H; S.innerRead = null;
+      };
+      /* ⓐ 눈썹(y230~270 · 눈 위 10 눈금) + 그 아래 두꺼운 쌍꺼풀 쉐도우(y295~314 · 눈 위 5.1 눈금) */
+      setup(288);
+      const a = PBx.archDecide(paint([[90, 295, 314], [40, 230, 270]]), 200);
+      /* ⓑ 눈썹이 탐색창 천장(y160)을 뚫고 나감 → **윗끝은 못박음이라 버리고**,
+            아랫끝(270)만 쓰고 아치엣지는 거기서 5칸 위(225) — v2.8.0 원장님 지시
+            「아치엣지가 잡히지 않거나 위에 머리카락으로 혼동이 있을 경우」 */
+      setup(288);
+      const b = PBx.archDecide(paint([[40, 160, 270]]), 200);
+      /* ⓒ 앞머리가 아치두께보다 **위**(y240 · 눈 위 13.3 눈금)면 해부학 순서가 깨진다 → 포기 */
+      setup(240);
+      const c = PBx.archDecide(paint([[90, 295, 314], [40, 230, 270]]), 200);
+      /* ⓓ 앞머리가 아주 낮아(눈 위 3 눈금) 해부학 필터가 놀 때 — **넘버링 하한(6)만으로도**
+         쉐도우(5.1 눈금)를 거르고 눈썹(10 눈금)을 골라야 한다 */
+      setup(333);
+      const d = PBx.archDecide(paint([[90, 295, 314], [40, 230, 270]]), 200);
+      /* ⓔ v2.8.0 — **아치 두께의 5칸 상한**. 눈썹이 y230~300(7.8 눈금 두께)이면 잔털·번짐까지
+         센 것이다 → 아치두께는 300 이 아니라 아치엣지에서 5칸 아래(230+45=275) 여야 한다.
+         (실제 사진 5번: 읽은 값 8.5 → 9.3 · 원장님 정답 9.5) */
+      setup(333);
+      const e = PBx.archDecide(paint([[40, 230, 300]]), 200);
+      /* ⓕ v2.8.0 — **아치엣지 맥시멈**. 앞두께를 y250 으로 두면 아치엣지는 250-45=205 보다
+         위로 갈 수 없다 — 눈썹 윗끝이 y200 이어도 205 에 선다. */
+      setup(333); S.g.frontThickness = 250 / H;
+      const f = PBx.archDecide(paint([[40, 200, 300]]), 200);
+      return { a, b, c, d, e, f, lo: PBx.ARCH_T_LO, hi: PBx.ARCH_T_HI, cols: PBx.ARCH_COLS };
+    });
+    await ctx.close();
+    const okA = r162.a && Math.abs(r162.a.thick - 270) <= 3 && Math.abs(r162.a.edge - 230) <= 4;
+    const notShadow = r162.a && Math.abs(r162.a.thick - 314) > 10
+      && r162.d && Math.abs(r162.d.thick - 270) <= 3;   /* 넘버링 하한만으로도 거른다 */
+    const okB = r162.b && Math.abs(r162.b.thick - 270) <= 3 && Math.abs(r162.b.edge - 225) <= 5;
+    const okE = r162.e && Math.abs(r162.e.thick - 275) <= 4 && Math.abs(r162.e.edge - 230) <= 4;
+    const okF = r162.f && Math.abs(r162.f.edge - 205) <= 3;
+    check("162. 아치엣지·아치두께 판독 — 쉐도우·창 천장·해부학 순서 방어 · 두께 5칸 상한 · 엣지 맥시멈",
+      okA && notShadow && okB && okE && okF && r162.c === null && r162.lo === 6 && r162.cols === 5,
+      `아치두께 ${r162.a && r162.a.thick}(기대 270) · 쉐도우 314 아님=${notShadow}(넘버링만으로도 ${r162.d && r162.d.thick}) · `
+      + `아치엣지 ${r162.a && r162.a.edge}(기대 230) · 창 천장 → 두께 ${r162.b && r162.b.thick}(270)·엣지 ${r162.b && r162.b.edge}(225)=${okB} · `
+      + `앞머리보다 아래면 포기=${r162.c === null} · 두께 5칸 상한 ${r162.e && r162.e.thick}(기대 275)=${okE} · `
+      + `엣지 맥시멈 ${r162.f && r162.f.edge}(기대 205)=${okF} · 하한 ${r162.lo} 눈금 · ${r162.cols}열`);
+  }
+
   /* 123. ⭐ v1.72.0 — **검은 드로잉이 끝나는 곳** (원장님 지시 2026-08-25 「검은 드로잉 고도화로 찾기」)
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.

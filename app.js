@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.4.1";
+const APP_VERSION = "v2.8.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3212,6 +3212,90 @@ function frontTickPx() {
   const a = innerAnchor();
   return a ? (a * S.dim.W) / 13.15 : null;
 }
+/* ─────────────────────────────────────────────────────────────────────────
+   ⭐ v2.5.0 — **한 열을 걸어 「두꺼운 검은 것」을 찾는 공용 판독** (원장님 지시 2026-08-29:
+   「앞머리, 앞두께 자동 위치조정 프로그래밍과 **같은 방법으로** 아치엣지 아치두께 고도화해라」)
+
+   v2.1~2.4 에서 앞머리·앞두께가 쓰던 규칙을 **그대로 꺼내** 아치엣지·아치두께가 같은 함수를
+   쓰게 했습니다. ⛔ 이 규칙을 두 군데서 키우지 마세요 — 한쪽만 고치면 두 판독이 서로 다른
+   말을 하게 됩니다 (명령서 §0-X 의 「두 군데서 자라면 서로 어긋난다」).
+
+   한 열을 **아래(눈) → 위**로 걸으며 후보를 **전부** 모읍니다:
+     ① 피부가 FRONT_SKIN 줄 이상 이어진 **뒤에** 오는 것만 후보 (눈화장·아이라인 방어)
+     ② 창 FRONT_WIN 줄 중 FRONT_HIT 줄이 어두워야 눈썹 (쌍꺼풀 주름 같은 얇은 선 방어)
+     ③ 「검은색」 문턱은 그 열의 피부 ↔ 최암부의 **중간 — 상대값만** (어두운 조명 방어)
+     ④ 윗끝(=두께 선)은 우선순위 ① 피부 복귀 → ② 어둡기 퍼센트 하락 (BASELINE 1-68)
+   돌려주는 것: `[{ y, top, ceil }]` — y=아랫끝 · top=윗끝(캔버스 px) · ceil=창 천장에 닿음.
+   ⚠️ `ceil` 은 **못박음 신호**입니다 — 창이 눈썹을 가로지른 것이므로 부르는 쪽이 버립니다. */
+function darkBlobsUp(img, x, yB, yT, tMin, tMax) {
+  const { W } = S.dim;
+  if (!img || x < 0 || x >= W || yB - yT < FRONT_WIN + 6) return null;
+  const col = [];                                        // col[0] = 맨 아래(yB)
+  for (let y = yB; y >= yT; y--) col.push(lumaAt(img, W, x, y));
+  const sorted = col.slice().sort((a, b) => a - b);
+  const skin = sorted[Math.floor(sorted.length * 0.75)];
+  const darkest = sorted[Math.floor(sorted.length * 0.03)];
+  if (skin - darkest < FRONT_DARK_MIN) return null;      // 검은 것이 없는 열
+  /* ⚠️ 문턱은 **상대값만** 씁니다 — 절대값(예: 피부−40)을 섞으면 조명이 어두운 사진에서
+     눈썹의 절반이 문턱 위에 남아 두께 창(7/9)을 못 채웁니다 (실측: 8장 중 6장 실패). */
+  const thr = skin - (skin - darkest) * FRONT_HALF;
+  const softThr = skin - (skin - darkest) * FT_SOFT;
+  const dark = col.map((v) => v < thr);
+  const u2 = frontTickPx();
+  const nC = col.length;
+  const pc = (y) => { const yy = Math.max(0, Math.min(nC - 1, y));
+    return Math.max(0, Math.min(1, (skin - col[yy]) / Math.max(1, skin - darkest))); };
+  const sm = (y) => (pc(y - 1) + pc(y) + pc(y + 1)) / 3;
+  const out = [];
+  let light = 0;
+  for (let i = 0; i + FRONT_WIN <= dark.length; i++) {
+    if (light >= FRONT_SKIN) {
+      let hit = 0;
+      for (let j = 0; j < FRONT_WIN; j++) if (dark[i + j]) hit++;
+      if (hit >= FRONT_HIT) {
+        let i0 = i; while (i0 < i + FRONT_WIN && !dark[i0]) i0++;   // 창 안 첫 어두운 줄
+        /* 윗끝 — 짙은 검정이 끝나도 옅은 윗털·파우더 그라데이션(FT_SOFT)이 이어지면 계속,
+           피부가 FT_SKIN 줄 연속되면 끝 (v2.3.0 원장님 확정) */
+        let j = i0, last = i0, gap = 0, clearSkin = false;
+        while (j + 1 < dark.length) {
+          j++;
+          if (col[j] < softThr) { last = j; gap = 0; }
+          else { gap++; if (gap >= FT_SKIN) { clearSkin = true; break; } }
+        }
+        let ftop = last;
+        const thTk = u2 ? (last - i0) / u2 : null;
+        /* 우선순위 ② — 피부 복귀가 불명확하거나 두께가 상식 범위 밖이면
+           어둡기 퍼센트가 **가장 크게 낮아지는 자리**를 고른다 (v2.4.0 원장님 확정) */
+        if (!clearSkin || (thTk !== null && (thTk < tMin || thTk > tMax))) {
+          const lim = Math.min(nC - 2, u2 ? i0 + Math.round(tMax * u2) : nC - 2);
+          let bj = -1, bd = 0;
+          for (let y2 = i0 + 1; y2 <= lim; y2++) {
+            const drop = sm(y2) - sm(y2 + 2);
+            if (drop > bd) { bd = drop; bj = y2; }
+          }
+          if (bj > i0 && bd >= FT_P2_MIN) ftop = bj;
+        }
+        out.push({ y: yB - i0, top: yB - ftop, ceil: ftop >= nC - 2 });
+        while (i + FRONT_WIN <= dark.length) {           // 이 덩어리를 지나쳐 계속 걷는다
+          let h2 = 0;
+          for (let j2 = 0; j2 < FRONT_WIN; j2++) if (dark[i + j2]) h2++;
+          if (h2 < 2) break;
+          i++;
+        }
+        light = 0;
+        continue;
+      }
+    }
+    /* 피부 세기는 **너그럽게** — 잔털·주근깨 한 줄로 끊기지 않게, 두 줄 연속 어두울 때만 0 */
+    if (dark[i]) { if (i > 0 && dark[i - 1]) light = 0; }
+    else light++;
+  }
+  return out;
+}
+
+/* 앞머리·앞두께 — 이너 자리에서 위로 걸어 「피부 다음의 두꺼운 검은 것」을 찾는다.
+   후보 고르기는 **넘버링**이 한다: 눈 위 FRONT_T_LO~FRONT_T_HI 안의 **가장 아래** 후보
+   (쌍꺼풀·주름 쉐도우 방어 · v2.1.2). 3열 미만이면 포기 → 기존 밴드 판독 유지. */
 function frontDecide(img) {
   const { W, H } = S.dim;
   if (!img || !W || !H) return null;
@@ -3227,115 +3311,186 @@ function frontDecide(img) {
   const yB = Math.round((ez - FRONT_LASH_GAP) * H);      // 시작(아래)
   const yT = Math.max(2, Math.round((ez - FRONT_UP) * H));
   if (yB - yT < FRONT_WIN + 6 || yB >= H) return null;
+  const u0 = frontTickPx(), eyePx = ez * H;
   const ys = [];
   for (let k = 1; k <= FRONT_COLS; k++) {
     const x = Math.round(ix + dir * (FRONT_SPAN * W * k) / FRONT_COLS);
-    if (x < 0 || x >= W) continue;
-    const col = [];                                       // col[0] = 맨 아래(yB)
-    for (let y = yB; y >= yT; y--) col.push(lumaAt(img, W, x, y));
-    const sorted = col.slice().sort((a, b) => a - b);
-    const skin = sorted[Math.floor(sorted.length * 0.75)];
-    const darkest = sorted[Math.floor(sorted.length * 0.03)];
-    if (skin - darkest < FRONT_DARK_MIN) continue;        // 검은 것이 없는 열
-    /* ⚠️ 문턱은 **상대값만** 씁니다 — 절대값(예: 피부−40)을 섞으면 조명이 어두운 사진에서
-       눈썹의 절반이 문턱 위에 남아 두께 창(7/9)을 못 채웁니다 (실측: 8장 중 6장 실패).
-       얇은 검은 선(주름·아이라인) 방어는 문턱이 아니라 **두께 창**의 몫입니다. */
-    const thr = skin - (skin - darkest) * FRONT_HALF;
-    const dark = col.map((v) => v < thr);
-    /* ⚠️ 원장님 룰의 핵심은 순서입니다 — 「**피부색이 이어지다가** … 검은색」.
-       출발점이 눈 화장(섀도·라이너·속눈썹) 속이면 그 검은 것부터 잡아 버립니다
-       (실측: 짙은 화장 사진 2장에서 앞머리가 눈두덩에 내려앉았습니다).
-       그래서 검은 창 **바로 앞(아래)에 피부가 FRONT_SKIN 줄 이상** 이어져 있어야 인정합니다. */
-    /* ⭐ v2.1.2 — **후보를 전부 모아, 넘버링으로 고른다** (원장님 지시 2026-08-29:
-       「쌍꺼풀, 주름 쉐도우를 방어하도록 룰 추가」)
-       쌍꺼풀 주름·눈두덩 쉐도우는 **눈 위 7 눈금 안쪽**에 삽니다. 처음 만난 검은 것을
-       바로 앞머리로 삼으면 거기 걸립니다. 이제 열을 끝까지 걸어 후보를 전부 모은 뒤:
-         ① 눈 위 7~16 눈금 안의 **가장 아래** 후보 = 앞머리
-         ② 그 범위에 없으면, 16 눈금을 넘지 않는 가장 아래 후보 (자가 특이한 얼굴)
-         ③ 자(anchor)가 없으면 예전처럼 첫 후보
-       → 쉐도우(5눈금)와 눈썹(11눈금)이 둘 다 잡혀도 **눈썹을 고릅니다.** */
-    let light = 0;
-    const cands = [];
-    for (let i = 0; i + FRONT_WIN <= dark.length; i++) {
-      if (light >= FRONT_SKIN) {
-        let hit = 0;
-        for (let j = 0; j < FRONT_WIN; j++) if (dark[i + j]) hit++;
-        if (hit >= FRONT_HIT) {
-          let i0 = i; while (i0 < i + FRONT_WIN && !dark[i0]) i0++;   // 창 안 첫 어두운 줄
-          /* ⭐ v2.3.0 — 이 덩어리의 **윗끝** = 앞두께. 원장님 확정:
-             「검은선에서 **피부색이 나오는 지점**」 — 짙은 검정이 끝나도 옅은 윗털·파우더
-             그라데이션(FT_SOFT 문턱)이 이어지면 계속 올라가고, 피부가 FT_SKIN 줄 연속되면 끝.
-             ⛔ 짙은 문턱(thr)으로 되돌리지 마세요 — 5장 중 4장에서 1~2 눈금 낮게 잡혔습니다. */
-          const softThr = skin - (skin - darkest) * FT_SOFT;
-          let j = i0, last = i0, gap = 0, clearSkin = false;
-          while (j + 1 < dark.length) {
-            j++;
-            if (col[j] < softThr) { last = j; gap = 0; }
-            else { gap++; if (gap >= FT_SKIN) { clearSkin = true; break; } }
-          }
-          /* ⭐⭐ v2.4.0 — **앞두께 우선순위** (원장님 확정 2026-08-29):
-             「보통값 6.0 이 중요한 게 아니다. ① 반드시 사진에서 **픽셀 검증**으로 —
-               앞머리에서 위로 올라가며 검은색에서 피부색이 나오는 부분의 **검은 마지막
-               끝부분**이 앞두께다. ② 피부색이 나온 부분이 **명확하지 않을 때**는
-               색상의 **퍼센트지가 낮아지는 부분**을 선택해야 한다.」
-             ① = 위 걷기의 `last` (피부 FT_SKIN 줄 연속으로 끝났을 때 = 명확).
-             ② = 피부 복귀를 못 찾았거나(clearSkin=false) 두께가 상식 범위(3~9눈금)를
-                 벗어났을 때 → 열의 어둡기 퍼센트(피부 0% · 최암부 100%, 3줄 평활)가
-                 **가장 크게 낮아지는 자리**를 앞두께로 잡는다.
-             ③ 보통값 6.0(ftGuard)은 ①②가 모두 실패했을 때의 **최후 안전판**입니다.
-             ⛔ ② 를 빼고 바로 6.0 으로 가지 마세요 — 회귀 161 이 잡습니다. */
-          let ftop = last;
-          const u2 = frontTickPx();
-          const thTk = u2 ? (last - i0) / u2 : null;
-          if (!clearSkin || (thTk !== null && (thTk < FT_T_MIN || thTk > FT_T_MAX))) {
-            const nC = col.length;
-            const pc = (y) => { const yy = Math.max(0, Math.min(nC - 1, y));
-              return Math.max(0, Math.min(1, (skin - col[yy]) / Math.max(1, skin - darkest))); };
-            const sm = (y) => (pc(y - 1) + pc(y) + pc(y + 1)) / 3;
-            const lim = Math.min(nC - 2, u2 ? i0 + Math.round(FT_T_MAX * u2) : nC - 2);
-            let bj = -1, bd = 0;
-            for (let y2 = i0 + 1; y2 <= lim; y2++) {
-              const drop = sm(y2) - sm(y2 + 2);                       // 퍼센트가 낮아지는 정도
-              if (drop > bd) { bd = drop; bj = y2; }
-            }
-            if (bj > i0 && bd >= FT_P2_MIN) ftop = bj;
-          }
-          cands.push({ y: yB - i0, top: yB - ftop });                 // 후보 (아래→위 순서)
-          /* 이 덩어리를 지나쳐 계속 — 위에 진짜 눈썹이 또 있는지 본다 */
-          while (i + FRONT_WIN <= dark.length) {
-            let h2 = 0;
-            for (let j2 = 0; j2 < FRONT_WIN; j2++) if (dark[i + j2]) h2++;
-            if (h2 < 2) break;
-            i++;
-          }
-          light = 0;
-          continue;
-        }
-      }
-      /* 피부 세기는 **너그럽게** — 잔털·주근깨 한 줄로 끊기지 않게, 두 줄 연속 어두울 때만
-         0 으로 되돌립니다 (실측: 결 눈썹 사진에서 잔털이 피부 구간을 계속 끊어 실패했습니다). */
-      if (dark[i]) { if (i > 0 && dark[i - 1]) light = 0; }
-      else light++;
-    }
-    const u0 = frontTickPx();
+    const cands = darkBlobsUp(img, x, yB, yT, FT_T_MIN, FT_T_MAX);
+    if (!cands || !cands.length) continue;
+    /* ⭐ v2.1.3 — **하한은 절대 규칙**: 7 눈금 미만은 후보 자격이 없다. 범위 안에 아무것도
+       없으면 이 열은 포기한다 (→ 대체값 경로). ⛔ 낮은 후보라도 쓰던 옛 방식으로 되돌리지 마세요. */
     let pick = null;
     if (u0) {
-      /* ⭐ v2.1.3 — **하한은 절대 규칙입니다** (원장님 지시 2026-08-29:
-         「어느 넘버 이하는 앞머리로 측정하지 않는다가 있어야 한다. 판독이 애매한 경우에도
-           말도 안 되는 위치에 있으면 안 된다」)
-         예전에는 범위 안에 후보가 없으면 낮은 후보(눈꺼풀·속눈썹)라도 썼습니다 — 그 구멍으로
-         원장님 폰에서 앞머리가 눈꺼풀에 내려앉았습니다. 이제 **7 눈금 미만은 후보 자격이
-         없습니다.** 범위 안에 아무것도 없으면 이 열은 포기합니다 (→ 대체값 경로). */
-      const eyePx = ez * H;
-      for (const c of cands) { const t = (eyePx - c.y) / u0; if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = c; break; } }
-    } else pick = cands.length ? cands[0] : null;
-    if (pick !== null) ys.push(pick);
+      for (const c of cands) {
+        const t = (eyePx - c.y) / u0;
+        if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = c; break; }
+      }
+    } else pick = cands[0];
+    if (pick) ys.push(pick);
   }
   if (ys.length < 3) return null;
   /* 앞머리 = 아랫끝들의 중앙값 · 앞두께 = 윗끝들의 중앙값 */
   const bots = ys.map((c) => c.y).sort((a, b) => a - b);
   const tops = ys.map((c) => c.top).sort((a, b) => a - b);
   return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)] };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⭐⭐⭐ v2.5.0 — **아치엣지·아치두께 판독 룰** (원장님 지시 2026-08-29:
+   「앞머리, 앞두께 자동 위치조정 프로그래밍과 **같은 방법으로** 아치엣지 아치두께 고도화해라」)
+   ───────────────────────────────────────────────────────────────────────────
+   앞머리와 **완전히 같은 방법**입니다 — 다른 것은 「어느 열을 훑는가」와 「어느 후보를 고르는가」뿐:
+
+   | | 앞머리·앞두께 | 아치엣지·아치두께 |
+   |---|---|---|
+   | 훑는 열 | 이너(v2) 자리에서 눈썹 몸통 쪽 5열 | **산꼭대기(peak)** 좌우 5열 |
+   | 아랫끝 | 앞머리 | **아치두께** |
+   | 윗끝 | 앞두께 | **아치엣지** |
+   | 후보 자격 | 눈 위 7~16 눈금 | 눈 위 6 눈금 이상 · **앞머리보다 위**(해부학) |
+
+   ⚠️ **훑는 열은 아치선(v6)이 아니라 산꼭대기입니다.** 아치선은 「꺾임점」(BASELINE 1-34)이라
+   봉우리보다 바깥이고, 거기서 재면 아치 자가 산이 아닌 자리의 눈썹을 잽니다.
+   자를 그리는 기둥(v6)과 **재는 자리(peak)** 는 다릅니다 — 섞지 마세요.
+
+   ⚠️ **아치두께는 앞머리보다 아래로 못 내려갑니다** (원장님 지시 2026-08-27 · BASELINE 1-45).
+   그래서 후보 자격에 그 순서를 그대로 넣었습니다 — 새 상수를 만든 것이 아니라 이미 있는
+   원장님 규칙을 후보 고르기에 쓴 것입니다.
+
+   ⛔ **보통값(대체값)은 만들지 않았습니다.** 앞머리(10.2)·앞두께(6.0)는 원장님이 케이스로
+   확정해 주신 숫자입니다. 아치에는 그 확정 케이스가 아직 없으므로, 판독에 실패하면
+   **조용히 기존 밴드 판독을 그대로 둡니다** (앞머리와 같은 안전판). 케이스를 주시면
+   그때 넘버링을 확정합니다. */
+const ARCH_COLS = 5;          // 산꼭대기 좌우로 훑는 열 수
+const ARCH_SPAN = 0.016;      // 그 열들이 퍼지는 반폭 (화면 비율) — 봉우리 주변만
+const ARCH_UP = 0.50;         // 눈(0) 위로 이 비율까지 — 아치는 앞머리보다 위에 있다
+const ARCH_T_LO = FRONT_T_LO; // 눈 위 이 눈금 미만은 눈꺼풀 (앞머리와 같은 하한)
+const ARCH_T_HI = 26;         // 이보다 멀면 이마·머리카락 (확대 사진 여유 · 앞머리 16 보다 넉넉히)
+const AT_T_MIN = 2, AT_T_MAX = 14;   // 두께 상식 범위 — **탐색 보조일 뿐 보통값이 아니다**
+/* ⭐⭐⭐ v2.6.0 — **아치 표준값** (원장님 지시 2026-08-29, 실제 사진 5장 판정 뒤):
+     「1번 판독 실패시 표준값 : 아치두께는 앞머리 측정값에서 3칸 위로,
+       아치엣지는 아치두께 위치에서 5칸 위로 측정한다」
+
+   v2.5.0 에는 아치 표준값이 없어서, 판독이 포기하면 **밴드값이 그대로 남았습니다**.
+   실제 사진 1번에서 그 밴드값이 눈썹 위로 4.9 눈금 떠 있었습니다 (원장님 판정: 틀림).
+   이제 판독이 포기하면 밴드값을 그대로 두지 않고 **앞머리에서 재서** 놓습니다.
+   앞머리는 이미 보통값(10.2)·하한(6)이 지키고 있으므로, 아치도 그 위에 얹힙니다.
+
+   ⚠️ 눈금 자(1 눈금 = 내안각 기준)가 없으면 적용하지 않습니다 — 잴 자가 없는데
+      「3칸 위」를 말할 수 없습니다. 그때는 예전처럼 밴드값이 남습니다.
+   ⚠️ 이 값은 **판독이 실패했을 때만** 씁니다. 판독이 성공하면 사진에서 읽은 값이 이깁니다. */
+const AT_FROM_FRONT = 3;      // 아치두께 = 앞머리에서 위로 이 눈금
+const ARCH_FROM_AT = 5;       // 아치엣지 = 아치두께에서 위로 이 눈금
+/* ⭐⭐⭐ v2.7.0 — **아치엣지만 잡힌 경우의 아치두께 대체값** (원장님 지시 2026-08-29:
+     「아치엣지가 잡힌다 + 아치두께 안 잡히는 경우 = 아치엣지에서 5칸 아래 위치한다 대체값」)
+   ⚠️ 「아치두께가 안 잡힌다」의 뜻을 좁게 정했습니다 — **아랫끝이 넘버링 하한(6 눈금) 아래로
+      새어 내려간 경우**입니다. 그건 눈썹이 아니라 눈꺼풀·속눈썹까지 읽었다는 뜻이라
+      「두께를 못 잡은 것」이 맞습니다.
+   ⛔ **해부학 순서 위반(아치두께가 앞머리보다 아래)은 여기에 넣지 마세요.** 그건 덩어리
+      자체가 눈썹이 아닐 수 있다는 신호라 윗끝도 못 믿습니다 — 회귀 162ⓒ 가 잡습니다. */
+const AT_FROM_ARCH = 5;       // 아치두께 = 아치엣지에서 아래로 이 눈금 (대체값)
+/* ⭐⭐⭐ v2.8.0 — **아치엣지의 맥시멈** (원장님 지시 2026-08-29:
+     「아치 엣지가 잡히지 않거나, 위에 머리카락으로 혼동이 있을 경우 **맥시멈 위치 추가** —
+       앞두께 위로 5칸 이상 넘어가는 곳을 임의로 잡지 않는다」)
+   아치두께에는 이미 마지노선(1-45 · 앞머리보다 아래로 못 감)이 있습니다. 아치엣지에는
+   위쪽 마지노선이 없어서 머리카락·이마로 떠오를 수 있었습니다 — 그 짝을 맞춘 것입니다. */
+const ARCH_MAX_OVER_FT = 5;   // 아치엣지는 앞두께 위로 이 눈금을 넘지 않는다
+/* 앞두께 자리(캔버스 y)와 눈금 1칸(px)에서 아치엣지가 갈 수 있는 **가장 위** 를 낸다 */
+function archEdgeMax(ftY, u) {
+  return u && isFinite(ftY) ? ftY - ARCH_MAX_OVER_FT * u : null;
+}
+/* 앞머리 자리(캔버스 y)와 눈금 1칸(px)에서 아치 두 줄을 낸다 — 원장님 규칙 그대로 */
+function archStandard(frontY, u, ftY) {
+  if (!u || !isFinite(frontY)) return null;
+  const thick = frontY - AT_FROM_FRONT * u;
+  let edge = thick - ARCH_FROM_AT * u;
+  const m = archEdgeMax(ftY, u);                         // 맥시멈 — 앞두께 위로 5칸까지
+  if (m !== null && edge < m) edge = m;
+  return { thick, edge };
+}
+function archDecide(img, peakX, info) {
+  const { W, H } = S.dim;
+  if (info) info.seen = 0;
+  if (!img || !W || !H || peakX === null || peakX === undefined) return null;
+  const ez = eyeZeroY();                                 // 넘버링의 0 = 동공 중심 (v2.2.2)
+  const yB = Math.round((ez - FRONT_LASH_GAP) * H);
+  const yT = Math.max(2, Math.round((ez - ARCH_UP) * H));
+  if (yB - yT < FRONT_WIN + 6 || yB >= H) return null;
+  const u = frontTickPx(), eyePx = ez * H;
+  const frontTk = u ? (eyePx - S.g.front * H) / u : null;
+  const tops = [], bots = [], edgeOnly = [], thickOnly = [], half = (ARCH_COLS - 1) / 2;
+  for (let k = 0; k < ARCH_COLS; k++) {
+    const x = Math.round(peakX + ((k - half) * ARCH_SPAN * W) / half);
+    const cands = darkBlobsUp(img, x, yB, yT, AT_T_MIN, AT_T_MAX);
+    if (!cands || !cands.length) continue;
+    if (info) info.seen++;                                 // v2.6.0 — 「눈썹처럼 보이는 것」이 있었는가
+    let pick = null, anatomyCut = false;
+    for (const c of cands) {
+      if (c.ceil) {
+        /* ⭐ v2.8.0 — 창 천장에 닿음 = **윗끝(아치엣지)을 못 믿는다** (머리카락·확대 사진).
+           원장님 2026-08-29: 「아치엣지가 잡히지 않거나 위에 머리카락으로 혼동이 있을 경우」
+           → 윗끝은 버리고 **아랫끝만** 챙긴다. 아치엣지는 나중에 아치두께에서 5칸 위로. */
+        if (u) {
+          const tb = (eyePx - c.y) / u;
+          if (tb >= ARCH_T_LO && tb <= ARCH_T_HI
+              && !(frontTk !== null && tb < frontTk - 1.5)) thickOnly.push(c.y);
+        }
+        continue;                                        // 못박음 (판독-룰 3장)
+      }
+      if (u) {
+        const t = (eyePx - c.y) / u;
+        if (t < ARCH_T_LO || t > ARCH_T_HI) continue;    // 눈꺼풀·이마
+        /* 해부학 순서 — 아치두께 ≤ 앞머리 (원장님 2026-08-27). 1.5 눈금 여유는
+           일자 눈썹처럼 둘이 거의 같은 높이인 경우를 위한 것입니다. */
+        if (frontTk !== null && t < frontTk - 1.5) { anatomyCut = true; continue; }
+      }
+      pick = c; break;                                   // 자격 있는 **가장 아래** 후보
+    }
+    if (!pick) {
+      /* v2.7.0 — 아랫끝이 **넘겨받을 수 없는 자리(넘버링 하한 아래)** 로 새어 내려갔다.
+         윗끝이 멀쩡하면 윗끝만 챙긴다 — 두께는 나중에 아치엣지에서 5칸 아래로 놓는다. */
+      if (u && !anatomyCut) {                            // ⛔ 해부학으로 잘린 열은 윗끝도 못 믿는다 (162ⓒ)
+        for (const c of cands) {
+          if (c.ceil) continue;
+          const tt = (eyePx - c.top) / u;
+          if (tt < ARCH_T_LO || tt > ARCH_T_HI) continue;   // 윗끝이 멀쩡해야 아치엣지로 쓴다
+          /* ⚠️ 아랫끝은 따로 안 봅니다 — 여기 온 시점에 **자격 있는 아랫끝은 이미 없습니다**
+             (있었으면 위에서 pick 이 됐습니다). 돌연변이 검사로 확인한 사실이라, 조건을 하나 더
+             넣어도 아무 것도 더 막지 못합니다(막지 못하는 조건은 테스트도 못 합니다). */
+          edgeOnly.push(c.top); break;
+        }
+      }
+      continue;
+    }
+    bots.push(pick.y); tops.push(pick.top);
+  }
+  /* ⭐⭐⭐ v2.8.0 — **아치두께는 아치엣지에서 5칸보다 더 내려가지 않는다** (원장님 지시 2026-08-29:
+       「판별이 두께의 경우 매우 심중한 문제사항이 아니므로 남겨두지 말고,
+         아치엣지가 잡힐 경우 아래 5칸 아래 두면 된다」)
+     ① 아랫끝이 아예 없으면(잔털이 하한 아래로 샌 열들) → **아치엣지 + 5칸**
+     ② 아랫끝을 읽었으면 그것을 쓰되 **5칸을 넘지 못한다** — 넘었다면 잔털·번짐을 센 것이다
+        (실제 사진 5번: 읽은 값 8.5 → 5칸 자리 9.3 · 원장님 정답 9.5)
+     ⚠️ ②를 「무조건 5칸」으로 바꾸지 마세요 — 원장님이 **그려 놓은 드로잉**은 아치가 5칸보다
+        얇을 수 있고, 그때는 그린 선의 아랫끝이 정답입니다 (회귀 87·90·91·92·115·116·128). */
+  const cap = u ? AT_FROM_ARCH * u : null;
+  /* ⭐ v2.8.0 — 아치엣지 맥시멈 (위 ARCH_MAX_OVER_FT 주석). ⚠️ **밴드 판독에는 걸지 않습니다** —
+     밴드가 읽는 것은 원장님이 그려 놓은 드로잉이고, 드로잉은 그 자체가 정답입니다. */
+  const eMax = archEdgeMax(S.g.frontThickness * H, u);
+  const capEdge = (e) => (eMax !== null && e < eMax ? eMax : e);
+  const mid = (a) => { a.sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+  const edges = tops.concat(edgeOnly), thicks = bots.concat(thickOnly);
+  if (edges.length >= 3) {                               // ① 아치엣지를 읽었다 — 여기가 기준
+    const edge = capEdge(mid(edges));
+    let thick = bots.length >= 3 ? mid(bots) : null;
+    if (cap) thick = thick === null ? edge + cap : Math.min(thick, edge + cap);
+    if (thick === null) return null;                     // 자도 없고 아랫끝도 없으면 말할 수 없다
+    if (!(edge < thick - 1)) return null;                // 윗선이 아랫선보다 위가 아니면 오독
+    return { edge, thick };
+  }
+  if (cap && thicks.length >= 3) {                       // ② 아치엣지만 못 읽었다 → 두께에서 5칸 위
+    const thick = mid(thicks);
+    return { edge: capEdge(thick - cap), thick };
+  }
+  return null;                                           // 3열 미만 → 조용히 포기 (밴드 유지)
 }
 
 /* ⭐⭐ v2.1.3 — **최종 하한 집행** — 어떤 경로로 왔든(판독·밴드·이전 값) 앞머리가
@@ -3910,6 +4065,28 @@ function autoFromDrawing() {
      ⚠️ `AT_GAP` — 상한에 **딱 붙이지 않고 조금 위**에 세웁니다. 딱 붙이면 아치두께와 앞머리가
         같은 값이 되어, 못박음 검사(회귀 131)가 「사진에서 읽은 값이 아니다」로 잡습니다.
         상한이 걸렸다는 것 자체가 판독이 흔들렸다는 뜻이므로 붙여 두면 안 됩니다. */
+  /* ⭐⭐⭐ v2.5.0 — 아치엣지·아치두께도 앞머리와 **같은 방법**으로 픽셀 검증 (원장님 지시 2026-08-29:
+     「앞머리, 앞두께 자동 위치조정 프로그래밍과 같은 방법으로 아치엣지 아치두께 고도화해라」).
+     ⚠️ 훑는 자리는 **산꼭대기**(밴드에서 찾은 봉우리 열)입니다 — 아치선(v6·꺾임점)이 아닙니다.
+     ⚠️ 이너(v2)·앞머리가 정해진 **뒤에** 부릅니다 — 해부학 순서(아치두께 ≤ 앞머리)를 후보 고르기에 씁니다.
+     실패하면 아무것도 바꾸지 않고 위의 밴드 판독이 그대로 남습니다 (조용한 안전판). */
+  {
+    const info = { seen: 0 };
+    const ad = archDecide(img, seq[pk].x, info);
+    if (ad) { setY("h2", ad.edge); setY("archThickness", ad.thick); }
+    else if (info.seen > 0) {
+      /* ⭐ v2.6.0 — 판독 실패 → **표준값** (위 AT_FROM_FRONT 주석의 원장님 지시).
+         ⚠️ `info.seen > 0` 조건을 지우지 마세요 — **왜 실패했는지**로 갈립니다:
+           · seen = 0 : 산꼭대기에 「두꺼운 검은 것」이 **아예 없다** → 테두리만 그린 드로잉,
+             맨 눈썹 저대비. 이때는 **밴드가 읽은 것이 유일한 증거**이므로 그대로 둡니다.
+             (회귀 89 · 94 가 잡습니다 — 드로잉을 표준값으로 덮으면 원장님 작업이 망가집니다)
+           · seen > 0 : 뭔가 보이긴 하는데 열들이 서로 다른 말을 한다 → 머리카락·그늘일
+             가능성이 큽니다. 밴드도 그 흔들리는 것을 읽었을 것이므로 **표준값**으로 갑니다.
+             (실제 사진 1번 — 밴드 아치엣지가 눈썹 위로 4.9 눈금 떠 있었습니다) */
+      const std = archStandard(S.g.front * H, frontTickPx(), S.g.frontThickness * H);
+      if (std) { setY("archThickness", std.thick); setY("h2", std.edge); }
+    }
+  }
   {
     const AT_GAP = 3 / H;                        // 캔버스 3px — 못박음 검사와 부딪히지 않는 최소 간격
     const floor = S.g.h2 + 4 / H;                // 아치 윗선보다는 반드시 아래
@@ -5150,5 +5327,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
-  frontDecide, FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
+  frontDecide, darkBlobsUp, archDecide,
+  ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard,
+  FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
