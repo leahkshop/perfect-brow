@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v128"; /* v3.1.0 — 아치선 마지노선 3~4칸 눈썹길이 연동 + 눈꼬리 표준값 강제이동 폐지 */
+const VERSION = "pb-v129"; /* v3.2.0 — seq 방향 판정 교정(아치선 좌우 뒤집힘) + 눈 구간 검증 + 산꼭대기 방치 폐지 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

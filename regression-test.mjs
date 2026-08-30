@@ -2357,7 +2357,18 @@ if (RUN(5)) {
       /* ⭐ v2.4.0 — 이너 맥시멈 45: 드로잉 시작점이 45 를 넘으면 기대값도 45 자리다 */
       const a90 = window.PB.innerAnchor();
       const innerCapPx = a90 ? (g.v1 - a90 * (1 - window.PB.INNER_F_SOFT)) * W : 1e9;
-      return { ok, W, H, exp, innerCapPx,
+      /* v3.2.0 — 아치선 방향 판정(seqOrient)의 순수 검사. 센터 400 기준.
+         straddleR = **화면 오른쪽 눈썹인데 읽힌 열이 센터를 넘은** 경우 — 예전 식
+         (`pts[0].x > cx`)이 여기서 뒤집혔습니다 (실기기 2026-08-30). */
+      const mk = (xs) => xs.map((x) => ({ x })), so = window.PB.seqOrient;
+      const orient = {
+        left: so(mk([100, 200, 300]), 400).map((q) => q.x),
+        right: so(mk([500, 600, 700]), 400).map((q) => q.x),
+        straddleR: so(mk([395, 500, 700]), 400).map((q) => q.x),
+        straddleL: so(mk([100, 300, 405]), 400).map((q) => q.x),
+      };
+      return { ok, W, H, exp, innerCapPx, orient,
+        cxPx: g.v1 * W, archRead: S.archRead ? { ...S.archRead } : null,
         frontPx: g.front * H, ftPx: g.frontThickness * H,
         archPx: g.h2 * H, atPx: g.archThickness * H, tailPx: g.h3 * H,
         innerPx: g.v2 * W, outerPx: g.v4 * W, archVPx: g.v6 * W,
@@ -4247,6 +4258,42 @@ if (RUN(5)) {
       `꼬리 ${o87.tailPx.toFixed(0)} > 윗선 ${outerTop}=${tailBelowTop} · `
       + `아치선 ${o87.archVPx.toFixed(0)} < 산꼭대기 ${peakX}=${archVOutside} · 바깥에서 ${(archFrac * 100).toFixed(0)}%(15~40%)=${archInBand} · `
       + `앞머리 꼭지점(이너 ${o87.innerPx.toFixed(0)}/${o87.exp.inner.toFixed(0)} · 앞머리 ${o87.frontPx.toFixed(0)}/${o87.exp.front.toFixed(0)})=${frontOnCorner}`);
+
+    /* 175. ⛔⛔ v3.2.0 — **열 순서의 방향** (실기기 사진 2026-08-30 · 원장님 확인)
+       증상: 아치선이 산꼭대기보다 **안쪽**, 눈썹 몸통 한가운데(num≈35)에 섰습니다.
+       원인: 방향을 `pts[0].x > cx` — **끝점 하나가 센터보다 오른쪽인가** — 로만 봤습니다.
+             화면 오른쪽 눈썹에서 읽힌 열이 **센터를 하나라도 넘으면**(미간 잔털·그늘)
+             판정이 뒤집혀 **열 순서 전체가 거꾸로** 서고, 아치선 탐색이 꼬리 쪽이 아니라
+             앞머리 쪽으로 걸어갑니다. 같은 사진·같은 코드에 순서만 뒤집어 넣으니
+             35.08 로 재현됐습니다 (정상 순서 24.07 · 실기기 실측 ≈35).
+       고침: `seqOrient` — 앞머리(seq[0])는 **센터에 가까운 끝**. `growEnd` 와 같은 잣대.
+       ⛔ 되돌리지 마세요. straddleR 이 그때 뒤집히던 바로 그 경우입니다. */
+    const or = o87.orient;
+    const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+    const orientOk = same(or.left, [300, 200, 100]) && same(or.right, [500, 600, 700])
+                  && same(or.straddleR, [395, 500, 700]) && same(or.straddleL, [405, 300, 100]);
+    check("175. 열 순서 방향 — 앞머리(seq[0])는 센터에 가까운 끝 (열이 센터를 넘어도 안 뒤집힘)",
+      orientOk,
+      `왼쪽 [${or.left}](기대 300,200,100) · 오른쪽 [${or.right}](500,600,700) · `
+      + `센터 넘은 오른쪽 [${or.straddleR}](395,500,700) · 센터 넘은 왼쪽 [${or.straddleL}](405,300,100)`);
+
+    /* 176. ⛔⛔ v3.2.0 — **아치선은 어떤 길로 와도 산꼭대기에서 마지노선(3~4칸) 밖**
+       (원장님 지시 2026-08-30: 「3개의 칸 내부로 들어오지 않는다」)
+       예전에는 픽셀 판독이 실패하고 눈꼬리 랜드마크도 없으면 **아무것도 안 해서**
+       임시로 놓아 둔 **산꼭대기 값(0칸)** 이 그대로 남았습니다 — 규칙을 가장 크게
+       어기는 자리입니다. 이제 세 갈래(pixel·corner·floor) 어디로 가든 이 띠를 지킵니다.
+       ⛔ `S.archRead` 를 지우지 마세요 — 무엇을 보고 그 자리에 섰는지 남기는 유일한 기록입니다. */
+    const okFloor = (o, nm) => {
+      const a = o.archRead;
+      if (!a) return { ok: false, why: `${nm}: archRead 없음` };
+      if (a.from === "corner") return { ok: true, why: `${nm}: 눈꼬리(마지노선 적용 안 함)` };
+      const outD = Math.abs(o.archVPx - o.cxPx), pkD = Math.abs(a.pkX - o.cxPx);
+      return { ok: outD >= pkD + a.minOutPx - 0.5,
+               why: `${nm}: ${a.from} 산꼭대기에서 ${((outD - pkD) / (a.minOutPx / a.floorUnits)).toFixed(2)}칸(마지노선 ${a.floorUnits.toFixed(2)})` };
+    };
+    const rA = okFloor(o87, "A"), rB = okFloor(o92, "B");
+    check("176. 아치선 마지노선 — 픽셀·눈꼬리·최후표준값 어느 길로 와도 산꼭대기 3~4칸 밖",
+      rA.ok && rB.ok, `${rA.why} · ${rB.why}`);
   }
 
   /* 120. ⚠️ v1.69.0 — **얼굴을 크게 확대한 사진**에서도 나머지 선을 찾는다 (원장님 지시 2026-08-24:

@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.1.0";
+const APP_VERSION = "v3.2.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3853,6 +3853,16 @@ function readDrawing(img, contrast, side) {
 }
 
 
+/* ⛔⛔⛔ v3.2.0 — **열 순서의 방향을 정하는 단 하나의 자리** (실기기 사진 2026-08-30).
+   `pts` 는 x 오름차순입니다. 앞머리(seq[0])는 **센터에 가까운 끝**입니다 — 화면 왼쪽
+   눈썹이면 x 가 큰 쪽, 오른쪽 눈썹이면 x 가 작은 쪽. `growEnd` 가 쓰는 잣대와 같습니다.
+   ⛔ 예전의 `pts[0].x > cx`(끝점 하나가 센터보다 오른쪽인가)로 되돌리지 마세요 —
+      읽힌 열이 센터를 하나라도 넘으면 판정이 뒤집혀 **열 순서 전체가 거꾸로** 섭니다.
+      회귀 175 가 잡습니다. */
+function seqOrient(pts, cx) {
+  return Math.abs(pts[0].x - cx) < Math.abs(pts[pts.length - 1].x - cx) ? pts : [...pts].reverse();
+}
+
 /* 사진에 그려진 드로잉 위로 모든 선을 올린다. 올렸으면 true.
    센터(v1)는 얼굴 축이라 건드리지 않습니다 (내안각 중점 · BASELINE 1-15).
    V 피봇·V 앵글도 자동으로 올리지 않습니다 — 쓰실 때만 켜는 보조선입니다. */
@@ -3891,9 +3901,25 @@ function autoFromDrawing() {
   if (!pts) return false;
 
   /* seq[0] = 안쪽(앞머리) … seq[n−1] = 바깥(꼬리).
-     화면 왼쪽 눈썹이면 x 가 큰 쪽이 코 방향(=안쪽)이므로 뒤집는다. */
+     화면 왼쪽 눈썹이면 x 가 큰 쪽이 코 방향(=안쪽)이므로 뒤집는다.
+
+     ⛔⛔⛔ v3.2.0 — **방향은 「어느 끝이 센터에 가까운가」로 정한다** (실기기 사진 2026-08-30).
+     예전에는 `pts[0].x > cx` — **끝점 하나가 센터보다 오른쪽인가** — 로만 봤습니다.
+     화면 오른쪽 눈썹에서 읽힌 열이 **센터를 하나라도 넘으면**(미간 잔털·그늘) `pts[0].x`
+     가 센터보다 왼쪽이 되어 판정이 뒤집히고, **열 순서 전체가 거꾸로** 섭니다.
+     그러면 아치선 탐색이 산꼭대기에서 꼬리 쪽이 아니라 **앞머리 쪽으로** 걸어가고,
+     아치선이 눈썹 몸통 한가운데(마지노선 규칙과 정반대 자리)에 섭니다.
+     실기기 스크린샷의 아치선(≈35)을 같은 사진·같은 코드에 **순서만 뒤집어** 넣으면
+     35.08 로 재현됐습니다 (정상 순서 24.07). 확대율 무관하게 재현됩니다.
+     ⚠️ 실기기에서 뒤집힘을 일으킨 정확한 입력은 컨테이너에서 재현하지 못했습니다 —
+        MediaPipe 가 막혀 랜드마크 경로(browBoxes)를 못 타고, 예비 경로(fallbackBox)는
+        상자를 센터(cx±4)에서 잘라 애초에 못 넘습니다. **랜드마크 경로에는 그 잘라내기가
+        없습니다** — 그래서 실기기에서만 났습니다.
+     이제 `growEnd`(위)와 **같은 잣대**를 씁니다 — 센터에 가까운 끝이 앞머리.
+     열이 센터를 안 넘는 보통 사진에서는 예전 식과 결과가 같습니다 (확정 4장 불변).
+     ⛔ 다시 끝점 하나(`pts[0].x > cx`)로 되돌리지 마세요 — 회귀 175 가 잡습니다. */
   const cx = S.g.v1 * W;
-  const seq = pts[0].x > cx ? pts : [...pts].reverse();
+  const seq = seqOrient(pts, cx);
   const n = seq.length;
 
   /* 구간 t(0=앞머리 … 1=꼬리) 안 표본들의 **분위수** (v1.37.0).
@@ -4167,20 +4193,44 @@ function autoFromDrawing() {
         if (farEnough && d >= ARCHV_EPS) { hold = 1; firstI = i; prevD = d; }
       }
     }
+    /* 순서 — ① 픽셀 판독(주역) → ② 눈꼬리 랜드마크 → ③ 산꼭대기 + 마지노선.
+       ⛔ v3.1.0 — 눈꼬리를 마지노선(3~4칸) 밖으로 억지로 밀지 않는다 (원장님 지시:
+          「4칸 전 눈꼬리가 3·3.5·4에 걸릴 경우 눈꼬리가 마지노선으로 더 늘어나지
+          않는다」). 마지노선은 ①의 픽셀 판독 후보를 거르는 자이지, 랜드마크로 실측한
+          눈꼬리까지 밀어낼 이유가 없다 — 밀면 오히려 실제 얼굴 비율에서 벗어난다. */
+    const eyeR = eyeArchRange(seq[0].x < cx ? "L" : "R");   /* 판독에 실제로 쓰인 쪽 */
+    /* ❌ v3.2.0 — 시도했다가 **접은 것**: 눈 기준 구간(eyeArchRange 의 `a`·눈동자 바깥
+       끝)으로 픽셀 판독을 **검증**하려 했습니다 (원장님 질문 2026-08-30: 「눈꼬리 랜드마크
+       설정하는것도 좋은 방법이니?」). 픽셀 판독이 눈동자 바깥 끝보다 코 쪽으로 들어오면
+       눈썹 몸통을 짚은 것으로 보고 버리는 안이었습니다.
+       접은 이유: **회귀 91 이 바로 잡았습니다** — 모양 B(아치가 안쪽 x260 에 있는 눈썹)의
+       **정상 판독(234)** 을 「너무 안쪽」으로 오판해 눈꼬리(150)로 버렸습니다. 눈 구간은
+       사람마다 눈썹-눈 배치가 달라 **판독을 감시할 만큼 촘촘한 자가 못 됩니다** —
+       아치가 안쪽에 있는 눈썹이 정상인데 그걸 이상으로 읽습니다.
+       ⛔ 문턱만 느슨하게 해서 되살리지 마세요 — 통과하게 맞춘 문턱은 근거가 없습니다.
+       이번 실기기 버그(아치선이 눈동자보다 한참 안쪽)는 애초에 **열 순서 뒤집힘**이
+       원인이고, 그건 `seqOrient` 에서 막습니다. 눈꼬리는 지금처럼 **못 찾았을 때의
+       표준값(②)** 으로만 씁니다 — 판독의 감시자로는 쓰지 않습니다. */
+    /* ⭐ v3.2.0 — **판독 근거를 남긴다** (이너의 `S.innerRead` 와 같은 방식).
+       이번 실기기 버그를 찾는 데 오래 걸린 이유가 「무엇을 보고 그 자리에 섰는지」가
+       아무 데도 안 남아서였습니다. 회귀 176 이 이 값을 읽습니다. */
+    S.archRead = { pkX: seq[pk].x, outX: outI >= 0 ? seq[outI].x : null,
+                   floorUnits, minOutPx: MIN_OUT_PX, browSpanUnits,
+                   from: outI >= 0 ? "pixel" : eyeR ? "corner" : "floor" };
     if (outI >= 0) {
       setLine("v6", clamp(S.g.v1 - Math.abs(seq[outI].x - cx) / W, 0.02, 0.98));
+    } else if (eyeR) {
+      /* ② 눈꼬리(outer 랜드마크) 그 자체를 표준값으로
+         (원장님: 「대부분의 아치선 경계는 눈꼬리 위에 있는 것을 확인」) */
+      setLine("v6", clamp(S.g.v1 - Math.abs(eyeR.corner - cx) / W, 0.02, 0.98));
     } else {
-      /* 못 찾음 — ① 눈꼬리(outer 랜드마크) 그 자체를 표준값으로
-         (원장님: 「대부분의 아치선 경계는 눈꼬리 위에 있는 것을 확인」)
-         ② 랜드마크도 없으면 위에서 임시로 놓은 산꼭대기 값이 그대로 남는다 (조용한 안전판)
-         ⛔ v3.1.0 — 눈꼬리를 마지노선(3~4칸) 밖으로 억지로 밀지 않는다 (원장님 지시:
-            「4칸 전 눈꼬리가 3·3.5·4에 걸릴 경우 눈꼬리가 마지노선으로 더 늘어나지
-            않는다」). 마지노선은 ①의 픽셀 판독 후보를 거르는 자이지, 랜드마크로 실측한
-            눈꼬리까지 밀어낼 이유가 없다 — 밀면 오히려 실제 얼굴 비율에서 벗어난다. */
-      const eyeR = eyeArchRange(seq[0].x < cx ? "L" : "R");   /* 판독에 실제로 쓰인 쪽 */
-      if (eyeR) {
-        setLine("v6", clamp(S.g.v1 - Math.abs(eyeR.corner - cx) / W, 0.02, 0.98));
-      }
+      /* ⭐ v3.2.0 — ③ 랜드마크도 없을 때. 예전에는 이 자리에서 **아무것도 안 해서**
+         위에서 임시로 놓아 둔 **산꼭대기 값(0칸)** 이 그대로 남았습니다 — 원장님이 정하신
+         「3개의 칸 내부로 들어오지 않는다」를 가장 크게 어기는 자리입니다(0칸).
+         이제 산꼭대기에서 **마지노선(3~4칸) 만큼 꼬리 쪽으로** 내보냅니다.
+         ⛔ 이것은 실측값이 아예 없을 때의 최후 표준값입니다 — ②(눈꼬리 실측)를
+            밀지 않는다는 v3.1.0 원칙과 충돌하지 않습니다. */
+      setLine("v6", clamp(S.g.v1 - (Math.abs(seq[pk].x - cx) + MIN_OUT_PX) / W, 0.02, 0.98));
     }
   }
   return true;
@@ -5408,7 +5458,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
-  autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair,
+  autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
