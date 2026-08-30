@@ -372,7 +372,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.4.0";
+const APP_VERSION = "v3.4.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -4311,14 +4311,27 @@ function autoFromDrawing() {
   /* ⭐ v3.3.1 — **점선 진단**: 앱이 읽은 눈썹 윗선을 화면에 그대로 보여 줄 수 있게 남긴다
      (원장님 확인 2026-08-30: 「점선으로 판독한 방법은 뭐니?」 — 그 점선이 이 seq 입니다).
      실기기에서만 나는 증상이라, 폰이 만든 점선을 폰 화면에서 직접 봐야 어긋난 지점이
-     보입니다. showArchDots() 가 이 값을 그립니다. ⏸ 원인이 잡히면 떼도 됩니다. */
-  S.archDots = seq.map((p) => ({ x: p.x, top: p.top }));
+     보입니다. showArchDots() 가 이 값을 그립니다. ⏸ 원인이 잡히면 떼도 됩니다.
+
+     ⭐ v3.4.1 — **꼬리까지 그린다** (원장님 지시 2026-08-30: 「파란 선을 그대로 꼬리까지
+     인식하여 꼬리 배치 고도화 할 수 있니?」). 앱은 이미 꼬리까지 읽고 있었습니다 —
+     꼬리선(v4)이 쓰는 자료는 `seqT`(= seq + tailAdd)인데 점은 `seq` 만 그려서, 화면에서
+     점이 꼬리 앞에서 끊겨 보였습니다. 이제 `seqT` 를 그리고 **이어 붙인 꼬리 열은 보라색**
+     으로 구분합니다. 꼬리선이 실제로 어느 열에 섰는지도 분홍 점으로 같이 찍습니다.
+     ⚠️ **판독 로직은 하나도 안 건드립니다** — 보이는 것만 늘렸습니다.
+     ⛔ 「마지막 점 = 꼬리」로 바꾸지 마세요 — 원장님 확정 「얇은털 따라가는것 금지」(v1.71.0)
+        「검은 드로잉이 끝나는 곳」(v1.72.0)과 충돌합니다. 회귀 122·123 이 잡습니다. */
+  S.archDots = seqT.map((p, i) => ({ x: p.x, top: p.top, bot: p.bot, tail: i >= n }));
   return true;
 }
 
-/* ⭐ v3.3.1 — 진단: 앱이 읽은 눈썹 윗선(seq)을 파란 점으로 8초간 표시.
+/* ⭐ v3.3.1 — 진단: 앱이 읽은 눈썹 윗선을 점으로 8초간 표시.
    render() 와 무관한 별도 SVG 라 다음 render 에 지워지지 않고, 시간이 지나면 스스로 사라진다.
-   주황 = 산꼭대기 · 초록 = 아치선이 실제로 선 자리. 저장본에는 안 찍힌다(exportImage 와 무관). */
+   저장본에는 안 찍힌다(exportImage 와 무관).
+     파랑  = 눈썹 몸통 판독 열(seq)의 윗선
+     보라  = v3.4.1 — 꼬리 쪽으로 **이어 붙인 열**(tailAdd)의 윗선
+     주황  = 산꼭대기(pk)   · 초록 = 아치선(v6)이 선 자리
+     분홍  = v3.4.1 — 꼬리선(v4)이 선 자리 (점들과 얼마나 맞는지 눈으로 보라고) */
 let archDotsTimer = null;
 function showArchDots() {
   try {
@@ -4340,12 +4353,15 @@ function showArchDots() {
       c.setAttribute("fill", fill); c.setAttribute("stroke", "#14161B"); c.setAttribute("stroke-width", "0.6");
       svg.appendChild(c);
     };
-    for (const p of S.archDots) dot(p.x, p.top, 2.4, "#4C8DFF");
+    for (const p of S.archDots) dot(p.x, p.top, 2.4, p.tail ? "#A855F7" : "#4C8DFF");
+    const top0 = S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6;
     const a = S.archRead;
     if (a) {
-      dot(a.pkX, S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6, 4, "#FFA500");
-      dot(S.g.v6 * W, S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6, 4, "#00C853");
+      dot(a.pkX, top0, 4, "#FFA500");
+      dot(S.g.v6 * W, top0, 4, "#00C853");
     }
+    /* v3.4.1 — 꼬리선이 선 자리. 점들의 끝과 견줘 보라고 같이 찍는다 */
+    if (S.g.v4 !== undefined) dot(S.g.v4 * W, top0, 4, "#FF4D94");
     stage.appendChild(svg);
     archDotsTimer = setTimeout(() => { const el = document.getElementById("archDotsOverlay"); if (el) el.remove(); }, 8000);
   } catch (e) { /* 진단 표시는 실패해도 조용히 — 본 기능에 영향 없음 */ }

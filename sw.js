@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v132"; /* v3.4.0 — 아치선 절대 상한 25(넘으면 23) + 산꼭대기 후보 넘버링 제한 */
+const VERSION = "pb-v133"; /* v3.4.1 — 점선 진단을 꼬리까지(seqT) 확장 · 꼬리선 자리 표시 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
