@@ -112,6 +112,60 @@ const URL_BASE = `http://127.0.0.1:${PORT}/index.html`;
 
 console.log("\n━━━ Perfect Brow 회귀 테스트 ━━━\n");
 
+/* ═══════════════════════════════════════════════════════════════
+   ⏱ **부분 테스트 스위치** `PB_ONLY` (v2.9.0 — 명령서 §0-Y 를 기계로 집행)
+
+   전 항목은 3분입니다. 한 줄만 고치는 동안 3분을 매번 태우면 하루가 사라집니다
+   (원장님 지적 2026-08-29: 「작업중인 부분만 부분적으로 테스트 돌린다」).
+
+     PB_ONLY=아치   node regression-test.mjs     ← 이름에 「아치」가 든 항목만
+     PB_ONLY=arch   node regression-test.mjs     ← 같은 뜻 (별칭표 아래)
+     PB_ONLY=162-164,121 node regression-test.mjs ← 항목 번호·범위
+     node regression-test.mjs                     ← 전부 (커밋 직전 한 번)
+
+   ⚠️ **부분 통과는 통과가 아닙니다.** 커밋 직전에는 `PB_ONLY` 없이 한 번 더 돌리세요.
+      부분 실행이면 맨 아래에 「부분 실행」 경고가 찍힙니다.
+
+   ⚠️ 블록표(BLOCK_TESTS)는 **소스에서 기계로 뽑은 것**입니다. 테스트를 추가·이동하면
+      `if (RUN(n))` 번호와 이 표가 어긋납니다 — 그때는 표를 다시 뽑으세요
+      (판독-룰.md 「부분 테스트 스위치」 절에 뽑는 법이 있습니다).
+   ═══════════════════════════════════════════════════════════════ */
+const BLOCK_TESTS = [["1. 페이지 로드 · JS 오류 없음", "33. 앱 실행 직후 두 조절자 모두 표시", "11. 세로 폴백 레이아웃 — 라인 버튼이 캔버스 하단", "2. 라인 직접 드래그 (60px)", "5. Center 이동 시 v2~v5 동반 이동", "3. Inner 좌우 대칭", "4. Outer 좌우 대칭", "6. 동공정렬 — 6° 기울기 보정 · 기준점 = 작업 영역 중앙 · 세로 = CENTER_Y", "44. 자동 정렬 — 얼굴이 작업 영역 가로 한가운데 · 세로 = CENTER_Y", "7. 줌/회전 슬라이더 범위", "8. 프리셋 저장 — 새로고침 후 유지", "9. 이미지 PNG 저장", "16. 사진 잠금 — 사진 고정 · 보정 버튼 반투명 잠김", "17. 잠금 중에도 선 조절 가능 · 가로바는 위아래로만", "18. 세로바는 좌우로만 · 대칭 유지", "19. 방향 버튼 — 가로바 ▼▲ / 세로바 ◀▶", "20. 잠금 해제 — 사진 보정 버튼 다시 밝아지고 눌림", "21. 빈 곳 드래그 → 선택된 가로바가 위아래로만 따라옴", "22. 빈 곳 드래그 → 대칭 세로바가 좌우로만 따라옴 · 대칭 유지", "23. 두 손가락 드래그 = 사진 이동 (선은 불변)", "24. 세로 조절자 — 왼쪽 끝 · 세로 중앙 (▲위/▼아래)", "25. 가로 조절자 — 아래·오른쪽 정렬 (◀왼쪽/▶오른쪽)", "32. 두 조절자 겹침 없음 · 캔버스 안", "26. 조절자 방향 = 선의 이동 방향", "27. 선을 탭하면 그 선이 선택 · 값은 그대로", "28. 다른 선 탭 → 전환 + 조절자 축도 전환", "35. 잠금 해제 · 한 손가락 사선 드래그 = 사진 자유 이동", "36. 아래 가로 바 하나로 선 조절 ↔ 사진 보정 겸용", "37. 세로선 선택 → 가로 바가 선 조절로 자동 복귀", "38. 오른쪽 아래 — 사진보정 버튼 위 / 좌우 바 = 줌~밸런스 행과 같은 폭·정렬", "39. 왼쪽=위아래 바만 · 오른쪽 위=초기화+다시실행/되돌리기 1행 · 밸런스=여러라인 옆 칸 · 삭제 정리", "41. 되돌리기 — 직전 작업만, 다시 누르면 그 전 작업", "42. 드래그 1회 = 되돌리기 1단계 (선택만 하는 탭은 기록 안 됨)", "49. 여러라인 — 누를 때마다 선택 누적 · 다시 누르면 해제(숨김 아님)", "50. 여러라인 — 선택된 선들이 함께 이동 · 비선택은 불변", "51. 선택된 라인 강조 — 굵기 증가", "52. 여러라인 해제 → 한 개만 선택", "53. 버튼 이름 — ", "43. 라인 버튼 — 1탭 선택(움직임) · 다시 탭 숨김", "54. 화면 탭 — 1탭 = 선택(숨기지 않음)", "55. 화면 탭 — 같은 선 다시 탭 = 숨김", "56. 화면 탭 — 여러라인 모드는 선택 해제만, 숨기지 않음 · 숨김은 되돌리기 대상", "57. 다시 실행 — 되돌린 작업을 다시 앞으로 (새 작업 시 갈래 폐기)", "58. 전체라인 — 여러라인 후속 버튼 · 보이는 선 전부 선택/해제", "59. 전체라인 — 화면의 모든 가로선이 한 번에 이동", "60. 한/영 전환 — 라인 버튼 이름 · 편집 화면 칩은 제거되고 설정 배지만 남음", "61. 기본값 — 눈 0.60 · V 피봇 위 10% · V 앵글 아래 45°", "62. 아이콘 — 이모지 없음 · 전부 SVG 선 아이콘", "63. 왼쪽 레일 담백 — 발광·그라데이션 없음", "64. 라인 버튼 — 색 띠가 선 색 · 버튼 전체를 선 색으로 칠하지 않음", "65. 잠금 아이콘 — 잠김/열림 모양이 다르다", "66. 모달 대비 — 다크 바탕에 밝은 글자 (흰 바탕 금지)", "67. 액센트 채움 버튼 — 글자 대비 충분 (흰 글자 금지)", "68. 모달 — 채운 버튼은 주 동작 하나뿐", "69. 두께 선 — 눈썹 아래 윤곽 실측 (고정 오프셋 아님)", "153. 눈 앞꼬리 = 언제나 40 — 동공 간격이 달라도 내안각 눈금이 흔들리지 않는다", "70. 비대칭 얼굴 — 이너·아우터는 기준쪽에 정확히, 오차는 반대쪽이 안는다 (데칼코마니)", "71. 자동 정렬 — 양쪽 눈썹 꼬리가 화면 안 (잘리지 않음)", "72. 선을 켜면 AI 측정 위치로 배치 (인식 실패 시엔 그대로)", "73. 자 정렬 — 짝끼리 동일 · 아치는 바깥 · 꼬리·눈은 얇은 실선 없음 · 눈은 회색 반투명", "74. 프리셋 — 고객 얼굴 폭·눈썹 높이에 맞춰 자동 환산 (대칭 유지)", "75. 프리셋 적용 중 표시 · 초기화 시 해제", "76. 기준틀 없는 옛 프리셋 — 환산 없이 그대로 적용", "84. 즐겨찾기 — 지정한 개수만큼만 · 누르면 바로 적용 · 없는 id 는 걸러냄", "85. 별표 — 3개까지 · 4번째는 거부 · 다시 누르면 해제", "12. 좌표계 규약 — 모든 라인 값 0~1"], [], ["153. 눈 앞꼬리 = 언제나 40 — 동공 간격이 달라도 내안각 눈금이 흔들리지 않는다"], ["81. 홈(사진 선택)은 세로 그대로 · 사진을 넣으면 편집기가 가로로", "13. 세로 기기에서 가로 강제 — 회전 적용", "13. 세로 기기에서 가로 강제 — 캔버스가 가로", "14. 회전 상태에서 라인 드래그 정확도", "34. 강제 가로 — 손 제스처 축이 화면과 일치", "82. 사진 선택 중 — 가로 그대로 · 화면만 어둡게 · 닫으면 복구", "29. 기본값에서 세로 기기 → 항상 가로 (자동 해제 없음)", "30. 기기가 실제 가로면 가짜 회전 해제 (설정은 유지)", "31. 세로로 되돌아가면 즉시 가로 강제 복귀", "15. pb_orient=off 도 무시 — 무조건 가로 (v1.93.0)"], ["10. ${dev.n} — 좌측 레일 + V 버튼", "10. ${dev.n} — 도크 잘림/겹침 없음 · 사진 ${Math.round(g.stageShare * 100)}%", "48. ${dev.n} — 가로 자 길이 = 눈썹 구간 (왼쪽 바를 넘지 않음)", "47. ${dev.n} — 컨트롤 영역 스크림 (터치 통과 · 선이 위)", "45. ${dev.n} — 세로 조절자 값 라벨이 바 오른쪽(안쪽) · 캔버스 안", "46. ${dev.n} — 세로선 이름 배지 없음 (v1.46.2 숨김)", "40. ${dev.n} — 왼쪽 아래는 프리셋(+즐겨찾기) · 좌우 바와 겹치지 않음", "83. ${dev.n} — 사진 2버튼=왼쪽 끝 · 잠금 홀로 가운데 · AI 눈썹 맞춤=좌우 바 왼쪽 · 밸런스=오른쪽 끝"], ["77. 밸런스 — 기준(왼쪽) 대비 오른쪽 12px 차이를 잡아냄 · 빨간 표시는 반대쪽에만", "78. 밸런스 — 기준을 오른쪽으로 바꾸면 빨간 표시가 왼쪽으로", "79. 밸런스 — 좌우가 같으면 표시 없음", "80. 밸런스 — 그린 선이 없으면 조용히 건너뜀 (오판하지 않음)", "86. 밸런스 — 허용 오차가 얼굴 크기를 따라간다 (px 고정 아님)", "87. 드로잉 자동 맞춤 — 눈썹 모양(앞머리·앞두께·아치·아치두께·꼬리)을 사진에서 읽는다", "88. 드로잉 자동 맞춤 — 얼굴 인식이 실패해도 그린 선을 찾는다 (예비 경로)", "89. 드로잉 자동 맞춤 — **테두리만 그린 드로잉**도 두께를 제대로 잡는다", "90. 드로잉 자동 맞춤 — 사진을 확대·이동해도 같은 드로잉 위에 붙는다", "91. 드로잉 자동 맞춤 — 드로잉 모양이 달라지면(아치가 안쪽) 선도 그 모양을 따라간다", "92. 드로잉 자동 맞춤 — 눈썹 아래 쌍꺼풀 선에 앞머리(아랫선)가 끌려가지 않는다", "94. 맨 눈썹 — 드로잉이 없어도 저대비 2차 패스가 털을 읽어 배치한다", "122. 얇은 털 추적 금지 — 아우터는 진한 눈썹의 끝에 선다 (잔털까지 따라가지 않는다)", "124. 앞머리·앞두께 — 앞두께가 **위**, 앞머리가 **아래** (원장님 확정)", "125. 이너 = 색이 시작하는 선 — 앞머리가 얇아져도 끝까지 따라간다", "126. 꼬리 = 색이 끝나는 곳 — 얇아진 꼬리를 끝까지 · 잔털은 제외", "127. 아랫선 — 눈썹 아래 그늘이 있어도 창 바닥에 못 박히지 않는다", "128. 아랫선 — 그늘이 창 바닥에 안 닿아도 눈썹 아랫선에 선다", "129. 윗선 — 눈썹 위 옅은 번짐에 앞두께가 끌려가지 않는다", "130. 자는 드로잉 위에 — 이너·아우터 자가 눈썹 밖 맨살로 뜨지 않는다", "131. 못박음 검사 — 까다로운 사진 9장 · 자가 창 경계·그늘에 못박히지 않고 아치두께가 꼬리 위", "132. 가이드 OFF=전부 고유색 · ON=한 줄씩 플로우 · 잡은 선만 잡은 색", "133. 아치두께 마지노선 — 꼬리·앞머리보다 아래로 내려가지 않는다 (눈꺼풀 그늘 방어)", "134. 전체라인 인사 1회 깜빡임 · 선택하면 굵고 밝게 · 움직인 선은 잡은 선 색으로 남음", "135. 가이드 순서 — ▲▼ 로 바꾸고 이름을 눌러 켜고 끈다 · 번호가 새 순서를 따라간다", "136. 설정 배치 — 조합 카드는 미리보기 밑 작은 카드 · 굵기/투명도/길이 각 한 줄 · 테두리는 별도 블록", "137. 고르면 되살아난다 — 죽은 선도 고르면 고유색·더 굵게·한 번 반짝 · 잡는 동안은 잡은 선 색", "138. 고른 선 말고는 한 단계 물러난다 — 가이드 꺼짐에서만 · 색은 그대로 옅게", "139. 한 번 탭에 선이 사라지지 않는다 — 숨김은 같은 버튼 연속 두 번만", "140. 드로잉 맞춤이 숨은 선을 되살린다 · 차례인 선은 숨길 수 없다", "141. 초기화셋팅 — 4초 인사 · 사진 로드/초기화/가이드 껐다 켜기 에서 작동", "142. 잡는 범위 — 교차점은 가로 자 · 아치선은 아래 구간 · 눈 선은 9px · 인사 조기 종료", "143. 안내 — 중앙 위 · 토글로 끄고 켬 · 가이드 켜짐 중 유지 · AI/눈썹정렬 두 줄", "144. 기본 언어 영어 · 링크 미리보기(OG)·설치 설명 영어 · 한국어는 눌러 저장", "145. 도크 자동 맞춤(667~844 겹침 없음) · pb_orient=off 여도 무조건 가로 · dvh 마지막 · offset 좌표", "146. 놓은 선 — doneC/doneW/doneOp 로 그림 · 잡은 선과 분리 · 설정 컨트롤", "147. 서브 라인 — 자→이너 연결선 굵기·투명도가 설정(subW/subOp)을 따름", "148. 배경 한 번 탭 = 단계 확인·다음으로 (안내도 이동) · 인사 중엔 안 넘어감", "149. 예비 동공 정렬 — 인식 실패 사진도 동공 간격 44%·기준점 정렬 · SVG 픽스처는 그대로", "150. ${dev.n} — 레일 버튼 얇게·붙여서 중앙 · 바 30% 짧게·왼쪽 간격", "151. 이너 판독 — 눈꺼풀 그늘을 따라가지 않고 드로잉이 시작하는 곳에 선다 (40~48 · 못 읽으면 43)", "152. 이너 판독 — 눈썹이 화면 위에 붙어도 잉크를 재고, 자가 있으면 언제나 답을 낸다", "154. 눈 앞꼬리 자동 인식 — 눈꺼풀 틈이 닫히는 자리를 찾는다 (코 그늘에 안 끌림)", "155. 앞머리·앞두께 판독 — 피부 다음 「두꺼운 검은 것」의 아랫끝·윗끝 (주름·눈화장은 아니다)", "156. 앞머리 넘버링 — 판독 없는 배치는 눈 위 11.7 눈금 (이너와 같은 자 · 범위 7~16 잠금)", "157. 쌍꺼풀·주름 쉐도우 방어 — 두꺼운 쉐도우가 있어도 넘버링(7~16)이 눈썹을 고른다", "158. 앞머리 하한 — 눈 위 7 눈금 미만은 앞머리가 아니다 (보통값 11.7 로 대체)", "159. 넘버링 0 동일화 — 0 = 동공 중심 실측 · h1 을 옮겨도 흔들리지 않는다", "160. 이너 맥시멈 45 — 답 클램프·예비 경로 모두 45(INNER_F_SOFT) 기준이다", "161. 앞두께 우선순위② — 피부 복귀가 불명확하면 퍼센트가 낮아지는 자리(검정 끝)를 고른다", "164. 아치엣지만 잡힌 경우 — 아치두께는 아치엣지에서 5칸 아래 (대체값)", "163. 아치 표준값 — 판독 실패 시 앞머리에서 3칸·5칸 (실패 이유로 갈린다)", "162. 아치엣지·아치두께 판독 — 쉐도우·창 천장·해부학 순서 방어 · 두께 5칸 상한 · 엣지 맥시멈", "123. 검은 드로잉 — 아우터는 진한 곳이 끝나는 자리에 선다 (옅은 번짐은 눈썹이 아니다)", "121. 판정 기준 — 꼬리=끝의 아랫선 · 아치선=꺾임점(바깥에서 ¼ 부근) · 앞머리=90° 꼭지점", "120. 드로잉 맞춤 — 눈썹이 지금 선보다 훨씬 위에 있어도 (크게 확대한 사진) 찾아낸다", "120b. 드로잉 맞춤 — 앞머리·아치·꼬리가 한 값으로 뭉치지 않는다 (탐색창에 갇힘 방지)", "119. 드로잉 맞춤 뒤 교정 안내 — ① 이너부터 다시 · 프롬프트 ①~⑦ · 좁은 폰에서도 안 잘림", "97. 꼬리 2단계 — 안 보이면 콧볼–외안각 연장선 · 보이는 진한 꼬리는 그 잉크 끝", "101. 가이드 플로우 — 이너→앞머리→앞두께→아치엣지→아치두께→꼬리아우터→꼬리높이 · 끄면 종료", "102. 이너 묶음 — 조용=얇은 회색 · 강조=민트 한 줄 · 선 색 = 레일 띠 색", "103. 가이드 플로우 — 밝은 선은 언제나 **하나** · 다음 차례로 선택도 함께 이동", "104. 아치·꼬리 — 고유색 유지 · 조용할 땐 얇은 회색 (v1.55.0)", "105. 밝은 사진에서도 읽히는가 — 캔버스 칩·초기화는 어두운 판 · 잠금=채움 · 저장은 조용", "106. 한 줄 규칙 — 자도 세로선도 조용=얇은 회색 / 차례=고유색 **한 줄** · 꼬리 자 반", "107. 프리셋 — 내장 기본 3종 없음 · 사용자가 저장한 것만", "108. 지시등 — 4초에 한 번 느린 깜빡임(CSS) · 잡으면 짙은 회색 + 살구색 테두리 · 저장본 선명", "109. 설정 — 색상표 8색 · 세로선 목록 · 굵기/테두리/잡은선 굵기 슬라이더 · 테두리 4종 · 선택 강조", "110. 조합 순환 버튼 — 가이드 오른쪽 · 클릭마다 다음 조합 · 한 바퀴 돌면 내 세트 복귀", "111. 설정 시트 — 아이폰 세로 잠금(rot90)에서도 가로로 뜬다", "112. 원장님 확정 기본 세팅(2026-08-29) — 라임·민트·파랑 · 0.75/8%/55% · 잡은 선 흰색 85%/65%", "113. 꼬리·아우터 사선 — 한 손짓으로 꼬리 끝 점을 놓는다 (거울쪽 부호 반전 · 다른 자는 그대로)", "117. 아치는 혼자 움직인다 — 아치·아치두께·아치선이 전부 따로 (v1.67.0 동반 폐지)", "118. 가로 길이 슬라이더 — 아주 짧게까지 · 끌면 미리보기가 같이 줄었다 늘어난다 · 표식 테두리 없음", "114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 십자 모서리는 **꼬리에만** (안쪽+위)", "115. 드로잉 맞춤 — 관자놀이 머리카락을 눈썹으로 읽지 않는다 (인식 성공)", "116. 드로잉 맞춤 — 머리카락이 있어도 예비 경로가 눈썹을 찾는다", "100. 홈 화면 버전 표시 — APP_VERSION 이 그대로 보인다", "96. 시작 = AI 눈썹정렬 자동 · 실패 시 기본정렬 · 프리미엄 게이트 존재", "95. 세로선 — 조용할 땐 회색 한 줄 · 아치선·아우터 짧게 · 이너는 눈까지", "93. 세로선 묶음 — 아치 자는 **아치선**을 따라간다 (아우터를 따라가지 않는다)"], ["122. 얇은 털 추적 금지 — 아우터는 진한 눈썹의 끝에 선다 (잔털까지 따라가지 않는다)"], ["124. 앞머리·앞두께 — 앞두께가 **위**, 앞머리가 **아래** (원장님 확정)"], ["125. 이너 = 색이 시작하는 선 — 앞머리가 얇아져도 끝까지 따라간다"], ["126. 꼬리 = 색이 끝나는 곳 — 얇아진 꼬리를 끝까지 · 잔털은 제외"], ["127. 아랫선 — 눈썹 아래 그늘이 있어도 창 바닥에 못 박히지 않는다"], ["128. 아랫선 — 그늘이 창 바닥에 안 닿아도 눈썹 아랫선에 선다"], ["129. 윗선 — 눈썹 위 옅은 번짐에 앞두께가 끌려가지 않는다"], ["130. 자는 드로잉 위에 — 이너·아우터 자가 눈썹 밖 맨살로 뜨지 않는다"], ["131. 못박음 검사 — 까다로운 사진 9장 · 자가 창 경계·그늘에 못박히지 않고 아치두께가 꼬리 위"], ["132. 가이드 OFF=전부 고유색 · ON=한 줄씩 플로우 · 잡은 선만 잡은 색"], ["133. 아치두께 마지노선 — 꼬리·앞머리보다 아래로 내려가지 않는다 (눈꺼풀 그늘 방어)"], ["134. 전체라인 인사 1회 깜빡임 · 선택하면 굵고 밝게 · 움직인 선은 잡은 선 색으로 남음"], ["135. 가이드 순서 — ▲▼ 로 바꾸고 이름을 눌러 켜고 끈다 · 번호가 새 순서를 따라간다"], ["136. 설정 배치 — 조합 카드는 미리보기 밑 작은 카드 · 굵기/투명도/길이 각 한 줄 · 테두리는 별도 블록"], ["137. 고르면 되살아난다 — 죽은 선도 고르면 고유색·더 굵게·한 번 반짝 · 잡는 동안은 잡은 선 색"], ["138. 고른 선 말고는 한 단계 물러난다 — 가이드 꺼짐에서만 · 색은 그대로 옅게"], ["139. 한 번 탭에 선이 사라지지 않는다 — 숨김은 같은 버튼 연속 두 번만"], ["140. 드로잉 맞춤이 숨은 선을 되살린다 · 차례인 선은 숨길 수 없다"], ["141. 초기화셋팅 — 4초 인사 · 사진 로드/초기화/가이드 껐다 켜기 에서 작동"], ["142. 잡는 범위 — 교차점은 가로 자 · 아치선은 아래 구간 · 눈 선은 9px · 인사 조기 종료"], ["143. 안내 — 중앙 위 · 토글로 끄고 켬 · 가이드 켜짐 중 유지 · AI/눈썹정렬 두 줄"], ["144. 기본 언어 영어 · 링크 미리보기(OG)·설치 설명 영어 · 한국어는 눌러 저장"], ["145. 도크 자동 맞춤(667~844 겹침 없음) · pb_orient=off 여도 무조건 가로 · dvh 마지막 · offset 좌표"], ["146. 놓은 선 — doneC/doneW/doneOp 로 그림 · 잡은 선과 분리 · 설정 컨트롤"], ["147. 서브 라인 — 자→이너 연결선 굵기·투명도가 설정(subW/subOp)을 따름"], ["148. 배경 한 번 탭 = 단계 확인·다음으로 (안내도 이동) · 인사 중엔 안 넘어감"], ["149. 예비 동공 정렬 — 인식 실패 사진도 동공 간격 44%·기준점 정렬 · SVG 픽스처는 그대로"], ["150. ${dev.n} — 레일 버튼 얇게·붙여서 중앙 · 바 30% 짧게·왼쪽 간격"], ["151. 이너 판독 — 눈꺼풀 그늘을 따라가지 않고 드로잉이 시작하는 곳에 선다 (40~48 · 못 읽으면 43)"], ["152. 이너 판독 — 눈썹이 화면 위에 붙어도 잉크를 재고, 자가 있으면 언제나 답을 낸다"], ["154. 눈 앞꼬리 자동 인식 — 눈꺼풀 틈이 닫히는 자리를 찾는다 (코 그늘에 안 끌림)"], ["155. 앞머리·앞두께 판독 — 피부 다음 「두꺼운 검은 것」의 아랫끝·윗끝 (주름·눈화장은 아니다)"], ["156. 앞머리 넘버링 — 판독 없는 배치는 눈 위 11.7 눈금 (이너와 같은 자 · 범위 7~16 잠금)"], ["157. 쌍꺼풀·주름 쉐도우 방어 — 두꺼운 쉐도우가 있어도 넘버링(7~16)이 눈썹을 고른다"], ["158. 앞머리 하한 — 눈 위 7 눈금 미만은 앞머리가 아니다 (보통값 11.7 로 대체)"], ["159. 넘버링 0 동일화 — 0 = 동공 중심 실측 · h1 을 옮겨도 흔들리지 않는다"], ["160. 이너 맥시멈 45 — 답 클램프·예비 경로 모두 45(INNER_F_SOFT) 기준이다"], ["161. 앞두께 우선순위② — 피부 복귀가 불명확하면 퍼센트가 낮아지는 자리(검정 끝)를 고른다"], ["164. 아치엣지만 잡힌 경우 — 아치두께는 아치엣지에서 5칸 아래 (대체값)"], ["163. 아치 표준값 — 판독 실패 시 앞머리에서 3칸·5칸 (실패 이유로 갈린다)"], ["162. 아치엣지·아치두께 판독 — 쉐도우·창 천장·해부학 순서 방어 · 두께 5칸 상한 · 엣지 맥시멈"], ["123. 검은 드로잉 — 아우터는 진한 곳이 끝나는 자리에 선다 (옅은 번짐은 눈썹이 아니다)"], ["121. 판정 기준 — 꼬리=끝의 아랫선 · 아치선=꺾임점(바깥에서 ¼ 부근) · 앞머리=90° 꼭지점"], ["119. 드로잉 맞춤 뒤 교정 안내 — ① 이너부터 다시 · 프롬프트 ①~⑦ · 좁은 폰에서도 안 잘림"], ["97. 꼬리 2단계 — 안 보이면 콧볼–외안각 연장선 · 보이는 진한 꼬리는 그 잉크 끝"], ["101. 가이드 플로우 — 이너→앞머리→앞두께→아치엣지→아치두께→꼬리아우터→꼬리높이 · 끄면 종료"], ["102. 이너 묶음 — 조용=얇은 회색 · 강조=민트 한 줄 · 선 색 = 레일 띠 색"], ["103. 가이드 플로우 — 밝은 선은 언제나 **하나** · 다음 차례로 선택도 함께 이동", "104. 아치·꼬리 — 고유색 유지 · 조용할 땐 얇은 회색 (v1.55.0)"], ["105. 밝은 사진에서도 읽히는가 — 캔버스 칩·초기화는 어두운 판 · 잠금=채움 · 저장은 조용"], ["106. 한 줄 규칙 — 자도 세로선도 조용=얇은 회색 / 차례=고유색 **한 줄** · 꼬리 자 반", "107. 프리셋 — 내장 기본 3종 없음 · 사용자가 저장한 것만"], ["108. 지시등 — 4초에 한 번 느린 깜빡임(CSS) · 잡으면 짙은 회색 + 살구색 테두리 · 저장본 선명"], ["109. 설정 — 색상표 8색 · 세로선 목록 · 굵기/테두리/잡은선 굵기 슬라이더 · 테두리 4종 · 선택 강조"], ["110. 조합 순환 버튼 — 가이드 오른쪽 · 클릭마다 다음 조합 · 한 바퀴 돌면 내 세트 복귀"], ["111. 설정 시트 — 아이폰 세로 잠금(rot90)에서도 가로로 뜬다"], ["112. 원장님 확정 기본 세팅(2026-08-29) — 라임·민트·파랑 · 0.75/8%/55% · 잡은 선 흰색 85%/65%"], ["113. 꼬리·아우터 사선 — 한 손짓으로 꼬리 끝 점을 놓는다 (거울쪽 부호 반전 · 다른 자는 그대로)"], ["117. 아치는 혼자 움직인다 — 아치·아치두께·아치선이 전부 따로 (v1.67.0 동반 폐지)"], ["118. 가로 길이 슬라이더 — 아주 짧게까지 · 끌면 미리보기가 같이 줄었다 늘어난다 · 표식 테두리 없음"], ["114. 화살표 미세 이동(≈1px) · ▶=위로 · 가이드 프롬프트 · 십자 모서리는 **꼬리에만** (안쪽+위)"], ["100. 홈 화면 버전 표시 — APP_VERSION 이 그대로 보인다"], ["96. 시작 = AI 눈썹정렬 자동 · 실패 시 기본정렬 · 프리미엄 게이트 존재"], ["95. 세로선 — 조용할 땐 회색 한 줄 · 아치선·아우터 짧게 · 이너는 눈까지"], ["93. 세로선 묶음 — 아치 자는 **아치선**을 따라간다 (아우터를 따라가지 않는다)"]];
+/* 원장님·개발자가 쓰기 쉬운 별칭 — 왼쪽을 치면 오른쪽 낱말로 찾습니다 */
+const ONLY_ALIAS = {
+  arch: "아치", inner: "이너", outer: "아우터", front: "앞머리", tail: "꼬리",
+  brow: "눈썹", num: "눈금", layout: "레이아웃", balance: "밸런스",
+};
+const ONLY_RAW = (process.env.PB_ONLY || "").trim();
+const ONLY = ONLY_RAW
+  ? ONLY_RAW.split(",").map((s) => s.trim()).filter(Boolean).map((s) => ONLY_ALIAS[s.toLowerCase()] || s)
+  : null;
+let skippedTests = 0, skippedBlocks = 0;
+
+/* 항목 이름 하나가 필터에 걸리나? 번호(121) · 범위(162-164) · 낱말(아치) 셋 다 받습니다 */
+function nameMatches(name) {
+  const num = parseInt(String(name).trim(), 10);
+  for (const tk of ONLY) {
+    const rng = /^(\d+)\s*-\s*(\d+)$/.exec(tk);
+    if (rng) { if (Number.isFinite(num) && num >= +rng[1] && num <= +rng[2]) return true; continue; }
+    if (/^\d+$/.test(tk)) { if (num === +tk) return true; continue; }
+    if (String(name).includes(tk)) return true;
+  }
+  return false;
+}
+function RUN(n) {
+  if (!ONLY) return true;
+  const names = BLOCK_TESTS[n] || [];
+  if (!names.length) return true;              // 검사 없는 준비 블록은 늘 돌린다
+  if (names.some(nameMatches)) return true;
+  skippedBlocks++; skippedTests += names.length;
+  return false;
+}
+if (ONLY) console.log(`⏱ 부분 실행 — PB_ONLY=${ONLY_RAW}\n`);
+const T0 = Date.now();
+
+
+
 /* 특수 환경에서 크로미움 경로를 직접 지정해야 할 때: PB_CHROME=/path/to/chrome node regression-test.mjs */
 const browser = await chromium.launch(
   process.env.PB_CHROME ? { executablePath: process.env.PB_CHROME } : {},
@@ -119,7 +173,7 @@ const browser = await chromium.launch(
 
 /* ═══════ A. 세로(portrait) — 기능 테스트 ═══════ */
 console.log("[세로 모드 · 기능]");
-{
+if (RUN(0)) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
   const p = await ctx.newPage();
   const errs = [];
@@ -406,7 +460,7 @@ console.log("[세로 모드 · 기능]");
   // 23. 두 손가락 드래그 = 사진 이동 (선은 그대로)
   await p.evaluate(() => { window.PB.S.locked = false; window.PB.S.p = { zoom: 1, ox: 0, oy: 0, rot: 0 }; window.PB.render(); });
   const b23 = await p.evaluate(() => ({ g: { ...window.PB.S.g }, p: { ...window.PB.S.p } }));
-  {
+  if (RUN(1)) {
     const t1 = await p.context().newCDPSession(p);
     const cx = box2.x + box2.width * 0.5, cy = box2.y + box2.height * 0.5;
     const pts0 = [{ x: cx - 60, y: cy }, { x: cx + 60, y: cy }];
@@ -1164,7 +1218,7 @@ console.log("[세로 모드 · 기능]");
        ① 자동 정렬의 자 = **내안각 간격**(INNER_FRAC)
        ② 세로선 눈금 = **얼굴 기준**(왼쪽 내안각 40 · 센터 53.15 · 오른쪽 내안각 66.3)
      ⛔ 둘 다 되돌리지 마세요. */
-  {
+  if (RUN(2)) {
     const r153 = await p.evaluate((lm) => {
       const PBx = window.PB, S = PBx.S, W = S.dim.W;
       const out = {};
@@ -1466,7 +1520,7 @@ console.log("[세로 모드 · 기능]");
 
 /* ═══════ A-2. 강제 가로 회전 (기기가 세로로 잠겨 있을 때) ═══════ */
 console.log("\n[강제 가로 회전]");
-{
+if (RUN(3)) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
   const p = await ctx.newPage();
   await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -1644,7 +1698,7 @@ console.log("\n[강제 가로 회전]");
 
 /* ═══════ B. 가로(landscape) — 레이아웃 테스트 ═══════ */
 console.log("\n[가로 모드 · 레이아웃]");
-for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아이패드 가로 1180×820", w: 1180, h: 820 }]) {
+if (RUN(4)) for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아이패드 가로 1180×820", w: 1180, h: 820 }]) {
   const ctx = await browser.newContext({ viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
   const p = await ctx.newPage();
   await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -1888,7 +1942,7 @@ for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아
    왼쪽 막대와 오른쪽 막대의 높이 차이를 정확히 몇 px 로 넣고, 그대로 잡아내는지 본다.
    ⚠️ 반드시 **가로 모드**에서 돌린다 — 세로 폴백은 작업 영역이 좁아 오른쪽 토막이 안 그려진다. */
 console.log("\n[밸런스 판정]");
-{
+if (RUN(5)) {
   const IW = 782, IH = 390, BY = 200;            // 가로 캔버스(844×390)의 스테이지 크기와 동일
   const balFace = (dyRight, draw = true) => {
     const bar = (x1, x2, yy) => `<rect x="${x1}" y="${yy}" width="${x2 - x1}" height="5" fill="#241a14"/>`;
@@ -2019,8 +2073,8 @@ console.log("\n[밸런스 판정]");
     cp: [[120, 152, 164], [150, 152, 164], [185, 122, 142], [215, 120, 140],
          [260, 132, 158], [300, 148, 178], [340, 148, 178]],
     front: [320, 148, 178], arch: [215, 120, 140], tail: [130, 152], inner: 340, outer: 120,
-    /* v1.70.0 원장님 기준 — 꼬리 = 바깥 끝의 **아랫선**(뾰족한 끝) · 아치선 = **꺾임점** */
-    tailMid: 164, archV: 181,   /* 꼬리 = 바깥 끝 **아랫선** · 아치선 = 꺾임점 */
+    /* 꼬리 = 바깥 끝의 **아랫선**(뾰족한 끝) · 아치선 = v3.0.0 **아치엣지-피부 경계** */
+    tailMid: 164, archV: 181,
   };
   /* 모양 B — 아치가 **안쪽 가까이**(x 260) 있고 두께도 다른 눈썹.
      ⚠️ 이 모양이 있어야 「아치를 사진에서 찾는다」가 진짜로 검증됩니다.
@@ -2041,7 +2095,7 @@ console.log("\n[밸런스 판정]");
     cp: [[120, 110, 120], [150, 108, 120], [185, 84, 118], [215, 80, 116],
          [260, 90, 118], [300, 100, 122], [340, 102, 122]],
     front: [320, 102, 122], arch: [215, 80, 116], tail: [130, 109], inner: 340, outer: 120,
-    tailMid: 120, archV: 176,
+    tailMid: 120, archV: 197,   /* v3.0.0 — 아치선 규칙이 「꺾임점」→「아치엣지가 피부와 맞닿는 자리」로 바뀜 */
   };
   const edgeAt = (cp, x, i) => {
     for (let k = 0; k < cp.length - 1; k++) {
@@ -2292,7 +2346,7 @@ console.log("\n[밸런스 판정]");
       /* ⚠️ v1.73.0 — 원장님 확정: **앞두께 = 윗선 · 앞머리 = 아랫선** (그 전에는 거꾸로였습니다) */
       const exp = { ft: cv(sh.front[0], sh.front[1]).y, front: cv(sh.front[0], sh.front[2]).y,
                     arch: cv(sh.arch[0], sh.arch[1]).y, at: cv(sh.arch[0], sh.arch[2]).y,
-                    /* v1.70.0 — 꼬리는 **끝의 아랫선**, 아치선은 **꺾임점 x** */
+                    /* 꼬리는 **끝의 아랫선**, 아치선은 v3.0.0 **아치엣지-피부 경계 x** */
                     tail: cv(sh.tail[0], sh.tailMid).y,
                     inner: cv(sh.inner, 160).x, outer: cv(sh.outer, 160).x,
                     archV: cv(sh.archV, 160).x };
@@ -2361,7 +2415,7 @@ console.log("\n[밸런스 판정]");
      이 사진은 몸통(x 172~340)이 진하고 꼬리(x 146~174)는 피부와 겨우 14 차이입니다.
      아우터는 **본 판독이 읽은 진한 눈썹의 끝(≈172)** 에 서야 하고, 잔털 끝(146)까지 가면 안 됩니다.
      ⛔ 추적을 다시 넣으면 이 검사가 바로 실패합니다. */
-  {
+  if (RUN(6)) {
     const ftp = makeTaperFace();
     const o122 = await runDraw(false, ftp, null, SHAPE_A);
     fs.unlinkSync(ftp);
@@ -2378,7 +2432,7 @@ console.log("\n[밸런스 판정]");
      v1.72.0 까지 거꾸로 놓고 있었습니다. 원장님 표시를 캔버스 좌표로 환산하니 「앞두께」가
      그때 앱이 **앞머리**라고 놓던 자리와 정확히 겹쳤습니다.
      ⛔ 두 선을 다시 뒤집지 마세요. */
-  {
+  if (RUN(7)) {
     const gap = o87.frontPx - o87.ftPx;      /* y 는 아래로 갈수록 큽니다 */
     check("124. 앞머리·앞두께 — 앞두께가 **위**, 앞머리가 **아래** (원장님 확정)",
       gap > 10 && Math.abs(o87.ftPx - o87.exp.ft) < 6 && Math.abs(o87.frontPx - o87.exp.front) < 6,
@@ -2390,7 +2444,7 @@ console.log("\n[밸런스 판정]");
      `trimOutside` ⓑ 가 그 열을 잘라 이너가 안쪽으로 덜 들어갔습니다 (원장님 사진 13px 짧음,
      분홍 펜 표시로 확인). `innerStart` 가 **색이 남아 있는 동안** 안쪽 끝만 다시 이어 붙입니다.
      ⛔ 바깥(꼬리) 끝에는 절대 같은 규칙을 쓰지 마세요 — 검사 122·123 이 잡습니다. */
-  {
+  if (RUN(8)) {
     const fhd = makeHeadFace();
     const o125 = await runDraw(false, fhd, null, SHAPE_HEAD);
     fs.unlinkSync(fhd);
@@ -2405,7 +2459,7 @@ console.log("\n[밸런스 판정]");
      꼬리를 먼저 자른 자리였습니다 (원장님 사진 104 ↔ 정답 93, 11px 안쪽).
      `growEnd` 가 색이 남아 있는 열(진하기 ≥ 0.5 × 중앙값)만 이어 붙입니다.
      ⛔ 바깥 문턱(OUTER_DARK)을 0.4 아래로 내리면 이 검사와 122·123 이 함께 깨집니다. */
-  {
+  if (RUN(9)) {
     const ftip = makeTipFace();
     const o126 = await runDraw(false, ftip, null, SHAPE_TIP);
     fs.unlinkSync(ftip);
@@ -2421,7 +2475,7 @@ console.log("\n[밸런스 판정]");
      「폰에서 아예 안 올라간다」 — 앞머리·아치두께가 눈썹이 아니라 눈꺼풀 위에, 그것도 **둘이 같은 y** 에
      서 있었습니다. 눈썹 아래 그늘이 눈썹과 이어져 읽히고 그 덩어리가 창 바닥에서 잘린 것입니다.
      ⛔ 아랫선(bot)을 창 바닥 그대로 쓰지 마세요 — 이 검사가 바로 잡습니다. */
-  {
+  if (RUN(10)) {
     const fsh = makeShadeFace();
     const o127 = await runDraw(true, fsh, null, SHAPE_A);
     fs.unlinkSync(fsh);
@@ -2437,7 +2491,7 @@ console.log("\n[밸런스 판정]");
      v1.75.0(바닥에 닿았을 때만 구제)로는 못 잡습니다 — 이 사진의 그늘은 바닥 위에서 끝납니다.
      원장님 화면: 아치두께가 눈꺼풀 위 · 다른 손님 사진에서는 앞머리가 눈썹 아래 74px.
      ⛔ 구제 조건을 「바닥에 닿았을 때만」으로 되돌리지 마세요. */
-  {
+  if (RUN(11)) {
     const f128 = makeShade2Face();
     const o128 = await runDraw(true, f128, null, SHAPE_A);
     fs.unlinkSync(f128);
@@ -2454,7 +2508,7 @@ console.log("\n[밸런스 판정]");
      ⛔ 윗선의 핵심 잘라내기를 빼지 마세요. 단, 문턱은 아랫선(0.45)보다 **훨씬 너그럽게**
      (0.1) — 파우더 눈썹의 진짜 위 경계까지 잘라 내면 앞두께가 눈썹 속으로 들어갑니다
      (원장님 사진에서 0.45 로 두니 앞두께 89 → 98, 원장님 표시 87.7 에서 10px 멀어졌습니다). */
-  {
+  if (RUN(12)) {
     const f129 = makeHaloFace();
     const o129 = await runDraw(true, f129, null, SHAPE_A);
     fs.unlinkSync(f129);
@@ -2470,7 +2524,7 @@ console.log("\n[밸런스 판정]");
      맨살 위로 떠서, 자를 눈썹에 맞춰 볼 수가 없습니다. 이제 자는 세로선에서 **눈썹 쪽으로만**
      뻗고, 세로선과 만나는 자리가 그대로 90° 꼭지점이 됩니다.
      ⛔ 가운데 맞춤으로 되돌리면 이 검사가 바로 실패합니다. */
-  {
+  if (RUN(13)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2518,7 +2572,7 @@ console.log("\n[밸런스 판정]");
        ③ |앞머리 − 아치두께| > 2   (둘이 같으면 못박힌 것)
        ④ 가로선 다섯 개가 모두 서로 다르다
      ⛔ 새 사진 규칙을 넣을 때 이 검사를 먼저 돌리세요. 개별 검사는 통과해도 여기서 걸립니다. */
-  {
+  if (RUN(14)) {
     const cases = [];
     const push = (name, f, sh, lm) => cases.push({ name, f, sh, lm });
     const fSh = makeShadeFace(), fSh2 = makeShade2Face(), fHl = makeHaloFace(),
@@ -2555,7 +2609,7 @@ console.log("\n[밸런스 판정]");
      가이드가 켜졌을 때만 선 하나씩 플로우 적용해라」
      ⛔ 가이드를 끈 상태에서 회색으로 되돌리지 마세요. 또한 잡을 때 **모든 선**이 잡은 색이
      되면 안 됩니다 (예전 `sel && dragOn` 이 그랬습니다). */
-  {
+  if (RUN(15)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2625,7 +2679,7 @@ console.log("\n[밸런스 판정]");
        꼬리보다 낮은곳에 쉐도우·어두운 선을 아치두께라고 인식할수 없다」
      이 사진은 **산 아래에만** 짙은 그늘을 깔아 아치두께를 눈꺼풀까지 끌어내립니다.
      ⛔ 상한을 지우면 아치두께가 꼬리(164)·앞머리(178) 아래로 내려가 바로 실패합니다. */
-  {
+  if (RUN(16)) {
     const f133 = (() => {
       const f = path.join(ROOT, ".draw-archshade.svg");
       const up = [], dn = [];
@@ -2656,7 +2710,7 @@ console.log("\n[밸런스 판정]");
        · 가이드가 꺼진 상태에서 **한 번 움직인 선**은 잡은 선 색으로 남는다 —
          움직이지 않은 선만 고유색으로 남아 무엇이 남았는지 눈으로 읽힌다
      ⛔ 이 세 신호를 빼지 마세요. */
-  {
+  if (RUN(17)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2725,7 +2779,7 @@ console.log("\n[밸런스 판정]");
      · 설정 → 「가이드 순서」 탭에서 ▲▼ 로 순서를 바꾸고, 이름을 눌러 단계를 켜고 끈다
      · 프롬프트 번호(①②③…)는 **바뀐 순서를 따라간다** — 번호를 문구에 박으면 여기서 걸린다
      · 저장되어 다음에도 유지된다 */
-  {
+  if (RUN(18)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2777,7 +2831,7 @@ console.log("\n[밸런스 판정]");
      · 조합 카드는 **미리보기 다음**에 온다 (시트 맨 위가 아니다)
      · 굵기 · 투명도 · 길이는 **각각 자기 줄** — 한 줄에 슬라이더 둘을 다시 합치면 여기서 걸린다
      · 테두리는 `.setblock` 안에서 **다른 배경색**을 갖는다 */
-  {
+  if (RUN(19)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2832,7 +2886,7 @@ console.log("\n[밸런스 판정]");
      · 고른 선은 안 고른 선보다 **굵고 밝다**
      · 고른 **그 순간** 한 번 반짝인다(blink1) — 반복 깜빡임(blink)이 아니다
      · 손으로 잡고 있는 동안에는 **잡은 선 색**이 이긴다 */
-  {
+  if (RUN(20)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2890,7 +2944,7 @@ console.log("\n[밸런스 판정]");
      · 가이드 **꺼짐**: 고른 선은 그대로, 나머지는 **자기 색 그대로 옅게**(0.55) — 회색으로 바꾸지 않는다
      · 가이드 **켜짐**: 아무것도 죽이지 않는다 (이미 차례 선 하나만 색이 있다)
      ⛔ 나머지 선의 **색**이 바뀌면 실패한다 — 색이 곧 이름표다 */
-  {
+  if (RUN(21)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2943,7 +2997,7 @@ console.log("\n[밸런스 판정]");
      · 앱이 자동으로 고른 선을 한 번 눌러도 **절대 숨지 않는다**
      · 같은 버튼을 **연달아 두 번** 누르면 숨는다 (원래 기능) · 세 번째면 다시 나온다
      · 숨긴 순간에는 HUD 로 알린다 — 조용히 사라지면 고장으로 보입니다 */
-  {
+  if (RUN(22)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -2996,7 +3050,7 @@ console.log("\n[밸런스 판정]");
        (원장님 지시 2026-08-28 「드로잉맞춤 클릭시 이너가 사라졌다 확인후 예전에 사용하던 이너라인 되돌려놔」)
      · 이너가 숨겨진 채로 드로잉 맞춤을 누르면 → **다시 나온다** (가이드 순서에 있는 선 전부)
      · 지금 차례인 선은 같은 버튼을 두 번 눌러도 **안 숨는다** (앱이 시켜 놓고 숨기면 시술이 멈춘다) */
-  {
+  if (RUN(23)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3045,7 +3099,7 @@ console.log("\n[밸런스 판정]");
        1.6s(너무 짧음)와 4s(조금 김) 사이 · 선을 움직이면 **즉시 종료**된다(회귀 142)
      · 작동 네 곳: 사진 로드(101·134 가 검사) · **초기화 버튼** · **가이드 껐다 켜기** (여기서 검사)
      · 인사 동안: intro=true · 차례 없음 · 인사가 끝나면 첫 스텝(guideOn 일 때) */
-  {
+  if (RUN(24)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3085,7 +3139,7 @@ console.log("\n[밸런스 판정]");
      · 아치선(v6)은 **아치두께 아래 구간**을 눌러야 잡힌다
      · 눈 가로선(h1)은 **9px 안**에서만 잡힌다 — 근처를 스쳐도 안 잡힌다
      · 초기화셋팅 중에 선을 움직이면 인사가 **즉시** 끝난다 */
-  {
+  if (RUN(25)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3139,7 +3193,7 @@ console.log("\n[밸런스 판정]");
      · 인사(초기화셋팅) 중에도 첫 스텝 안내가 미리 나온다 — 껐다 켠 직후 비어 보이지 않게
      · 플로우 밖 선(눈)을 골라도 안내가 유지된다
      · AI 버튼은 「AI / 눈썹정렬」 두 줄 */
-  {
+  if (RUN(26)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3202,7 +3256,7 @@ console.log("\n[밸런스 판정]");
      · 처음 여는 기기(저장된 언어 없음) → **영어**로 시작 · 한국어를 고르면 저장되어 유지
      · 링크 미리보기(og:*)·설치 이름/설명(manifest)·html lang 이 전부 영어
      · og:image 는 **절대 주소** — 상대 주소면 메신저가 아이콘을 못 읽는다 */
-  {
+  if (RUN(27)) {
     const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
     const mf = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.webmanifest"), "utf8"));
     const head = html.slice(0, html.indexOf("</head>"));
@@ -3243,7 +3297,7 @@ console.log("\n[밸런스 판정]");
      · pb_orient="off" 로 저장돼 있어도 세로 뷰포트는 **무조건 rot90**
      · .screen 높이는 **dvh 가 마지막**(주소창 있는 화면에서 아래 버튼이 잘리던 원인)
      · alignCenterDock 은 rect 가 아니라 **offset 좌표**만 쓴다 (rot90 에서 rect 는 90° 돌아가 있다) */
-  {
+  if (RUN(28)) {
     const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
     const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
     const acd = (src.match(/function alignCenterDock\(\)[\s\S]*?\n}/) || [""])[0]
@@ -3294,7 +3348,7 @@ console.log("\n[밸런스 판정]");
      · 놓은 선(doneSet)은 doneC/doneW/doneOp 로 그려진다 — 잡은 선 값과 **완전 분리**
      · 설정 시트에 색상표·굵기·투명도 컨트롤이 있다
      ⛔ drawDone 을 drawGrab 으로 합치지 마세요 — 잡은 선을 바꾸면 놓은 선까지 같이 바뀝니다. */
-  {
+  if (RUN(29)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3345,7 +3399,7 @@ console.log("\n[밸런스 판정]");
   /* 147. ⭐ v1.95.0 — **서브 라인 설정** (원장님 지시 2026-08-29: 「아치엣지와 아치두께에서
      뻗어 이너라인까지 닿는 서브 라인의 굵기·투명도」)
      자→이너선 옅은 연결선의 굵기(subW)·투명도(subOp)가 설정을 따른다. 색은 먹색 고정. */
-  {
+  if (RUN(30)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3385,7 +3439,7 @@ console.log("\n[밸런스 판정]");
        다음으로 넘어가라 — 그래서 설명도 넘어가라」)
      · 가이드 켜짐 + 차례 있음 + 배경(선 없는 곳) 탭 → 그 단계 끝냄(doneSet) + 다음 차례 + 안내 이동
      · 선 위 탭은 그대로 선택 (건너뛰지 않는다) · 인사 중에는 안 넘어간다 */
-  {
+  if (RUN(31)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3447,7 +3501,7 @@ console.log("\n[밸런스 판정]");
         동공 간격 = EYE_FRAC×W · 중점 = (centerX, CENTER_Y) 로 통일된다
      ② SVG 사진(회귀 픽스처)은 건드리지 않는다 — 기존 테스트의 변환 안정성
      ⛔ findPupilsFallback 의 동그람(aspect)·크기 필터를 지우지 마세요 — 눈썹·머리카락을 잡습니다. */
-  {
+  if (RUN(32)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3509,7 +3563,7 @@ console.log("\n[밸런스 판정]");
        드래그바를 누를 때 왼쪽 선 이름 버튼이 눌리니 조금 더 떨어뜨려」)
      ⛔ `#lineRail #hButtons` 에 position:relative 를 주지 마세요 — `.linebar{bottom:8px}` 가
         되살아나 가로 버튼 묶음이 8px 위로 밀립니다 (설정 배지와 겹침 · 실제로 겪음). */
-  for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아이패드 가로 1180×820", w: 1180, h: 820 }]) {
+  if (RUN(33)) for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 }, { n: "아이패드 가로 1180×820", w: 1180, h: 820 }]) {
     const ctx = await browser.newContext({ viewport: { width: dev.w, height: dev.h }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3566,7 +3620,7 @@ console.log("\n[밸런스 판정]");
      ① 눈꺼풀 그늘이 안쪽으로 이어져도 이너는 **드로잉이 시작하는 곳**에 선다 (그늘 끝 ✗)
      ② 이너는 **내안각(40) ~ 하드 맥시멈(48)** 밖으로 나가지 못한다
      ③ 읽지 못하면 **43**(케이스 3개 이상이면 케이스 중앙값) */
-  {
+  if (RUN(34)) {
     const fis = makeInnerShadeFace();
     const o151 = await runDraw(true, fis, null, SHAPE_A);
     fs.unlinkSync(fis);
@@ -3609,7 +3663,7 @@ console.log("\n[밸런스 판정]");
      ② 자(내안각→센터)가 있으면 **언제나** 이너 전용 판독이 답을 냅니다. 밴드를 못 믿을 때
         `growEnd` 로 되돌아가면 다시 미간 맨살(46.7·48)에 섭니다.
      ⛔ 둘 다 되돌리지 마세요. */
-  {
+  if (RUN(35)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3644,7 +3698,7 @@ console.log("\n[밸런스 판정]");
      예전에는 랜드마크가 없으면 앞꼬리를 **비율(R_INNER 0.52)로 짐작**했습니다.
      이 검사는 **눈 모양을 아는 합성 사진**을 만들어, 검출기가 그 코쪽 끝점을 찾아내는지 봅니다.
      ⛔ 「제일 어두운 열의 끝」으로 되돌리지 마세요 — 코 그늘·눈물샘까지 눈으로 셉니다. */
-  {
+  if (RUN(36)) {
     /* 아몬드 눈 두 개. 왼쪽 눈의 코쪽 끝 = 250, 오른쪽 눈의 코쪽 끝 = 550 (이미지 좌표) */
     const eye = (x0, x1, cy, h) => {
       const up = [], dn = [];
@@ -3703,7 +3757,7 @@ console.log("\n[밸런스 판정]");
      ② **얇은 검은 선**(쌍꺼풀 주름 5px)은 검은색이어도 눈썹이 아니다 — 두께 창이 거른다
      ③ 출발점에 붙은 **눈 화장**(섀도 덩어리)은 「피부가 먼저」 규칙이 거른다
      ⛔ 셋 중 하나라도 되돌리면 앞머리가 주름·눈두덩에 내려앉습니다. */
-  {
+  if (RUN(37)) {
     const f155 = path.join(ROOT, ".front-rule.svg");
     const up = [], dn = [];
     for (let x = 120; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
@@ -3747,7 +3801,7 @@ console.log("\n[밸런스 판정]");
        「빨간 선은 눈으로부터 올라와 대체값이 필요할 때 사용할 넘버링, 파란색이 옳바른」)
      ① 판독 없는 시작 배치: 앞머리 = **눈 위 11.7 눈금** (동공 비율 0.78 짐작 폐지)
      ② 눈금 1칸 = 이너 자(내안각→센터)의 1/13.15 — 이너와 **같은 자** */
-  {
+  if (RUN(38)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3778,7 +3832,7 @@ console.log("\n[밸런스 판정]");
      두꺼운 쉐도우는 두께 창(155)을 **통과합니다** — 얇지 않으니까요. 그래서 넘버링으로
      거릅니다: 눈 위 7 눈금 안쪽에서 찾은 것은, **위에 진짜 눈썹(7~16 눈금)이 또 있으면**
      쉐도우였던 것입니다. ⛔ 첫 후보를 바로 쓰는 방식으로 되돌리면 이 검사가 잡습니다. */
-  {
+  if (RUN(39)) {
     const f157 = path.join(ROOT, ".front-shadow.svg");
     fs.writeFileSync(f157, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
       + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
@@ -3821,7 +3875,7 @@ console.log("\n[밸런스 판정]");
      ① 어떤 경로로 왔든 최종 앞머리가 눈 위 7 눈금 미만이면 → 보통값(11.7)으로 대체
      ② 7 눈금 이상이면 그대로 둔다 (확대 사진의 16 초과도 허용 — 회귀 120 의 모양 C)
      ⛔ frontFloor() 호출을 빼거나 하한을 0 으로 내리면 이 검사가 잡습니다. */
-  {
+  if (RUN(40)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3859,7 +3913,7 @@ console.log("\n[밸런스 판정]");
      0 = **동공 중심** — 랜드마크가 있으면 매번 실측, 없으면 배치 때 저장한 동공 높이.
      ⛔ h1(눈 가로선)을 0 으로 쓰면 안 됩니다 — 원장님이 드래그로 옮기는 순간
         하한 7·보통값 11.6·두께 4.7 이 전부 따라 밀립니다. */
-  {
+  if (RUN(41)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3905,7 +3959,7 @@ console.log("\n[밸런스 판정]");
        ① innerDecide 답 클램프가 INNER_F_SOFT(45)여야 하고 (fRaw 는 캡 전 값 보존),
        ② 예비 경로(밴드 half)의 클램프도 45 기준이어야 한다.
      ⛔ 클램프를 INNER_F_HARD(48)로 되돌리면 이 테스트가 잡습니다. */
-  {
+  if (RUN(42)) {
     const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
     const hasAnsClamp = src.includes("const fAns = Math.min(fRaw, INNER_F_SOFT)");
     const hasRaw = src.includes("clamp(i > 0 ? scan[i - 1] : scan[i], INNER_F_LO, INNER_F_HARD)");
@@ -3934,7 +3988,7 @@ console.log("\n[밸런스 판정]");
      합성 사진: 눈썹(검정) 위로 옅은 그라데이션이 길게 이어져 피부-복귀 두께가 12.7눈금
      (상식 밖) — 이때 ② 가 어둡기 퍼센트가 가장 크게 낮아지는 **검정 끝(y≈300)** 을
      골라야 한다. ② 를 빼고 보통값으로 직행하면 top 이 그라데이션 끝(y≈270)이 된다. */
-  {
+  if (RUN(43)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -3968,7 +4022,7 @@ console.log("\n[밸런스 판정]");
      눈꺼풀·속눈썹까지 읽었다는 뜻입니다. 그때 윗끝(아치엣지)이 멀쩡하면 윗끝은 쓰고,
      두께만 **아치엣지에서 5칸 아래**로 놓습니다.
      ⛔ **해부학 순서 위반은 여기에 넣지 마세요** — 162ⓒ 가 그것까지 살아나면 바로 잡습니다. */
-  {
+  if (RUN(44)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4021,7 +4075,7 @@ console.log("\n[밸런스 판정]");
      ⛔ 이 갈림(`info.seen > 0`)을 지우면 **회귀 89·94** 가 바로 잡습니다 — 실제로 지워 보니
         89 아치두께 159(기대 140) · 94 아치두께 156(기대 140) 으로 떨어졌습니다.
         여기 163 은 그 갈림의 **입력**(seen 세기)과 표준값 **산수**를 잡습니다. */
-  {
+  if (RUN(45)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4088,7 +4142,7 @@ console.log("\n[밸런스 판정]");
        ③ 덩어리가 **탐색창 천장에 닿으면** 못박음이므로 판독을 포기한다 (밴드 유지)
        ④ 아치두께가 **앞머리보다 아래**면 후보 자격이 없다 (원장님 해부학 순서 · BASELINE 1-45)
      ⛔ 넷 중 하나라도 빼면 아치 자가 눈꺼풀·창 경계에 내려앉습니다. */
-  {
+  if (RUN(46)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4155,7 +4209,7 @@ console.log("\n[밸런스 판정]");
      꼬리 끝은 **평균 진하기**가 중앙값의 55% 이상인 마지막 열입니다. 잉크량(두께×진하기)으로
      재면 넓고 옅은 번짐이 통과해 버립니다 — 그래서 **두께와 무관한 진하기**를 봅니다.
      ⛔ 진하기 기준을 잉크량으로 되돌리지 마세요. */
-  {
+  if (RUN(47)) {
     const fsm = makeSmudgeFace();
     const o123 = await runDraw(false, fsm, null, SHAPE_A);
     fs.unlinkSync(fsm);
@@ -4166,23 +4220,29 @@ console.log("\n[밸런스 판정]");
       `아우터 ${o123.outerPx.toFixed(0)} (검은 드로잉 끝 ${SMUDGE.bodyEndX} 에 섬=${atBody} · 번짐 끝 ${SMUDGE.smudgeEndX} 까지 안 감=${notSmudge})`);
   }
 
-  /* 121. ⚠️ v1.70.0 — **원장님이 정해 주신 판정 기준** (2026-08-24, 사진 3장 + 확인 답변)
+  /* 121. ⚠️ v1.70.0 판정 기준, v3.0.0 아치선 규칙 갱신 (원장님 지시 2026-08-30, 실제 사진
+     3장에 파란 선으로 손수 표시해 확인):
        · 꼬리 자 = 꼬리의 **뾰족한 끝**(끝 구간의 아랫선). 윗선이 아닙니다 → 예전보다 **아래**
-       · 아치선 = **꺾임점**(아치 가로선에서 눈썹이 아래로 빠지는 자리). 산꼭대기가 아닙니다 → **바깥쪽**
+       · 아치선 = **아치엣지 가로선이 눈썹과 맞닿아 피부색이 드러나는 자리**
+         (「아치엣지가로를 아치선이 맞닿을때 생기는 피부색이 생기는 위치가 아치선」).
+         v1.70.0~v2.9.0 의 「꺾임점」(낙차 비율)을 대신합니다 — 산꼭대기가 아니라는 것과
+         「바깥쪽」이라는 방향은 같지만, 멈추는 **자리를 재는 기준**이 다릅니다.
        · 앞머리 = 이너 × 앞머리의 90° 꼭지점이 눈썹 앞부분 끝에 닿는다 (구간 평균이 아니라 끝 근처)
-     ⛔ 예전 규칙(꼬리=윗선 · 아치선=산꼭대기)으로 되돌리면 이 검사가 바로 잡습니다. */
-  {
+     ⛔ 예전 규칙(꼬리=윗선 · 아치선=산꼭대기 · 아치선=꺾임점)으로 되돌리면 이 검사가 잡습니다. */
+  if (RUN(48)) {
     const outerTop = 152, peakX = 215;      /* 모양 A 의 바깥 끝 윗선 · 산꼭대기 x */
     const tailBelowTop = o87.tailPx > outerTop + 8;      /* 끝의 아랫선 = 윗선보다 뚜렷이 아래 */
-    const archVOutside = o87.archVPx < peakX - 15;       /* 꺾임점 = 산꼭대기보다 바깥 */
-    /* ⚠️ v1.70.0 — 원장님이 실제 화면에 십자로 찍어 확인해 주신 자리(2026-08-24 「이 위치 아치
-       해석 완료형으로」)를 픽셀로 재니 **눈썹 바깥 끝에서 폭의 26%** 였습니다. 꺾임점이 내는
-       값도 26% 대입니다. 이 띠(15~40%)를 벗어나면 해석이 다시 어긋난 것입니다. */
+    const archVOutside = o87.archVPx < peakX - 15;       /* 아치선 = 산꼭대기보다 뚜렷이 바깥 */
+    /* ⚠️ v1.70.0 — 원장님이 실제 화면에 십자로 찍어 확인해 주신 자리(2026-08-24)를 픽셀로
+       재니 **눈썹 바깥 끝에서 폭의 26%** 였습니다. v3.0.0 새 규칙(아치엣지-피부 경계)도
+       모양 A 에서 같은 대역(15~40%)에 떨어집니다 — 두 규칙이 이 합성 눈썹에서는 비슷한
+       자리를 가리키지만, 실제 사진에서는 갈립니다(원장님이 손으로 표시해 확인한 이유).
+       이 띠를 벗어나면 산꼭대기에 눌러앉았거나 눈썹 밖으로 튄 것입니다. */
     const archFrac = (o87.archVPx - o87.exp.outer) / (o87.exp.inner - o87.exp.outer);
     const archInBand = archFrac > 0.15 && archFrac < 0.40;
     const frontOnCorner = Math.abs(o87.innerPx - o87.exp.inner) < 9
                        && Math.abs(o87.frontPx - o87.exp.front) < 5;
-    check("121. 판정 기준 — 꼬리=끝의 아랫선 · 아치선=꺾임점(바깥에서 ¼ 부근) · 앞머리=90° 꼭지점",
+    check("121. 판정 기준 — 꼬리=끝의 아랫선 · 아치선=아치엣지-피부 경계(바깥쪽) · 앞머리=90° 꼭지점",
       tailBelowTop && archVOutside && archInBand && frontOnCorner,
       `꼬리 ${o87.tailPx.toFixed(0)} > 윗선 ${outerTop}=${tailBelowTop} · `
       + `아치선 ${o87.archVPx.toFixed(0)} < 산꼭대기 ${peakX}=${archVOutside} · 바깥에서 ${(archFrac * 100).toFixed(0)}%(15~40%)=${archInBand} · `
@@ -4212,7 +4272,7 @@ console.log("\n[밸런스 판정]");
      · 프롬프트는 ①~⑥ 번호가 붙어 순서가 화면에서 읽힌다
      · 자동으로 놓인 두 줄(앞두께·아치)은 「사진에서 맞췄습니다」로 **확인만** 하라고 알린다
      ⛔ 번호를 떼거나 두 줄로 늘리지 마세요 — 시술 화면을 가립니다. */
-  {
+  if (RUN(49)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4261,7 +4321,7 @@ console.log("\n[밸런스 판정]");
      꼬리는 관자놀이 잔털과 끊김 없이 이어져 있어 어두움으로 끝을 정할 수 없습니다.
      지금 규칙: 기준쪽 콧볼 → 외안각 연장선이 꼬리 높이(h3)와 만나는 x = 꼬리 끝.
      랜드마크 꼬리점 대비 0.8~1.5배 제한. 잉크 추적으로 되돌리면 이 검사가 깨집니다. */
-  {
+  if (RUN(50)) {
     const FAKE97 = () => {
       const lm = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
       const set = (i, x, y) => { lm[i] = { x, y, z: 0 }; };
@@ -4325,7 +4385,7 @@ console.log("\n[밸런스 판정]");
      · 조용한 선은 얇은 회색 · 움직임이 끝나면 그 선의 **다음** · 꼬리 높이 뒤로는 종료
      · 가이드를 끄면 즉시 종료
      ⛔ 순서를 코드에 박지 마세요 — 원장님이 설정에서 바꾸실 수 있습니다 (회귀 137). */
-  {
+  if (RUN(51)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4407,7 +4467,7 @@ console.log("\n[밸런스 판정]");
      ⚠️ v1.49.0 에서 아치·꼬리도 같은 방식(연한 상태 별도 색)으로 통일됐습니다 — 다만 **각 묶음의
         연한 색은 자기 계열**입니다(아치 #A9CFF2 · 꼬리 #D0B8F0). 전부 같은 회색으로 만들면
         v1.46.2에서 세로선 배지를 지우며 세운 「색이 곧 이름표」가 무너집니다. */
-  {
+  if (RUN(52)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4473,7 +4533,7 @@ console.log("\n[밸런스 판정]");
           알파 0.475 로 흐리게 하니 파랑이 피부와 섞여 화면 실제색 #6D7CA4(휘도 0.203),
           보라는 #A762A0(0.195) — 피부(0.199)와 밝기가 같아 사실상 안 보였습니다.
           ⚠️ 고유색(#2E8BFF · #A855F7)은 **바꾸지 않습니다** — 원장님이 유지를 원하셨습니다. */
-  {
+  if (RUN(53)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4594,7 +4654,7 @@ console.log("\n[밸런스 판정]");
        · 사진저장 = 채움 아님 — 「시작시 사진저장에 색상 죽일것」
        · 가이드 켜짐 = 채움 + 글로우 — 「이것이 켜져있다는 신호가 보여야 한다」
        · 초기화 = 어두운 판이되 **채움은 아니다** — 눌리면 전부 지워지므로 시선을 끌면 안 됩니다(3장) */
-  {
+  if (RUN(54)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4654,7 +4714,7 @@ console.log("\n[밸런스 판정]");
           한 줄로: **일하는 곳만 굵고 나머지는 얇은 짙은 회색.**
           ⛔ 굵은 선이 눈썹 속을 가로지르게 되돌리면 그 자리 드로잉이 가려집니다.
      107 「프리셋 유지, 내부에 기본사항 제공 제거. 오로지 사용자의 프리셋 저장만 사용하자」 */
-  {
+  if (RUN(55)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4749,7 +4809,7 @@ console.log("\n[밸런스 판정]");
       움직임 없을 때는 현재 얇은 회색 유지」
      ⛔ 깜빡임을 JS 타이머로 되돌리지 마세요 — 드래그 중 매 프레임 render() 가 화면을 먹습니다.
      ⛔ 밝은 쪽(0%·100%) 은 반드시 stroke-opacity:1 — 저장본은 애니메이션 없이 그 값으로 찍힙니다. */
-  {
+  if (RUN(56)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4818,7 +4878,7 @@ console.log("\n[밸런스 판정]");
         측정 결과 위에 세워졌습니다: 색은 **피부 주황(25°)에서 먼 색상(hue)** 으로 고르고,
         밝기 대비는 **테두리(대비색)** 가 만듭니다. 이 역할 분담을 깨지 마세요.
      ⛔ 설정 값을 바꿔도 **선 색 = 레일 띠 색**은 계속 맞아야 합니다 (BASELINE 1-20). */
-  {
+  if (RUN(57)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -4972,7 +5032,7 @@ console.log("\n[밸런스 판정]");
       또 클릭 시 다른 조합 변경」
      순서: 내 세트 → 밝은 사진 → 어두운 사진 → **다시 내 세트** (한 바퀴 돌면 그대로 복귀 —
      시술 중 잘못 눌러도 잃는 것이 없어야 한다). 라벨은 지금 조합 이름을 보여준다. */
-  {
+  if (RUN(58)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5014,7 +5074,7 @@ console.log("\n[밸런스 판정]");
   /* 111. ⚠️ v1.59.0 — 설정 시트도 가짜 회전(rot90)을 따라간다 (원장님 지시 2026-08-23
      「설정창 가로모드로 변경」). 시트는 body 직속 fixed 라 .screen 의 회전을 상속받지 못해
      아이폰 세로 잠금 상태에서 **설정만 세로로** 떴었다. ⛔ body.rot90 .sheet 블록을 지우면 재발. */
-  {
+  if (RUN(59)) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5043,7 +5103,7 @@ console.log("\n[밸런스 판정]");
      「지금 내가 앱에 설정한 선을 기본으로 셋팅하고 못 박아줘」
      원장님이 실제 시술 화면에서 눈으로 맞춘 값입니다. 이 테스트가 그 값을 통째로 잠급니다.
      ⛔ 값을 바꾸려면 **원장님 확인을 먼저** 받으세요. 이 테스트를 고쳐서 통과시키지 마세요. */
-  {
+  if (RUN(60)) {
     /* ⚠️ v1.81.0 갱신 — **누가·언제·왜** (BASELINE 1-26 규칙대로 기록합니다):
        원장님 지시 2026-08-27 「세로색 목록 추가 — 이너: 기본 민트 / 아치선: 먹색 / 꼬리선: 먹색」
        + 「가이드가 꺼진상태에서 이너라인은 제외한 세로색상은 기본적으로 먹색을 유지」
@@ -5090,7 +5150,7 @@ console.log("\n[밸런스 판정]");
      꼬리 끝 = (아우터 x, 꼬리 y) **한 점**. 꼬리 자든 아우터 세로선이든 잡고 사선으로 끌면
      dy → 꼬리(h3), dx → 아우터(v4)가 함께 움직인다. 오른쪽(거울)에서 잡으면 dx 부호 반전.
      ⛔ 다른 자(앞머리·아치)로 퍼뜨리지 말 것 — 두께 쌍이 흐트러진다. 여러라인 모드는 예외 없음. */
-  {
+  if (RUN(61)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5157,7 +5217,7 @@ console.log("\n[밸런스 판정]");
      + 원장님 확인: 아치두께 동반도 함께 해제 → 아치 · 아치두께 · 아치선이 **전부 따로**.
      ⛔ v1.67.0 의 ARCH_PAIR(사선 동반 · 두께 동반)를 되살리지 마세요.
      ⚠️ 꼬리·아우터의 사선 동시 이동(BASELINE 1-27)은 **그대로**입니다 — 회귀 113 이 지킵니다. */
-  {
+  if (RUN(62)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5239,7 +5299,7 @@ console.log("\n[밸런스 판정]");
      「꼬리와 아우터에 **회색 테두리가 자동으로 생겼다. 내가 의도하지 않음** — 테두리 없게」
        → 표식(십자 모서리)의 테두리는 설정의 「테두리」를 그대로 따른다. 기본(없음)이면 없다.
      ⛔ 3단 세그먼트로 되돌리지 마세요 — 아주 짧은 자를 만들 수 없습니다. */
-  {
+  if (RUN(63)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5309,7 +5369,7 @@ console.log("\n[밸런스 판정]");
      ② 가이드 프롬프트 칩 — 지금 차례가 무엇을 맞추는지 한 줄
      ③ 꼬리 스텝의 **십자 안쪽 모서리** 표식 — 「두 선이 맞닿아 십자 모양의 내측을 포인트로」
      ⛔ 화살표 step 을 다시 키우지 마세요 — 시술 중 한 번 눌러 튀면 처음부터 다시 맞춥니다. */
-  {
+  if (RUN(64)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5411,7 +5471,7 @@ console.log("\n[밸런스 판정]");
   /* 100. 버전 표시 (v1.39.2) — 홈 화면에 앱 버전이 보인다. 폰(iOS PWA) 캐시가 끈질겨서
      「반영이 안 됐다」와 「판독이 실패했다」를 구분할 방법이 이것뿐입니다.
      APP_VERSION 은 릴리스 때 sw.js 의 VERSION 과 함께 올립니다. */
-  {
+  if (RUN(65)) {
     const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
     const av = (src.match(/const APP_VERSION = "(v[\d.]+)"/) || [])[1];
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 } });
@@ -5429,7 +5489,7 @@ console.log("\n[밸런스 판정]");
      · runFaceAI 의 모든 경로가 autoAiOnLoad() 를 부른다 (성공·얼굴없음·모델실패)
      · autoAiOnLoad 는 판독 실패 시 **아무것도 바꾸지 않는다** — v1.30~33 의 「어긋난 시작」 방어
      · aiAllowed() 프리미엄 게이트가 존재한다 (지금은 무료 = true) */
-  {
+  if (RUN(66)) {
     const src = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
     const m = src.match(/async function runFaceAI\(\)[\s\S]*?\n}/);
     const code = m && m[0].replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
@@ -5450,7 +5510,7 @@ console.log("\n[밸런스 판정]");
      · 아치선·아우터의 진한 구간은 눈 기준선(h1)에 **닿지 않는다**
      · 이너는 길게 남는다 (내안각과 맞춰 보는 기준선)
      · 아치선·아우터는 이너보다 얇다 */
-  {
+  if (RUN(67)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5506,7 +5566,7 @@ console.log("\n[밸런스 판정]");
      「아우터라인과 아치 아치두께 라인이 함께 움직여」 → 아치는 **자기 세로선**을 따라가야 합니다.
        앞머리·앞두께 → 이너 · 아치·아치두께 → 아치선 · 꼬리 → 아우터
      자 위치를 다시 frac 상수로 박으면 이 검사가 깨집니다. */
-  {
+  if (RUN(68)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
@@ -5557,12 +5617,19 @@ fs.unlinkSync(face.file);
 
 /* ── 요약 ───────────────────────────────── */
 const failed = results.filter((r) => !r.pass);
+const SECS = ((Date.now() - T0) / 1000).toFixed(1);
 console.log("\n" + "━".repeat(46));
-console.log(`  통과 ${results.length - failed.length} / ${results.length}`);
+console.log(`  통과 ${results.length - failed.length} / ${results.length}   (${SECS}초)`);
 if (failed.length) {
   console.log("\n  ❌ 실패 항목 — 커밋하지 마세요:");
   failed.forEach((f) => console.log(`     · ${f.name}  ${f.detail}`));
   console.log("\n  BASELINE.md 의 해당 항목을 확인하세요.\n");
   process.exit(1);
 }
-console.log("  ✅ 전 항목 통과 — 커밋해도 안전합니다.\n");
+if (ONLY) {
+  /* ⚠️ 부분 통과를 「전 항목 통과」로 읽으면 안 됩니다 — 그러려고 만든 스위치가 아닙니다. */
+  console.log(`  ⏱ **부분 실행**입니다 — 블록 ${skippedBlocks}개 · 항목 약 ${skippedTests}건을 건너뛰었습니다.`);
+  console.log("  ⛔ 커밋 전에는 `PB_ONLY` 없이 전 항목을 한 번 더 돌리세요.\n");
+} else {
+  console.log("  ✅ 전 항목 통과 — 커밋해도 안전합니다.\n");
+}

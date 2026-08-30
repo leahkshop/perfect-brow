@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v125"; /* v2.8.0 — 아치 5칸 규칙 정리 (두께 상한 · 엣지 대체 · 엣지 맥시멈) */
+const VERSION = "pb-v127"; /* v3.0.0 — 아치선(v6) 규칙 교체: 꺾임점→아치엣지-피부 경계 + 3칸 마지노선 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 

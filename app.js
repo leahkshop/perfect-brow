@@ -369,7 +369,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v2.8.0";
+const APP_VERSION = "v3.0.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2743,7 +2743,10 @@ function browBoxes() {
    아치~앞두께 밴드의 앞뒤로 한 배쯤. 눈 기준선 위로는 넘어가지 않습니다.
    ⛔ 다시 화면 절반으로 되돌리지 마세요. 머리카락이 들어온 사진에서 그대로 재발합니다. */
 const TAIL_INK = 0.45;    // **평균 진하기**가 중앙값의 이 비율 이상이어야 「검은 드로잉」 (v1.72.0)
-const KINK_DROP = 0.15;   // 산꼭대기~꼬리 낙차의 이 비율만큼 내려앉으면 「꺾였다」 (v1.70.0)
+/* ⛔ v3.0.0 — KINK_DROP(「꺾임점」 문턱)은 폐지되었습니다. 아치선(v6)은 이제
+   autoFromDrawing() 안의 seq/smoothTop 기반 블록(ARCHV_EPS·ARCHV_HOLD·3칸 마지노선)이
+   직접 잡습니다 — 독립 함수가 아니라 그 흐름 안에 인라인으로 있습니다. 되살리지
+   마세요 — 회귀 121 이 새 규칙으로 바뀌었습니다. */
 /* ⚠️ v1.70.0 — 아래 경계 (원장님 지시 2026-08-24: 「빨간 X 부분 **해석 불필요**」)
    원장님이 눈 기준선 바로 위(≈7%)에 X 를 찍어 「여기는 읽지 마라」고 하셨습니다 — 눈꺼풀·
    쌍꺼풀 주름 자리입니다. 아래 경계를 눈 기준선 위 **8%** 로 올려 그 띠를 아예 보지 않습니다.
@@ -4030,29 +4033,12 @@ function autoFromDrawing() {
     ftGuard();
   }
   setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
-  /* ⚠️ v1.70.0 — 아치선 = **꺾임점**. 산꼭대기 높이의 수평선을 바깥으로 밀 때, 눈썹 윗선이
-     그 선에서 `KINK_DROP × 아치두께` 만큼 처음 내려앉는 자리입니다 (원장님: 「아치 가로선을
-     뒤로 뺐을 때 각도가 생기는 꼭지점」). 못 찾으면 산꼭대기를 그대로 씁니다. */
-  /* 임계는 **산꼭대기에서 꼬리 끝까지의 낙차**로 잽니다 — 두께로 재면 눈썹 모양에 따라
-     꺾임점이 크게 흔들립니다 (모양 B 에서 30px 이상 밀렸습니다). */
-  const peakTop = smoothTop(pk);
-  const fall = Math.max((at(1 - END, 1, "top") || peakTop) - peakTop, 4);
-  let kink = -1;
-  for (let i = pk; i <= n - 1; i++) {          // seq[n-1] = 바깥(꼬리) 방향
-    if (smoothTop(i) - peakTop >= KINK_DROP * fall) { kink = i; break; }
-  }
-  /* ⚠️ 원장님 판단 기준은 **두 개**이고 순서가 있습니다 (2026-08-24):
-       ① 꺾임점 — 아치 가로선에서 눈썹이 아래로 빠지는 자리. **이것이 우선입니다.**
-       ② 자리(1·2·3) — 눈동자 바깥 끝 / 눈꼬리 / 꼬리 섀도우. 꺾임을 **못 찾았을 때**의 자리입니다.
-     ⛔ ②로 ①을 가두지 마세요 — 아치가 안쪽에 있는 눈썹에서 아치선이 30px 넘게 밀립니다
-        (회귀 91 이 그 모양입니다). */
-  let kx;
-  if (kink >= 0) kx = seq[kink].x;
-  else {
-    const eyeR = eyeArchRange(seq[0].x < cx ? "L" : "R");   /* 판독에 실제로 쓰인 쪽 */
-    kx = eyeR ? (eyeR.a + eyeR.b) / 2 : seq[pk].x;          // ② 눈꼬리 근처
-  }
-  setLine("v6", clamp(S.g.v1 - Math.abs(kx - cx) / W, 0.02, 0.98));
+  /* ⭐ v3.0.0 — **아치선(v6)은 아치엣지(h2)가 확정된 뒤에 잡습니다** — 아래에서
+     archDecide/archStandard 로 h2 를 다 정한 다음, 이 함수 맨 아래의 v6 판정 블록
+     (ARCHV_EPS·ARCHV_HOLD·3칸 마지노선)이 seq/smoothTop 를 훑어 다시 정합니다.
+     여기서는 「일단 산꼭대기」로만 임시로 놓아 둡니다 — 이너·앞머리처럼
+     실패하면 예전 배치가 남아 있어야 하기 때문입니다. */
+  setLine("v6", clamp(S.g.v1 - Math.abs(seq[pk].x - cx) / W, 0.02, 0.98));
 
   /* ⭐⭐ v1.81.0 — **아치두께의 마지노선** (원장님 지시 2026-08-27)
      「절대로 : 아치두께는 절대로 꼬리가 측정된 위치 밑으로 내려오지 않는다.
@@ -4093,6 +4079,94 @@ function autoFromDrawing() {
     const lim = Math.max(floor, Math.min(S.g.h3, S.g.front) - AT_GAP);
     if (S.g.archThickness > lim) setLine("archThickness", lim);
   }
+
+  /* ⭐⭐⭐ v3.0.0 — **아치선(v6) — 아치엣지 가로선이 눈썹과 맞닿는 자리** (원장님 지시
+     2026-08-30, 실제 사진 3장에 파란 선으로 손수 표시해 확인):
+       「아치엣지가로를 아치선이 맞닿을때 생기는 피부색이 생기는 위치가 아치선」
+     즉 **아치엣지(h2, 방금 위에서 확정됨) 높이의 수평선을 산꼭대기에서 바깥으로 밀 때,
+     눈썹 윗선(smoothTop)이 그 높이를 처음 넘어서는(=피부가 드러나는) 자리**입니다.
+
+     ⛔ v1.70.0~v2.9.0 의 「꺾임점」(낙차의 KINK_DROP 비율)을 대신합니다 — 원장님이 실제
+     사진에 짚어 주신 자리가 꺾임점과 달랐습니다. **훑는 자료는 seq/smoothTop 그대로**
+     씁니다 — 테두리만 그린 드로잉·저대비 맨눈썹에서도 이미 검증된 자료라(회귀 89·94),
+     따로 픽셀을 다시 훑으면(darkBlobsUp) 테두리 드로잉의 속 빈 부분을 잘못 읽습니다.
+
+     ⚠️ **기준 높이는 archDecide 의 h2 가 아니라 `smoothTop(pk)` 자체입니다.** 밴드(seq)와
+     archDecide 는 서로 다른 픽셀 판독이라 h2 와 `smoothTop(pk)` 가 1~2px 어긋날 수 있고,
+     그 어긋남이 바로 다음 열들을 「벌써 피부」로 잘못 읽게 만듭니다(원장님 사진 A·D로
+     확인 — 눈썹 한복판에 섰습니다). **밴드 안에서 자기 자신과만 비교**해야 일관됩니다.
+
+     ⚠️⚠️ **여유는 그 눈썹의 낙차에 비례(ARCHV_EPS_FRAC)** — 예전 「꺾임점」(KINK_DROP)과
+     같은 이유로 고정 px 여유는 사진마다 결이 달라 흔들립니다(회귀 A·D). 산꼭대기~꼬리
+     낙차(`fall`, 아래 KINK_DROP 자리에서 쓰던 그 자)의 작은 비율로 잡으면 사진마다 저절로
+     맞는 여유가 됩니다. **꺾임점(0.15)보다 훨씬 작습니다** — 「다 꺾였다」가 아니라
+     「막 피부가 비치기 시작했다」를 잡는 것이므로.
+
+     ⚠️⚠️⚠️ v3.0.1 — **버팀(ARCHV_HOLD)은 「계속 피부」뿐 아니라 「계속 늘어나야」 확정** —
+     원장님이 A사진에 직접 짚어 주신 자리(2026-08-30, 파란 세로선)로 확인: 산꼭대기 바로
+     옆에 눈썹 결 때문에 잠깐 튀었다가 도로 가라앉는 「가짜 상승」이 있고(A·D), 진짜 아치선은
+     그 뒤에 옵니다. 예전엔 문턱만 넘으면 쭉 세었기 때문에(가짜 상승도 문턱은 넘음) 가짜
+     상승에 먼저 낚였습니다. 이제는 **버팀 구간 내내 높이가 줄어들면 안 됩니다**(작은 결
+     흔들림은 tol만큼 봐줌) — 가짜 상승처럼 올라갔다 도로 가라앉으면 그 시작점은 버려지고,
+     다음으로 「내내 늘기만 하는」 진짜 시작점을 찾습니다. B·C·D는 애초에 가짜 상승이 없어서
+     이 조건을 추가해도 값이 그대로입니다(회귀 확인됨) — A만 29.52→25.46 으로 밀렸습니다.
+     ⏸ 대기함 — 원장님 손 표시(≈23)에는 아직 못 미칩니다. 거기까지 밀려면 문턱
+     자체(ARCHV_EPS_FRAC)를 올려야 하는데, 그러면 B·C·D도 같이 밀립니다 — 이 파일 하나만
+     따로 봐주는 규칙이 아니라 전체가 같이 쓰는 공식이라서 그렇습니다.
+
+     ⛔⛔ v3.0.2 — **산꼭대기에서 3칸 안쪽은 아예 후보에서 뺀다** (원장님 지시 2026-08-30,
+     3칸 표시 스크린샷): 「3개의 칸 내부로 들어오지 않는다 · 무조건 3개칸 이후부터 찾거나,
+     못 찾으면 3개칸 이후의 눈꼬리 윗부분을 표준값으로」. v3.0.1의 가짜 상승 방어는 그
+     상승이 EPS를 넘고 다시 가라앉아야만 걸러지는데, 만약 어떤 사진에서 가짜 상승이
+     가라앉지 않고 그대로 버팀(HOLD)까지 이어지면 또 산꼭대기 바로 옆에서 낚일 수 있다 —
+     그 경우를 위한 마지막 방어선. **몇 번째 줄(i)이 아니라 실제 눈금 거리(px)로 잰다**
+     (frontTickPx 그 자) — 사진마다 확대율이 달라 i 개수는 사진마다 다른 실제 거리를
+     가리키기 때문. 4장 전부 이미 3칸보다 훨씬 바깥에서 잡혀서(4.1~6칸) 이 줄 하나로는
+     지금 값이 안 바뀐다 — 「지금 맞는 값을 더 정확하게」가 아니라 「이 사고가 다음 사진에서
+     다시 나면 무조건 막는다」는 마지노선이다. */
+  {
+    const peakTop = smoothTop(pk);
+    const fall = Math.max((at(1 - END, 1, "top") || peakTop) - peakTop, 4);
+    const ARCHV_EPS_FRAC = 0.05;  // 꺾임점의 0.15 보다 훨씬 작다 — 「막 비치기 시작」 기준
+    const ARCHV_EPS = Math.max(1.5, ARCHV_EPS_FRAC * fall);
+    const ARCHV_HOLD = 5;        // 연속 이 열이 계속 피부 + 계속 증가여야 확정 (가짜 상승 방어, v3.0.1)
+    const ARCHV_TOL = 0.5;       // 버팀 중 이만큼의 흔들림(결 노이즈)은 「감소」로 안 침
+    const tickPx = frontTickPx();
+    const MIN_OUT_PX = tickPx ? tickPx * 3 : 0;   // 산꼭대기에서 최소 3칸 — 그 안쪽은 후보 자격 없음 (v3.0.2)
+    let outI = -1, hold = 0, firstI = -1, prevD = null;
+    for (let i = pk; i <= n - 1; i++) {
+      const d = smoothTop(i) - peakTop;
+      const farEnough = Math.abs(seq[i].x - seq[pk].x) >= MIN_OUT_PX;
+      const cont = farEnough && d >= ARCHV_EPS && (hold === 0 || d >= prevD - ARCHV_TOL);
+      if (cont) {
+        if (hold === 0) firstI = i;
+        hold++;
+        prevD = d;
+        if (hold >= ARCHV_HOLD && outI < 0) outI = firstI;
+      } else {
+        hold = 0; prevD = null;
+        if (farEnough && d >= ARCHV_EPS) { hold = 1; firstI = i; prevD = d; }
+      }
+    }
+    if (outI >= 0) {
+      setLine("v6", clamp(S.g.v1 - Math.abs(seq[outI].x - cx) / W, 0.02, 0.98));
+    } else {
+      /* 못 찾음 — ① 눈꼬리(outer 랜드마크) 그 자체를 표준값으로
+         (원장님: 「대부분의 아치선 경계는 눈꼬리 위에 있는 것을 확인」)
+         ② 랜드마크도 없으면 위에서 임시로 놓은 산꼭대기 값이 그대로 남는다 (조용한 안전판)
+         ③ v3.0.2 — 눈꼬리조차 3칸 안쪽이면(드문 얼굴 비율) 3칸 밖으로 밀어낸다 —
+            표준값도 「3칸 이후」여야 한다는 원장님 지시 그대로. */
+      const eyeR = eyeArchRange(seq[0].x < cx ? "L" : "R");   /* 판독에 실제로 쓰인 쪽 */
+      if (eyeR) {
+        let cornerX = eyeR.corner;
+        if (Math.abs(cornerX - seq[pk].x) < MIN_OUT_PX) {
+          const dir = Math.sign(cornerX - seq[pk].x) || Math.sign(seq[n - 1].x - seq[pk].x) || 1;
+          cornerX = seq[pk].x + dir * MIN_OUT_PX;
+        }
+        setLine("v6", clamp(S.g.v1 - Math.abs(cornerX - cx) / W, 0.02, 0.98));
+      }
+    }
+  }
   return true;
 }
 
@@ -4118,7 +4192,7 @@ function eyeArchRange(side) {
     if (!(wide > 8)) return null;      // 눈 코너를 못 받았으면 가두지 않는다 (엉뚱한 범위 방지)
     const irisEdge = ip.x + (useL ? -1 : 1) * wide * 0.18;      // ① 눈동자 바깥 끝
     const tailShadow = outer.x + (useL ? -1 : 1) * wide * EYE_TAIL; // ③ 꼬리 섀도우
-    return { a: irisEdge, b: tailShadow };
+    return { a: irisEdge, b: tailShadow, corner: outer.x };    // corner = ② 눈꼬리 그 자체
   } catch (e) { return null; }
 }
 
@@ -5327,7 +5401,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
-  frontDecide, darkBlobsUp, archDecide,
+  frontDecide, darkBlobsUp, archDecide, eyeArchRange,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
