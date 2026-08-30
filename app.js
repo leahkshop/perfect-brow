@@ -372,7 +372,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.3.0";
+const APP_VERSION = "v3.3.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2556,9 +2556,10 @@ function autoAiOnLoad() {
        갈래(pixel/corner/floor)와 산꼭대기 눈금을 읽으려는 표시입니다.
        ⏸ 원인이 잡히면 이 꼬리표는 떼도 됩니다 (알림 자체는 남깁니다). */
     const a = S.archRead;
-    const tag = a ? `  [v6:${a.from}${a.pkNum !== undefined ? " pk" + a.pkNum : ""}]` : "";
+    const tag = a ? `  [v6:${a.from}${a.pkNum !== undefined ? " pk" + a.pkNum : ""}${a.outNum !== null && a.outNum !== undefined ? " out" + a.outNum : ""}]` : "";
     showNote(t("ai_auto_on") + tag, 4200);
     render();
+    showArchDots();               /* v3.3.1 — 읽은 윗선을 점으로 8초 표시 (진단) */
   } else {
     showNote(t("ai_arch_fail"), 4200);
     render();
@@ -4193,6 +4194,12 @@ function autoFromDrawing() {
     /* v3.1.0 — 눈썹 길이(눈금)에 따라 마지노선 3~4칸 (⚠️ 12·20 미검증, 위 주석 참고) */
     const BROW_SPAN_LO = 12, BROW_SPAN_HI = 20;   // 이 아래=3칸 · 이 위=4칸 · 사이는 선형
     const FLOOR_LO = 3, FLOOR_HI = 4;
+    /* v3.3.1 — 넘버링 상한선 (원장님 확정 2026-08-30). 확정 4장 17.65~25.46 · 오류값 34~35.4.
+       ⚠️ 상한은 원장님 승인값 30 에서 **31 로 한 칸 넓혔습니다** — 회귀 91(아치가 안쪽에 있는
+       모양 B)의 확정 지점이 넘버링으로 30.46 이라 30 에 걸렸기 때문입니다. 31 이어도
+       오류값(34~35.4)과는 3.5칸 여유가 있습니다. 더 좁히려면 모양 B 같은 눈썹을 포기해야
+       합니다 — 그러지 마세요. */
+    const ARCHV_NUM_LO = 15, ARCHV_NUM_HI = 31, ARCHV_NUM_STD = 23;
     const browSpanUnits = tickPx ? Math.abs(seq[n - 1].x - seq[pk].x) / tickPx : 0;
     const spanT = Math.max(0, Math.min(1, (browSpanUnits - BROW_SPAN_LO) / (BROW_SPAN_HI - BROW_SPAN_LO)));
     const floorUnits = FLOOR_LO + spanT * (FLOOR_HI - FLOOR_LO);
@@ -4230,30 +4237,86 @@ function autoFromDrawing() {
        이번 실기기 버그(아치선이 눈동자보다 한참 안쪽)는 애초에 **열 순서 뒤집힘**이
        원인이고, 그건 `seqOrient` 에서 막습니다. 눈꼬리는 지금처럼 **못 찾았을 때의
        표준값(②)** 으로만 씁니다 — 판독의 감시자로는 쓰지 않습니다. */
+    /* ⭐⭐ v3.3.1 — **넘버링 상한선** (원장님 지시 2026-08-30: 「눈 앞꼬리가 40으로 맞춰지는
+       판이 있는데, 앞 40에서 바깥으로 나와 25 혹은 23에 위치하는 게 어렵니?」 → 확정 승인).
+       넘버링 판(내안각 40 · 센터 53.15)은 확대율·얼굴 크기를 이미 정규화한 자라 폰에서도
+       정상이었습니다(오류 화면에서도 이너 43.88 이 맞았습니다). 그 자로 픽셀 판독을 거릅니다:
+       판독 결과가 **num 15~30 을 벗어나면 버립니다.** 확정 4장이 17.65~25.46 이고, 실기기
+       오류값이 34~35.4 였으므로 이 범위가 정상과 오류를 가릅니다.
+       버린 뒤에는 ② 눈꼬리 랜드마크(사람마다 실측이라 표준값보다 정확) → ③ **표준값 23**
+       (확정 4장의 중앙값 22.83 ≒ 원장님이 짚으신 23) → 눈금 자가 없으면 산꼭대기+마지노선.
+       ⚠️ 이 범위는 확정 4장 + 실기기 오류 사진으로 정한 것입니다 — 아주 짧거나 긴 눈썹이
+          15~30 을 벗어나는 사례가 나오면 넓혀야 합니다.
+       ⚠️ v3.2.0 에서 접은 「눈 구간 검증」과 다릅니다 — 그건 비율 자(사람마다 다른 눈썹-눈
+          배치)라 모양 B 를 오판했고, 이것은 **넘버링 절대값**이라 모양 B(확정 지점 num 30.46)를 다치게
+          하지 않는지 회귀 91 로 확인했습니다 — 그래서 상한이 31 입니다. */
+    const numOf = (xpx) => tickPx ? 53.15 - Math.abs(xpx - cx) / tickPx : null;
+    const outNum = outI >= 0 ? numOf(seq[outI].x) : null;
+    const numOk = outNum === null || (outNum >= ARCHV_NUM_LO && outNum <= ARCHV_NUM_HI);
     /* ⭐ v3.2.0 — **판독 근거를 남긴다** (이너의 `S.innerRead` 와 같은 방식).
        이번 실기기 버그를 찾는 데 오래 걸린 이유가 「무엇을 보고 그 자리에 섰는지」가
        아무 데도 안 남아서였습니다. 회귀 176 이 이 값을 읽습니다. */
     S.archRead = { pkX: seq[pk].x, outX: outI >= 0 ? seq[outI].x : null,
                    floorUnits, minOutPx: MIN_OUT_PX, browSpanUnits,
                    pkNum: dispV(seq[pk].x / W),
-                   from: outI >= 0 ? "pixel" : eyeR ? "corner" : "floor" };
-    if (outI >= 0) {
+                   outNum: outNum === null ? null : Math.round(outNum * 10) / 10, numOk,
+                   from: outI >= 0 && numOk ? "pixel" : eyeR ? "corner" : tickPx ? "std23" : "floor" };
+    if (outI >= 0 && numOk) {
       setLine("v6", clamp(S.g.v1 - Math.abs(seq[outI].x - cx) / W, 0.02, 0.98));
     } else if (eyeR) {
       /* ② 눈꼬리(outer 랜드마크) 그 자체를 표준값으로
          (원장님: 「대부분의 아치선 경계는 눈꼬리 위에 있는 것을 확인」) */
       setLine("v6", clamp(S.g.v1 - Math.abs(eyeR.corner - cx) / W, 0.02, 0.98));
+    } else if (tickPx) {
+      /* ⭐ v3.3.1 — ③ 표준값 **넘버링 23** (원장님 확정 · 확정 4장 중앙값 22.83) */
+      setLine("v6", clamp(S.g.v1 - ((53.15 - ARCHV_NUM_STD) * tickPx) / W, 0.02, 0.98));
     } else {
-      /* ⭐ v3.2.0 — ③ 랜드마크도 없을 때. 예전에는 이 자리에서 **아무것도 안 해서**
-         위에서 임시로 놓아 둔 **산꼭대기 값(0칸)** 이 그대로 남았습니다 — 원장님이 정하신
-         「3개의 칸 내부로 들어오지 않는다」를 가장 크게 어기는 자리입니다(0칸).
-         이제 산꼭대기에서 **마지노선(3~4칸) 만큼 꼬리 쪽으로** 내보냅니다.
-         ⛔ 이것은 실측값이 아예 없을 때의 최후 표준값입니다 — ②(눈꼬리 실측)를
-            밀지 않는다는 v3.1.0 원칙과 충돌하지 않습니다. */
+      /* v3.2.0 — 눈금 자마저 없을 때: 산꼭대기 + 마지노선(3~4칸).
+         예전에는 여기서 아무것도 안 해서 산꼭대기 값(0칸)이 그대로 남았습니다. */
       setLine("v6", clamp(S.g.v1 - (Math.abs(seq[pk].x - cx) + MIN_OUT_PX) / W, 0.02, 0.98));
     }
   }
+  /* ⭐ v3.3.1 — **점선 진단**: 앱이 읽은 눈썹 윗선을 화면에 그대로 보여 줄 수 있게 남긴다
+     (원장님 확인 2026-08-30: 「점선으로 판독한 방법은 뭐니?」 — 그 점선이 이 seq 입니다).
+     실기기에서만 나는 증상이라, 폰이 만든 점선을 폰 화면에서 직접 봐야 어긋난 지점이
+     보입니다. showArchDots() 가 이 값을 그립니다. ⏸ 원인이 잡히면 떼도 됩니다. */
+  S.archDots = seq.map((p) => ({ x: p.x, top: p.top }));
   return true;
+}
+
+/* ⭐ v3.3.1 — 진단: 앱이 읽은 눈썹 윗선(seq)을 파란 점으로 8초간 표시.
+   render() 와 무관한 별도 SVG 라 다음 render 에 지워지지 않고, 시간이 지나면 스스로 사라진다.
+   주황 = 산꼭대기 · 초록 = 아치선이 실제로 선 자리. 저장본에는 안 찍힌다(exportImage 와 무관). */
+let archDotsTimer = null;
+function showArchDots() {
+  try {
+    const stage = document.getElementById("stage");
+    if (!stage || !S.archDots || !S.archDots.length) return;
+    const { W, H } = S.dim;
+    const old = document.getElementById("archDotsOverlay");
+    if (old) old.remove();
+    clearTimeout(archDotsTimer);
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.id = "archDotsOverlay";
+    svg.setAttribute("width", W); svg.setAttribute("height", H);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:60;";
+    const dot = (x, y, r, fill) => {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", r);
+      c.setAttribute("fill", fill); c.setAttribute("stroke", "#14161B"); c.setAttribute("stroke-width", "0.6");
+      svg.appendChild(c);
+    };
+    for (const p of S.archDots) dot(p.x, p.top, 2.4, "#4C8DFF");
+    const a = S.archRead;
+    if (a) {
+      dot(a.pkX, S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6, 4, "#FFA500");
+      dot(S.g.v6 * W, S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6, 4, "#00C853");
+    }
+    stage.appendChild(svg);
+    archDotsTimer = setTimeout(() => { const el = document.getElementById("archDotsOverlay"); if (el) el.remove(); }, 8000);
+  } catch (e) { /* 진단 표시는 실패해도 조용히 — 본 기능에 영향 없음 */ }
 }
 
 /* ⚠️ v1.70.0 — 아치선이 놓일 수 있는 **눈 기준 구간** (원장님 지시 2026-08-24)
@@ -5164,6 +5227,7 @@ $("btnSnap").onclick = () => {
   if (ok && S.guideOn) { S.intro = false; clearTimeout(introTimer); S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
   render(); updateButtons();
   showNote(ok ? t("ai_drawn") : t("ai_redraw_fail"), 2600);   /* v1.90.0 — 중앙 위, 가이드 안내와 같은 자리 */
+  if (ok) showArchDots();         /* v3.3.1 — 수동 눈썹정렬에도 점선 진단 표시 */
 };
 /* 가이드 켜고 끄기 — 끄면 플로우 즉시 종료. 켠 직후엔 아무 선도 켜지 않는다:
    **처음 움직이는 선**이 플로우의 시작이다 (원장님 지시 2026-08-21) */
@@ -5478,7 +5542,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
-  autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient,
+  autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
