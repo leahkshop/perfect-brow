@@ -372,7 +372,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.3.1";
+const APP_VERSION = "v3.4.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2513,6 +2513,12 @@ function placeLines(lm) {
     const v = aiValueFor(k);
     if (v !== null) g[k] = v;
   }
+  /* ⛔⛔ v3.4.0 — **초기 배치에도 25 상한을 건다** (원장님 확정 2026-08-30:
+     「AI 자동배치에서 절대 있어서는 안 되는 자리 29 혹은 30 같은 위치에 있어서는 안 된다」).
+     `aiValueFor("v6")` 는 눈썹 산 위쪽 랜드마크(105/334)라 사람에 따라 30 을 훌쩍 넘습니다 —
+     실기기에서 34~35 에 서 있던 값이 바로 이것입니다. 판독 전에 여기서 먼저 자릅니다.
+     ⛔ 이 한 줄을 지우지 마세요. */
+  archVCap();
   g.innerAngle = clamp(g.h1 + 0.16, 0.05, 0.95);
 }
 
@@ -3967,7 +3973,31 @@ function autoFromDrawing() {
     const a = seq[Math.max(0, i - 1)].top, b2 = seq[i].top, c2 = seq[Math.min(n - 1, i + 1)].top;
     return (a + b2 + c2) / 3;
   };
-  const lo = Math.max(1, Math.round(n * 0.15)), hi = Math.min(n - 2, Math.round(n * 0.85));
+  /* ⛔⛔⛔ v3.4.0 — **산꼭대기 후보는 내안각(넘버링 40)보다 바깥이어야 한다**
+     (실기기 점선 진단 2026-08-30 · 원장님 화면에서 직접 확인)
+     ───────────────────────────────────────────────────────────────────────────
+     v3.3.1 의 점선 표시로 실기기에서만 나던 증상의 원인이 드러났습니다: **판독 열이 눈썹
+     앞머리(이너 44)를 지나 미간까지 이어지고**, 거기 잔털이 만든 높은점이 진짜 산꼭대기보다
+     9px 더 높게 읽혀 **`pk` 가 미간 쪽(num 45.6)에 섰습니다.** 산꼭대기가 틀리면 아치엣지·
+     아치두께(그 열에서 읽음)와 아치선(그 자리에서 바깥으로 탐색)이 전부 함께 틀어집니다.
+
+     예전 방어는 **`n` 의 15%~85% 라는 「몇 번째 열이냐」** 였습니다. 열이 눈썹 밖까지
+     이어지면 그 비율 창도 같이 밀려서 아무것도 막지 못합니다.
+     이제 **얼굴 기준 넘버링**으로 막습니다 — 아치는 해부학적으로 **내안각(40)보다 안쪽에
+     설 수 없습니다.** 확대율·사진 크기와 무관한 자입니다(확정 4장의 산꼭대기는 27~31).
+     ⛔ 다시 비율(15%)만으로 되돌리지 마세요 — 회귀 178 이 잡습니다.
+     ⚠️ 눈금 자가 없으면(랜드마크·동공 정렬 실패) 예전처럼 비율 창만 씁니다 — 가두지 않는다. */
+  const ARCHPK_NUM_MAX = 40;      // 내안각. 산꼭대기가 이보다 안쪽이면 눈썹이 아니다
+  let lo = Math.max(1, Math.round(n * 0.15));
+  const hi = Math.min(n - 2, Math.round(n * 0.85));
+  {
+    const tk = frontTickPx();
+    if (tk) {
+      /* seq 는 앞머리→꼬리 순이라 index 가 커질수록 num 이 작아진다 */
+      const numAt = (i) => 53.15 - Math.abs(seq[i].x - cx) / tk;
+      while (lo < hi && numAt(lo) > ARCHPK_NUM_MAX) lo++;
+    }
+  }
   let pk = lo;
   for (let i = lo; i <= hi; i++) if (smoothTop(i) < smoothTop(pk)) pk = i;
   const win = Math.max(1, Math.round(n * 0.08));
@@ -4199,7 +4229,7 @@ function autoFromDrawing() {
        모양 B)의 확정 지점이 넘버링으로 30.46 이라 30 에 걸렸기 때문입니다. 31 이어도
        오류값(34~35.4)과는 3.5칸 여유가 있습니다. 더 좁히려면 모양 B 같은 눈썹을 포기해야
        합니다 — 그러지 마세요. */
-    const ARCHV_NUM_LO = 15, ARCHV_NUM_HI = 31, ARCHV_NUM_STD = 23;
+    const ARCHV_NUM_LO = 15, ARCHV_NUM_HI = ARCHV_NUM_MAX, ARCHV_NUM_STD = ARCHV_NUM_23;
     const browSpanUnits = tickPx ? Math.abs(seq[n - 1].x - seq[pk].x) / tickPx : 0;
     const spanT = Math.max(0, Math.min(1, (browSpanUnits - BROW_SPAN_LO) / (BROW_SPAN_HI - BROW_SPAN_LO)));
     const floorUnits = FLOOR_LO + spanT * (FLOOR_HI - FLOOR_LO);
@@ -4260,21 +4290,23 @@ function autoFromDrawing() {
                    floorUnits, minOutPx: MIN_OUT_PX, browSpanUnits,
                    pkNum: dispV(seq[pk].x / W),
                    outNum: outNum === null ? null : Math.round(outNum * 10) / 10, numOk,
-                   from: outI >= 0 && numOk ? "pixel" : eyeR ? "corner" : tickPx ? "std23" : "floor" };
+                   from: outI >= 0 && numOk ? "pixel" : tickPx ? "std23" : "floor" };
     if (outI >= 0 && numOk) {
       setLine("v6", clamp(S.g.v1 - Math.abs(seq[outI].x - cx) / W, 0.02, 0.98));
-    } else if (eyeR) {
-      /* ② 눈꼬리(outer 랜드마크) 그 자체를 표준값으로
-         (원장님: 「대부분의 아치선 경계는 눈꼬리 위에 있는 것을 확인」) */
-      setLine("v6", clamp(S.g.v1 - Math.abs(eyeR.corner - cx) / W, 0.02, 0.98));
     } else if (tickPx) {
-      /* ⭐ v3.3.1 — ③ 표준값 **넘버링 23** (원장님 확정 · 확정 4장 중앙값 22.83) */
+      /* ⛔⛔ v3.4.0 — **못 읽거나 25 를 넘으면 무조건 23** (원장님 확정 2026-08-30:
+         「25가 넘어가는 자리에 있어 오류가 보고될 경우 23으로 자동위치 채택한다,
+          절대위치로 못 받는다. 오류로 못 읽으면 23」).
+         ❌ **눈꼬리 랜드마크 대체는 폐지했습니다** — 눈꼬리는 사람에 따라 25 를 넘는 자리라
+            「절대위치로 못 받는다」는 지시와 충돌합니다. 판독이 못 미더우면 답은 23 하나입니다.
+         ⛔ 눈꼬리 대체를 되살리지 마세요 — 회귀 177 이 잡습니다. */
       setLine("v6", clamp(S.g.v1 - ((53.15 - ARCHV_NUM_STD) * tickPx) / W, 0.02, 0.98));
     } else {
       /* v3.2.0 — 눈금 자마저 없을 때: 산꼭대기 + 마지노선(3~4칸).
          예전에는 여기서 아무것도 안 해서 산꼭대기 값(0칸)이 그대로 남았습니다. */
       setLine("v6", clamp(S.g.v1 - (Math.abs(seq[pk].x - cx) + MIN_OUT_PX) / W, 0.02, 0.98));
     }
+    archVCap();   /* ⛔ v3.4.0 — 어느 길로 왔든 25 넘으면 23 (위 archVCap 주석) */
   }
   /* ⭐ v3.3.1 — **점선 진단**: 앱이 읽은 눈썹 윗선을 화면에 그대로 보여 줄 수 있게 남긴다
      (원장님 확인 2026-08-30: 「점선으로 판독한 방법은 뭐니?」 — 그 점선이 이 seq 입니다).
@@ -4317,6 +4349,39 @@ function showArchDots() {
     stage.appendChild(svg);
     archDotsTimer = setTimeout(() => { const el = document.getElementById("archDotsOverlay"); if (el) el.remove(); }, 8000);
   } catch (e) { /* 진단 표시는 실패해도 조용히 — 본 기능에 영향 없음 */ }
+}
+
+/* ⛔⛔⛔ v3.4.0 — **아치선은 넘버링 25를 절대 넘지 않는다. 넘으면 23.**
+   (원장님 확정 2026-08-30 · 실기기 사진 5장으로 직접 확인)
+   ───────────────────────────────────────────────────────────────────────────
+   원장님 말씀 그대로: 「사진이 들어오는데 모두 최대 25 이상을 넘어가지 않아. 사진 4와 5는
+   같은 사진인데 비율이 커지나 작아지나 25 이상을 넘어가지 않고. 그러니 상한선 25로 강행.
+   25가 넘어가는 자리에 있어 오류가 보고될 경우 23으로 자동위치 채택한다, 절대위치로 못
+   받는다. 오류로 못 읽으면 23. 자동 범위계산이 25 이상 상한을 넘으면 23. 이는 AI 자동배치에서
+   절대 있어서는 안 되는 자리 29 혹은 30 같은 위치에 있어서는 안 되는 오류를 범하면 안 되기
+   때문이다」
+
+   실기기 5장 실측(아치선): 21 · 24 · 23 · 23 · 24 — 전부 25 이하. 4·5번은 **같은 사진을
+   확대율만 달리한 것**인데 둘 다 25 이하였습니다. 반면 고장난 판독은 34~35 에 섰습니다.
+
+   ⛔ 이 자는 **모든 경로에 걸립니다** — 픽셀 판독·눈꼬리 랜드마크·랜드마크 초기배치
+      (`placeLines`) 전부. 29·30 같은 자리는 어떤 길로도 화면에 나오면 안 됩니다.
+   ⚠️ 눈금 자가 없으면(랜드마크·동공 정렬 실패) 아무것도 하지 않습니다 — 잴 수 없으면 가두지 않는다.
+   ⚠️ 합성 회귀 픽스처(모양 A 확대본 26.3 · 모양 B 30.3)는 이 자에 걸려 23 으로 갑니다.
+      원장님 규칙이 절대값이므로 **픽스처 기대값을 규칙에 맞춰 고쳤습니다** (회귀 90·91·177). */
+const ARCHV_NUM_MAX = 25;   // 아치선 절대 상한 (원장님 확정)
+const ARCHV_NUM_23  = 23;   // 넘으면 무조건 이 자리
+function archVCap() {
+  const { W } = S.dim, g = S.g;
+  if (!W) return false;
+  const tk = frontTickPx();
+  if (!tk) return false;
+  const cx = g.v1 * W;
+  const num = 53.15 - Math.abs(g.v6 * W - cx) / tk;
+  if (num <= ARCHV_NUM_MAX) return false;
+  setLine("v6", clamp(g.v1 - ((53.15 - ARCHV_NUM_23) * tk) / W, 0.02, 0.98));
+  if (S.archRead) { S.archRead.capped = true; S.archRead.wasNum = Math.round(num * 10) / 10; }
+  return true;
 }
 
 /* ⚠️ v1.70.0 — 아치선이 놓일 수 있는 **눈 기준 구간** (원장님 지시 2026-08-24)

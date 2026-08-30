@@ -2382,12 +2382,24 @@ if (RUN(5)) {
     return out;
   };
   /* 허용 오차도 **확대율을 따라간다** — 사진을 키우면 같은 오차가 픽셀로는 커집니다 */
-  const judge = (o, z = 1) => o.ok
+  /* ⛔ v3.4.0 — 아치선은 **넘버링 25 상한**(넘으면 23)이 절대 규칙이 되었습니다
+     (원장님 확정 2026-08-30 · 실기기 5장 전부 25 이하 확인). 합성 픽스처 중 판독이
+     25 를 넘는 것(모양 A 확대본 26.3 · 모양 B 30.3)은 규칙대로 23 으로 갑니다 —
+     그 두 건은 아치선을 `capOk` 로 따로 검사하고 judge 에서는 뺍니다.
+     ⛔ 픽스처 기대값을 되살리려고 상한을 풀지 마세요 — 29·30 자리가 다시 나옵니다. */
+  /* v3.4.0 — 판독이 25 를 넘어 23 으로 갔는지 확인 (from=std23 또는 최종 캡) */
+  const capOk = (o) => {
+    const a = o.archRead;
+    if (!a) return false;
+    if (a.capped === true && (a.wasNum ?? 0) > 25) return true;
+    return a.from === "std23" && a.numOk === false;
+  };
+  const judge = (o, z = 1, skipArchV = false) => o.ok
     && near(o.frontPx, o.exp.front, 5 * z) && near(o.ftPx, o.exp.ft, 5 * z)
     && near(o.archPx, o.exp.arch, 5 * z) && near(o.atPx, o.exp.at, 5 * z)
     && near(o.tailPx, o.exp.tail, 5 * z)
     && near(o.innerPx, Math.min(o.exp.inner, o.innerCapPx), 9 * z) && near(o.outerPx, o.exp.outer, 9 * z)
-    && near(o.archVPx, o.exp.archV, 12 * z) && o.mirrorOk
+    && (skipArchV || near(o.archVPx, o.exp.archV, 12 * z)) && o.mirrorOk
     && o.pivotUntouched && o.vBase === false;
   const say = (o) => `앞머리 ${o.frontPx.toFixed(0)}(${o.exp.front.toFixed(0)}) / 앞두께 ${o.ftPx.toFixed(0)}(${o.exp.ft.toFixed(0)}) / `
     + `아치 ${o.archPx.toFixed(0)}(${o.exp.arch.toFixed(0)}) / 아치두께 ${o.atPx.toFixed(0)}(${o.exp.at.toFixed(0)}) / 꼬리 ${o.tailPx.toFixed(0)}(${o.exp.tail.toFixed(0)}) / `
@@ -2405,11 +2417,17 @@ if (RUN(5)) {
      ⚠️ 확대율을 더 올리지 마세요 — 눈썹 꼬리가 캔버스 밖으로 나가면 앱이 볼 수 없어
      아우터가 화면 끝에 붙습니다(그게 맞는 동작입니다). 실제 앱은 `fitBrowsInFrame()` 이 막아 줍니다. */
   const o90 = await runDraw(true, fd, { zoom: 1.35, rot: 0, ox: 0.03, oy: -0.02 }, SHAPE_A);
-  check("90. 드로잉 자동 맞춤 — 사진을 확대·이동해도 같은 드로잉 위에 붙는다", judge(o90, 1.35), say(o90));
+  /* ⛔ v3.4.0 — 이 확대본은 아치선 판독이 num 26.3 이라 **25 상한에 걸려 23 으로** 갑니다.
+     나머지 선(앞머리·앞두께·아치·아치두께·꼬리·이너·아우터)은 그대로 붙어야 합니다. */
+  check("90. 드로잉 자동 맞춤 — 사진을 확대·이동해도 같은 드로잉 위에 붙는다 (아치선은 25 상한 적용)",
+    judge(o90, 1.35, true) && capOk(o90), say(o90) + ` · 아치선 ${o90.archRead && o90.archRead.from}(판독 num ${o90.archRead && o90.archRead.outNum})`);
   /* 91. 드로잉 모양이 바뀌면 선도 따라가야 한다 — 아치가 안쪽으로 옮겨간 눈썹.
      ⚠️ 「드로잉이 바뀌어도 각 드로잉 위에 알맞은 선이 자동 위치해야 한다」(원장님, 2026-08-20) */
   const o91 = await runDraw(true, fb, null, SHAPE_B);
-  check("91. 드로잉 자동 맞춤 — 드로잉 모양이 달라지면(아치가 안쪽) 선도 그 모양을 따라간다", judge(o91), say(o91));
+  /* ⛔ v3.4.0 — 모양 B 는 아치가 안쪽이라 아치선 판독이 num 30.3 — **25 상한에 걸려 23**.
+     원장님 확정 규칙이 절대값이므로 예전 기대값(234)은 더 이상 쓰지 않습니다. */
+  check("91. 드로잉 자동 맞춤 — 드로잉 모양이 달라지면(아치가 안쪽) 선도 그 모양을 따라간다 (아치선은 25 상한 적용)",
+    judge(o91, 1, true) && capOk(o91), say(o91) + ` · 아치선 ${o91.archRead && o91.archRead.from}(판독 num ${o91.archRead && o91.archRead.outNum})`);
   /* 92. ⚠️ 원장님 스크린샷(2026-08-20)에서 실제로 난 문제.
      눈썹 아래 **쌍꺼풀 선**이 눈썹에 딸려 붙어 앞두께가 피부까지 내려갔습니다.
      이제 "잉크가 비슷한 두 줄"만 테두리로 보므로, 옅은 주름은 붙지 않습니다.
@@ -4306,12 +4324,15 @@ if (RUN(5)) {
        (거부 경로는 실사진으로 확인 — 컨테이너에서 34 를 내는 픽스처를 만들려면 판독 자체를
         속여야 해서, 속인 픽스처는 잠그는 것이 없습니다.) */
     {
-      const aA = o87.archRead, aB = o91.archRead;
-      const okA = aA && aA.from === "pixel" && aA.numOk && aA.outNum >= 15 && aA.outNum <= 31;
-      const okB = aB && aB.from === "pixel" && aB.numOk && aB.outNum >= 15 && aB.outNum <= 31;
-      check("177. 아치선 넘버링 상한선 — 정상 판독은 num 15~31 안에서 pixel 로 통과 (모양 A·B)",
-        okA && okB,
-        `A ${aA ? aA.from + " num" + aA.outNum : "archRead 없음"} · B ${aB ? aB.from + " num" + aB.outNum : "archRead 없음"}`);
+      const aA = o87.archRead, aB = o91.archRead, aZ = o90.archRead;
+      const numOfV6 = (o) => { const a = o.archRead; return a && a.minOutPx && a.floorUnits
+        ? 53.15 - Math.abs(o.archVPx - o.cxPx) / (a.minOutPx / a.floorUnits) : null; };
+      const okA = aA && aA.from === "pixel" && !aA.capped && aA.outNum <= 25;   // 25 이하 → 판독 그대로
+      const okZ = capOk(o90) && Math.abs(numOfV6(o90) - 23) < 0.6;   // 26.3 → 23
+      const okB = capOk(o91) && Math.abs(numOfV6(o91) - 23) < 0.6;   // 30.3 → 23
+      check("177. 아치선 절대 상한 — num 25 이하는 판독 그대로 · 넘으면 무조건 23",
+        okA && okZ && okB,
+        `A ${aA && aA.outNum}(${aA && aA.from}) · A확대 ${aZ && aZ.outNum}→${numOfV6(o90) && numOfV6(o90).toFixed(1)}(${aZ && aZ.from}) · B ${aB && aB.outNum}→${numOfV6(o91) && numOfV6(o91).toFixed(1)}(${aB && aB.from})`);
     }
   }
 
