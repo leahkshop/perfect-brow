@@ -372,7 +372,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.5.0";
+const APP_VERSION = "v3.5.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2860,6 +2860,31 @@ function columnRuns(img, x, y0, y1, cy, contrast) {
     const a = runs[i], b = runs[si];
     const closer = cy !== null && Math.abs(mid(a) - cy) < Math.abs(mid(b) - cy);
     if (a.ink > b.ink * 1.15 || (a.ink > b.ink * 0.85 && closer)) si = i;
+  }
+  /* ⭐⭐⭐ v3.5.1 — **씨앗이 창 천장에 닿았으면 천장에 안 닿은 덩어리로 다시 고른다**
+     (원장님 지시 2026-08-30 · 실사진 실측)
+     관자놀이 **머리카락**이 눈썹 꼬리 위를 덮은 열에서는 잉크가 머리카락 쪽이 3~4배
+     많습니다. 그래서 씨앗이 머리카락이 되고, 그 열은 `edge`(=머리카락)로 찍혀
+     `trimOutside` ⓒ 가 통째로 버립니다 — **꼬리가 아직 그 열에 있는데도** 판독이
+     한두 열 일찍 끝났습니다. 실측(원장님 사진, 꼬리 끝 canvas x=84.4):
+       x 92  씨앗=꼬리          → 판독됨 (여기서 멈춤)
+       x 86  씨앗=머리카락 1072 · **꼬리 288 (core 54)** → 버려짐  ← 여기까지가 정답
+       x 80  씨앗=머리카락 1825 · 꼬리 71 (core 31)      → 꼬리 끝 바깥, 버리는 게 맞음
+     이 앱의 원칙은 이미 「창 천장으로 빠져나가는 것은 눈썹이 아니라 머리카락」입니다
+     (v1.66.0). 그렇다면 **천장에 닿은 덩어리를 씨앗으로 삼아서도 안 됩니다.**
+     ⛔ 조건을 빼지 마세요 — 바꾸는 것은 ① 씨앗이 천장에 닿았고 ② 대신 고른 덩어리가
+        눈썹 중심(cy)에 **더 가까울 때**뿐입니다. 머리카락만 있는 열은 그대로 머리카락입니다
+        (회귀 115·116·131 이 지킵니다). */
+  if (cy !== null && runs[si].top <= y0 + 1) {
+    let alt = -1;
+    for (let i = 0; i < runs.length; i++) {
+      if (runs[i].top <= y0 + 1) continue;
+      if (alt < 0) { alt = i; continue; }
+      const a = runs[i], b = runs[alt];
+      const closer = Math.abs(mid(a) - cy) < Math.abs(mid(b) - cy);
+      if (a.ink > b.ink * 1.15 || (a.ink > b.ink * 0.85 && closer)) alt = i;
+    }
+    if (alt >= 0 && Math.abs(mid(runs[alt]) - cy) < Math.abs(mid(runs[si]) - cy)) si = alt;
   }
   return { x, runs, si, N };
 }
