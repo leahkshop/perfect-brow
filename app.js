@@ -372,7 +372,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.4.1";
+const APP_VERSION = "v3.5.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2844,7 +2844,9 @@ function columnRuns(img, x, y0, y1, cy, contrast) {
         for (let i = t; i <= b; i++) { const d = cut - v[i]; if (d > pv) { pv = d; pk = i; } }
         let cb = pk; while (cb + 1 <= b && cut - v[cb + 1] >= CORE_DROP * pv) cb++;
         let ct = pk; while (ct - 1 >= t && cut - v[ct - 1] >= CORE_UP * pv) ct--;
-        runs.push({ top: y0 + t, bot: y0 + b, coreTop: y0 + ct, coreBot: y0 + cb, ink, len });
+        /* ⭐ v3.5.0 — `peak` = 이 덩어리에서 **가장 진한 점**이 문턱(cut)보다 얼마나 더 어두운가.
+           `contrast + peak` 가 곧 **피부 대비 절대 어둡기**입니다 — 꼬리 끝 판정이 이걸 씁니다. */
+        runs.push({ top: y0 + t, bot: y0 + b, coreTop: y0 + ct, coreBot: y0 + cb, ink, len, peak: pv });
       }
       t = -1;
     }
@@ -2900,7 +2902,8 @@ function keepBand(pts) {
     const s = [keep[Math.max(0, i - 1)][key], keep[i][key], keep[Math.min(keep.length - 1, i + 1)][key]].sort((a, b) => a - b);
     return s[1];
   };
-  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot"), ink: p.ink, dark: p.dark, edge: p.edge }));
+  /* ⭐ v3.5.0 — `core`(피부 대비 절대 어둡기)도 그대로 넘긴다. 꼬리 끝 판정이 씁니다 */
+  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot"), ink: p.ink, dark: p.dark, core: p.core, edge: p.edge }));
 }
 
 /* ⚠️ v1.66.0 — **머리카락·그림자 방어** (원장님 지시 2026-08-23)
@@ -2995,6 +2998,23 @@ function trimOutside(band, b) {
    ⛔ 바깥 문턱을 0.4 아래로 내리지 마세요 — 「얇은털 따라가는것 금지」(2026-08-24)가 깨집니다. */
 const INNER_DARK = 0.25;   // 안쪽(앞머리) — 이 비율 이상이면 아직 「색이 있다」
 const OUTER_DARK = 0.5;    // 바깥(꼬리) — 머리카락·번짐이 있으므로 엄격하게
+/* ⭐⭐⭐ v3.5.0 — **꼬리 끝은 「검은 점이 아직 있는가」로 봅니다** (원장님 지시 2026-08-30)
+   ───────────────────────────────────────────────────────────────────────────
+     「원래는 드로잉이 끝나는 위치는 아치선에서 밖으로 뻗어나오면서 검은 드로잉이 끝나고
+       피부색으로 시작되는 지점의 검은라인 끝이 눈꼬리 끝이다」
+   지금까지 바깥 문턱은 `dark`(그 열 덩어리의 **평균** 진하기)만 봤습니다. 꼬리는 털이
+   성글어져 덩어리 평균이 먼저 떨어지므로, **아직 새까만 털이 남아 있는데도** 끊겼습니다.
+   원장님 사진 실측 (아우터가 선 자리 x=813 기준, 중앙값 대비 비율):
+       x 810  평균 0.58  ← 문턱 0.5 를 겨우 못 넘어 여기서 멈췄습니다
+       x 800  평균 0.82   · 790 0.79 · 780 0.55 · 770 0.59  ← 아직 검은 눈썹
+       x 760  평균 0.13                                     ← 진짜 피부
+   `core` = **피부보다 얼마나 어두운 점이 있는가**(가장 진한 점 기준)로 다시 재면:
+       810 0.84 · 800 1.19 · 790 1.00 · 780 0.82 · 770 0.55 · 760 0.25 ← 여기서 끊깁니다
+   그래서 바깥 문턱은 **평균 또는 core** 중 하나만 넘으면 통과입니다 (넓히는 쪽으로만 작동).
+   ⛔ core 만 보도록 바꾸지 마세요 — 넓고 옅은 **번짐**은 core 가 절대값으로는 진해서
+      그대로 통과합니다. 중앙값 대비 비율(0.5)이 번짐(0.31)을 걸러 냅니다. 회귀 123.
+   ⛔ 절대 바닥(DRAW_CONTRAST)을 빼지 마세요 — 맨살로 걸어 나갑니다. 회귀 122. */
+const OUTER_CORE = 0.5;    // 바깥(꼬리) — core 가 중앙값의 이 비율 이상이면 아직 「검은 선」
 const GROW_STEP = 0.55;    // 중심이 두께의 이 비율 넘게 어긋나면 이어진 것이 아니다
 const GROW_MAX = 0.18;     // 판독 폭의 이 비율까지만 이어 붙인다 (폭주 방지)
 /* 한쪽 끝을 이어 붙인다. `toInner` 면 안쪽(코 방향), 아니면 바깥(꼬리 방향).
@@ -3008,9 +3028,13 @@ function growEnd(band, kept, toInner) {
   const edge = goRight ? last : first;
   const mid = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)] || 0; };
   const medDark = mid(band.map((p) => p.dark || 0));
+  const medCore = mid(band.map((p) => p.core || 0));
   const th = mid(band.map((p) => p.bot - p.top)) || 1;
   const limX = GROW_MAX * (Math.abs(last.x - first.x) || 1);
   const darkMin = (toInner ? INNER_DARK : OUTER_DARK) * medDark;
+  /* v3.5.0 — 바깥만 core 기준을 함께 봅니다 (위 주석). 안쪽은 예전 그대로 — 이너는
+     이제 `innerDecide` 가 정하고, 여기를 건드리면 눈꺼풀 그늘 문제가 되돌아옵니다. */
+  const coreMin = toInner || medCore <= 0 ? null : Math.max(DRAW_CONTRAST, OUTER_CORE * medCore);
   const pool = goRight
     ? kept.filter((p) => p.x > edge.x).sort((a, b2) => a.x - b2.x)
     : kept.filter((p) => p.x < edge.x).sort((a, b2) => b2.x - a.x);
@@ -3020,7 +3044,8 @@ function growEnd(band, kept, toInner) {
     if (Math.abs(p.x - edge.x) > limX) break;
     if (toInner && (innerRight ? p.x >= cx : p.x <= cx)) break;   // 센터를 넘지 않는다
     if (p.edge) break;                                            // 창 천장에 닿은 열 = 머리카락
-    if ((p.dark || 0) < darkMin) break;                           // 색이 끝났다
+    /* 색이 끝났다 — 평균(dark) 도 core 도 못 넘으면 여기가 검은 드로잉의 끝입니다 */
+    if ((p.dark || 0) < darkMin && !(coreMin !== null && (p.core || 0) >= coreMin)) break;
     if (p.bot - p.top > th * 1.6) break;                          // 갑자기 두꺼워지면 다른 것
     const c0 = (prev.top + prev.bot) / 2, c1 = (p.top + p.bot) / 2;
     if (Math.abs(c1 - c0) > Math.max(GROW_STEP * th, 6)) break;
@@ -3855,6 +3880,8 @@ function readDrawing(img, contrast, side) {
     const bot = !usingPair && sd0.coreBot !== undefined ? Math.min(r.bot, sd0.coreBot) : r.bot;
     const top = !usingPair && sd0.coreTop !== undefined ? Math.max(r.top, sd0.coreTop) : r.top;
     return { x: c.x, top, bot, ink: sd0.ink,
+             /* ⭐ v3.5.0 — core = 피부 대비 절대 어둡기(가장 진한 점). 꼬리 끝 판정용 */
+             core: contrast + (sd0.peak || 0),
              dark: sd0.ink / Math.max(1, sd0.len), edge: r.top <= y0 + 1 };
   });
   pts.sort((p, q) => p.x - q.x);
@@ -4061,9 +4088,15 @@ function autoFromDrawing() {
   {
     const darks = seqT.map((p) => p.dark || 0).slice().sort((a, b) => a - b);
     const medDark = darks[Math.floor(darks.length / 2)] || 0;
+    /* ⭐ v3.5.0 — `growEnd` 와 **같은 잣대**입니다: 평균(dark) 또는 core 중 하나만 넘으면
+       아직 검은 드로잉입니다. 여기만 예전 기준으로 두면 이어 붙인 열이 도로 잘립니다. */
+    const cores = seqT.map((p) => p.core || 0).slice().sort((a, b) => a - b);
+    const medCore = cores[Math.floor(cores.length / 2)] || 0;
+    const coreMin = medCore > 0 ? Math.max(DRAW_CONTRAST, TAIL_INK * medCore) : null;
     if (medDark > 0) {
       for (let i = nT - 1; i >= Math.floor(nT * 0.45); i--) {
-        if ((seqT[i].dark || 0) >= TAIL_INK * medDark) { tailIdx = i; break; }
+        const p = seqT[i];
+        if ((p.dark || 0) >= TAIL_INK * medDark || (coreMin !== null && (p.core || 0) >= coreMin)) { tailIdx = i; break; }
       }
     }
     const t0 = Math.max(0, tailIdx - Math.round(END * (nT - 1)));
