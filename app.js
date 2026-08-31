@@ -89,6 +89,8 @@ const I18N = {
     editor_preset_load: "프리셋",
     editor_photo_lock: "사진잠금",
     editor_photo_unlock: "잠금해제",
+    editor_exposure: "EXPOSURE",
+    editor_brightness: "밝기",
     editor_export: "사진저장",
     editor_change_photo: "사진변경",
     editor_rotate: "화면가로",
@@ -255,6 +257,8 @@ const I18N = {
     editor_preset_load: "Presets",
     editor_photo_lock: "Lock",      /* v1.92.0 — 짧게: 가운데 잠금이 센터선 위에 남아야 합니다 */
     editor_photo_unlock: "Unlock",
+    editor_exposure: "EXPOSURE",
+    editor_brightness: "Brightness",
     editor_export: "Save",          /* v1.92.0 — 짧게: 왼쪽 도크가 넓어지면 가운데 잠금을 밀어냅니다 */
     editor_change_photo: "Change",
     editor_rotate: "Landscape",
@@ -372,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.6.1";
+const APP_VERSION = "v3.7.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -790,6 +794,8 @@ const S = {
   pickMode: false,       // 동공 2점 지정 모드
   pick: [],
   picking: false,        // 사진 선택 시트가 열려 있는 동안 (v1.27.0) — 그때만 세로로 되돌린다
+  exposureBrightnessMode: "exposure",   // "exposure" 또는 "brightness"
+  exposureBrightnessValue: 0,           // -100 ~ 100
 };
 
 /* ═══════════ DOM ═══════════ */
@@ -1847,6 +1853,7 @@ function updateButtons() {
   $("btnLock").classList.toggle("on", S.locked);
   $("btnGuide").classList.toggle("on", !!S.guideOn);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
+  updateExposureBrightnessButtons();
   updateUndoBtn();
 }
 
@@ -4661,6 +4668,8 @@ function loadPhoto(file) {
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
     S.pick = [];
+    S.exposureBrightnessMode = "exposure";
+    S.exposureBrightnessValue = 0;
     /* v1.47.0 원장님 지시 — 「가이드는 앱이 켜지면 항상 시작 상태로 유지, 사용자가 클릭할 때만 꺼짐」
        사진이 올라와 편집이 시작될 때마다 가이드 ON + 이너부터. 끄는 건 가이드 버튼 클릭뿐. */
     S.guideOn = true;
@@ -4674,9 +4683,12 @@ function loadPhoto(file) {
     startIntro();               /* 초기화셋팅 ①② — 처음 열었을 때 · 사진을 다시 불러왔을 때 */
     clearHist();                 /* 새 사진 = 되돌리기 기록 초기화 */
     show("editor");
+    $("exposureBrightnessSlider").value = 0;  /* EXPOSURE/밝기 슬라이더 초기화 */
+    photo.style.filter = "";                   /* 필터 초기화 */
     requestAnimationFrame(() => {
       measure();
       render();
+      updateButtons();
       runFaceAI();
     });
   };
@@ -5256,6 +5268,61 @@ function toggleLock() {
   toast(S.locked ? t("locked_msg") : t("unlocked_msg"));
 }
 $("btnLock").onclick = toggleLock;
+
+/* ═══ EXPOSURE/밝기 조절 (v1.96.0) ═══════════════════════════════
+   고객이 사진을 더 잘 보기 위해 라이브 조절 */
+function applyExposureBrightness() {
+  const v = S.exposureBrightnessValue;
+  if (v === 0) {
+    photo.style.filter = "";
+    return;
+  }
+
+  if (S.exposureBrightnessMode === "exposure") {
+    /* EXPOSURE: 명도 변화 (값이 클수록 밝아짐) */
+    const exposure = 1 + (v / 100);
+    photo.style.filter = `brightness(${exposure})`;
+  } else {
+    /* 밝기: 명도 + 대비 조절 (더 자연스러운 밝기 조절) */
+    const brightness = 100 + v;
+    photo.style.filter = `brightness(${brightness}%)`;
+  }
+}
+
+function toggleExposureMode() {
+  S.exposureBrightnessMode = "exposure";
+  S.exposureBrightnessValue = 0;
+  $("exposureBrightnessSlider").value = 0;
+  updateExposureBrightnessButtons();
+  applyExposureBrightness();
+  toast(t("editor_exposure"));
+}
+
+function toggleBrightnessMode() {
+  S.exposureBrightnessMode = "brightness";
+  S.exposureBrightnessValue = 0;
+  $("exposureBrightnessSlider").value = 0;
+  updateExposureBrightnessButtons();
+  applyExposureBrightness();
+  toast(t("editor_brightness"));
+}
+
+function updateExposureBrightnessButtons() {
+  $("btnExposure").classList.toggle("on", S.exposureBrightnessMode === "exposure");
+  $("btnBrightness").classList.toggle("on", S.exposureBrightnessMode === "brightness");
+}
+
+$("btnExposure").onclick = toggleExposureMode;
+$("btnBrightness").onclick = toggleBrightnessMode;
+
+$("exposureBrightnessSlider").addEventListener("input", (e) => {
+  S.exposureBrightnessValue = parseInt(e.target.value, 10);
+  applyExposureBrightness();
+});
+
+$("exposureBrightnessSlider").addEventListener("change", () => {
+  /* 필요시 여기에 저장 로직 추가 */
+});
 
 $("btnExport").onclick = exportImage;
 
