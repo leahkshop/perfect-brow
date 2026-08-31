@@ -192,17 +192,6 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
 /* v1.95.0 — 위아래 바가 왼쪽으로 가서 스크림도 **왼쪽**에 깝니다 (원장님 지시 2026-08-29) */
 .scrim-l{top:0;bottom:0;left:0;width:calc(var(--redge) + 62px);
   background:linear-gradient(to right,var(--scrim) 0%,var(--scrim-m) 55%,rgba(6,8,13,0) 100%)}
-/* ⭐ v3.8.0 — 착시제거 (원장님 지시 2026-08-31). 눈꺼풀·눈주름·눈 크기 때문에 생기는
-   동공-눈썹 밸런스 착시를 없애려고, 눈+눈썹만 남기고 나머지를 흐리게·톤다운합니다.
-   photo 에 CSS transform(줌/이동/회전)이 걸려도 흔들리지 않도록, backdrop-filter 로
-   "지금 화면에 보이는 대로" 뒤를 흐리는 방식을 씁니다 — photo 를 복제해 따로 옮기지 않습니다.
-   mask 는 stage 좌표계(0~W, 0~H)에 고정된 SVG data URI 를 JS 가 매 렌더마다 다시 그립니다
-   (updateIllusionMask() · 흰색=흐려짐 · 검정=원본 그대로). */
-#illusionDim{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .15s;
-  -webkit-backdrop-filter:blur(9px) saturate(.32) brightness(.5);
-  backdrop-filter:blur(9px) saturate(.32) brightness(.5);
-  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:100% 100%;mask-size:100% 100%}
-#illusionDim.on{opacity:1}
 #guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 /* ⚠️ v1.55.0 지시등 (원장님 지시 2026-08-22) — 「느린 블링킹 한 번, 4초에 한 번씩
    다음 움직임 전까지 계속 반복. 고유색으로 밝았다 조금 투명해진다」
@@ -415,19 +404,6 @@ body.land.compact #brightnessCtrl{width:min(35vw,300px)}
    `[hidden]{display:none}` 을 이겨서 드래그바가 항상 보였습니다(원장님 신고 2026-08-31).
    특이도를 올려 hidden 이 반드시 이기게 합니다. */
 #brightnessCtrl[hidden]{display:none}
-/* v3.8.0 — 밝기 버튼을 조금 작게 (착시제거 버튼과 공간을 나눔, 원장님 지시 2026-08-31) */
-#btnBrightness.small{min-width:52px;padding-left:6px;padding-right:6px}
-/* v3.8.0 — 착시제거 도크는 밝기 도크 왼쪽에 붙습니다. `.bright-dock` 과 같은 이유로
-   여기 transform 값도 JS 로드 전 잠깐 보일 초기값일 뿐입니다(alignCenterDock() 이 매
-   프레임 밝기 도크의 x 이동값에서 자기 폭+8px 를 더 빼서 재배치합니다). */
-.illusion-dock{position:absolute;left:50%;bottom:calc(var(--safe-b) + 8px);z-index:30;
-  transform:translateX(-260%)}
-body:not(.land) .illusion-dock{bottom:calc(var(--safe-b) + 112px)}
-#illusionCtrl{position:absolute;left:50%;bottom:calc(100% + 8px);width:max(46vw,220px);
-  transform:translateX(-50%)}
-body.land.compact #illusionCtrl{width:min(35vw,300px)}
-/* ⚠️ #brightnessCtrl 과 같은 함정 — 특이도를 올려 hidden 이 반드시 이기게 합니다. */
-#illusionCtrl[hidden]{display:none}
 /* v3.7.0 — 밝기 조절은 태양 버튼으로 활성화, posctl.axis-h 스타일 사용 */
 /* 즐겨찾기 버튼 (v1.29.0) — **프리셋 버튼보다 낮고 길쭉하게.**
    크기 차이로 "프리셋에 딸린 목록"임을 표현합니다. 프리셋 버튼 크기는 그대로 둡니다.
@@ -478,11 +454,6 @@ body.land.compact #editor .favrow button i, body.land.compact #editor .favrow bu
    fitDocks() 가 실제로 재 보고 좁으면 dock-tight → dock-min 순서로 줄입니다. ⛔ 고정 px 로 되돌리지 마세요. */
 body.dock-tight .menurow button{min-width:44px;padding:0 4px;font-size:8.5px}
 body.dock-tight #btnExport, body.dock-tight #btnChange, body.dock-tight #btnLock{min-width:50px !important}
-/* v3.8.0 — 밝기·착시제거 도크는 착시제거가 새로 생기며 폭이 셋(잠금 포함)으로 늘었습니다.
-   `body.land.compact #editor .menurow button`(52px, ID 특이도)가 dock-tight/dock-min 의
-   일반 규칙(44px/36px)을 이겨 좁은 가로 화면에서 세 도크가 겹쳤습니다(디버그 스크립트로 확인,
-   2026-08-31) — 여기서도 !important + ID 로 반드시 이기게 합니다. */
-body.dock-tight #btnBrightness, body.dock-tight #btnIllusion{min-width:44px !important;padding:0 4px}
 body.dock-tight .dgap{width:6px}
 body.dock-tight .barrow{min-width:114%}
 body.dock-tight #btnSnap{min-width:46px;padding:0 5px}
@@ -492,8 +463,6 @@ body.dock-min .menurow button{min-width:36px;padding:0 3px}
 body.dock-min .menurow button em{display:none}
 body.dock-min #btnLock em{display:block;font-size:8px}
 body.dock-min #btnExport, body.dock-min #btnChange, body.dock-min #btnLock{min-width:40px !important}
-/* v3.8.0 — 위 dock-tight 주석과 같은 이유. dock-min 에서는 더 좁게. */
-body.dock-min #btnBrightness, body.dock-min #btnIllusion{min-width:34px !important;padding:0 3px}
 body.dock-min .dgap{width:4px}
 body.dock-min .barrow{min-width:104%}
 body.dock-min #btnSnap{min-width:38px;padding:0 4px}
@@ -872,8 +841,6 @@ body:not(.land) #railLang{display:none}
 <section id="editor" class="screen">
   <div class="stage" id="stage">
     <img id="photo" alt="" />
-    <!-- 착시제거 (v3.8.0) — 눈+눈썹만 원본, 나머지는 흐리고 톤다운. 평소엔 opacity:0 -->
-    <div id="illusionDim"></div>
     <!-- 컨트롤 영역 어둡게 (v1.16.0) — 가이드 SVG 보다 아래에 두어 선은 그대로 밝게 보인다 -->
     <div class="scrim scrim-b"></div>
     <div class="scrim scrim-l"></div>
@@ -983,28 +950,13 @@ body:not(.land) #railLang{display:none}
     </div>
     <!-- 밝기 도크 (v3.7.1) — 사진잠금 왼쪽에 붙는다. 드래그바(#brightnessCtrl)는 태양 버튼
          "위"에 절대배치로 뜨는 팝업이라 평소엔 자리를 차지하지 않는다(항상 숨김 · 누르면 생성 ·
-         다시 누르면 숨김 — toggleBrightnessMode()). v3.8.0 부터 폭이 조금 줄어 착시제거 버튼
-         자리를 나눠 준다(#btnBrightness.small). -->
+         다시 누르면 숨김 — toggleBrightnessMode()). -->
     <div class="menurow bright-dock" id="brightnessDock">
       <div id="brightnessCtrl" class="posctl axis-h" hidden>
         <span class="pbtn" role="img" aria-label="Brightness">☀</span>
         <input type="range" id="exposureBrightnessSlider" min="-100" max="100" value="0" style="flex:1;">
       </div>
-      <button id="btnBrightness" class="small" title="Brightness"><span>☀</span></button>
-    </div>
-    <!-- 착시제거 도크 (v3.8.0 · 원장님 지시 2026-08-31) — 밝기 도크 왼쪽에 붙는다.
-         눈꺼풀·눈주름·눈 크기로 생기는 동공-눈썹 밸런스 착시를 없애려고, 눈+눈썹만 원본으로
-         남기고 나머지를 흐리게·톤다운한다(#illusionDim). 드래그바는 버튼 위 팝업 · 평소 숨김 ·
-         누르면 생성 · 다시 누르면 숨김 — 밝기와 같은 패턴(toggleIllusionMode()).
-         ⚠️ 이건 **화면 표시 효과**입니다 — AI 판독(darkBlobsUp 등)은 원본 이미지(S.imgEl)를
-         그대로 읽으므로 이 오버레이의 영향을 받지 않습니다. 원장님이 육안으로 밸런스를 볼 때
-         쓰는 보조 기능입니다. -->
-    <div class="menurow illusion-dock" id="illusionDock">
-      <div id="illusionCtrl" class="posctl axis-h" hidden>
-        <span class="pbtn" role="img" aria-label="Focus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
-        <input type="range" id="illusionSlider" min="0" max="100" value="70" style="flex:1;">
-      </div>
-      <button id="btnIllusion" title="Remove illusion"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></i><em data-i18n="editor_illusion">착시제거</em></button>
+      <button id="btnBrightness" title="Brightness" data-i18n="editor_brightness"><span>☀</span></button>
     </div>
 
     <div class="hud" id="hud"></div>
