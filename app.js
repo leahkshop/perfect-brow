@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.8.0";
+const APP_VERSION = "v3.8.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5356,16 +5356,26 @@ function updateIllusionButtons() {
 }
 
 /* 눈썹 탐색 상자(browBoxes/fallbackBox — 판독에도 쓰는 그 좌표계)를 그대로 재사용해
-   같은 자리에 "선명 창"을 뚫는다. 아이리스 랜드마크가 있으면 눈 중심까지 아래쪽을 늘려
-   눈까지 창 안에 들어오게 하고, 없으면(fallbackBox 경로) 눈썹 높이 비율로 어림한다. */
+   같은 자리에 "선명 창"을 뚫는다.
+   ⚠️ v3.8.1 — 원장님 교정(2026-08-31, 노란색 마킹 사진 지시: 「블러처리는 분명히 눈썹주변,
+   눈과 눈썹사이의 경계라고 내가 사진을 주었다. 노란색 부분을 섬세하게 판독해라」).
+   v3.8.0 은 아이리스(동공)까지, 또는 눈썹 박스 아래로 한 배 가까이 더 늘려서 선명 창이
+   눈·동공까지 덮었습니다 — 마킹 사진의 노란 영역은 눈썹 자체 + 눈썹과 눈 사이의 "경계"까지만
+   이고 눈(동공)은 포함하지 않습니다. box.y1 은 이미 판독 로직(DRAW_EYE_GAP·FB_DOWN)이
+   눈꺼풀 앞에서 멈춰 둔 경계이므로, 그 아래로 아주 조금만("경계" 폭만큼) 더 내리고,
+   아이리스가 있으면 동공까지 남은 거리의 절반을 절대 넘지 않게 자릅니다.
+   ⛔ 다시 iris.y 를 향해 늘리지 마세요 — 동공을 덮으면 원장님이 지적한 문제가 재발합니다. */
 function illusionWindow(box, iris) {
   const x0 = box.x0, x1 = box.x1;
   const topY = box.y0;
-  let botY = box.y1 + box.h * 0.9;                 // 어림 — 눈꺼풀·눈까지 여유
-  if (iris) botY = Math.max(botY, iris.y + box.h * 0.55);
+  let botY = box.y1 + box.h * 0.22;                // 눈썹 박스 바로 아래 "경계" 여유만
+  if (iris && iris.y > box.y1) {
+    botY = Math.min(botY, iris.y - (iris.y - box.y1) * 0.5); // 동공까지 남은 거리의 절반은 항상 남긴다
+  }
+  botY = Math.max(botY, box.y1 + box.h * 0.05);    // 눈썹 박스 자체는 항상 포함
   const cx = (x0 + x1) / 2, cy = (topY + botY) / 2;
-  const rx = Math.max((x1 - x0) / 2 * 1.15, 4);
-  const ry = Math.max((botY - topY) / 2 * 1.08, 4);
+  const rx = Math.max((x1 - x0) / 2 * 1.08, 4);    // 박스에 바짝 붙여 "눈썹 주변"만
+  const ry = Math.max((botY - topY) / 2 * 1.05, 4);
   return { cx, cy, rx, ry };
 }
 

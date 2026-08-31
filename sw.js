@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v141"; /* v3.8.0 — 착시제거: 눈+눈썹 창만 남기고 나머지 흐리고 톤다운(밝기 버튼 왼쪽, 사진 불러오면 기본 ON) */
+const VERSION = "pb-v142"; /* v3.8.1 — 착시제거 창 교정: 눈썹+경계까지만 선명, 동공(눈)까지 덮지 않게 축소(원장님 노란색 마킹 사진 지시 2026-08-31) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
