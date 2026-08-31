@@ -418,15 +418,24 @@ if (RUN(0)) {
     const cv = document.getElementById("posCtlV").getBoundingClientRect();
     const chz = document.getElementById("posCtlH").getBoundingClientRect();
     const st = document.getElementById("stage").getBoundingClientRect();
-    for (let fy = 0.16; fy < 0.60; fy += 0.02)
-      for (let fx = 0.10; fx < 0.80; fx += 0.02) {
+    /* ⚠️ v3.6.0 — 예전에는 「45px 넘게 떨어진 첫 자리」를 찾고, 없으면 **아무 자리**(0.2,0.25)를
+       돌려줬습니다. 그 자리가 선 위면 드래그가 그 선을 잡아 검사가 엉뚱하게 실패합니다
+       (실제로 v3.6.0 에서 꼬리선이 옮겨지자 21 번이 그렇게 실패했습니다).
+       이제 **가장 빈 자리**(어느 선과도 가장 멀리 떨어진 점)를 고릅니다 — 검사가 무엇을
+       확인하는지는 그대로이고, 자리를 고르는 방법만 튼튼해졌습니다.
+       ⛔ 눈금 기대값을 손보지 마세요. 여기는 「어디를 집을까」일 뿐입니다. */
+    let best = null;
+    for (let fy = 0.14; fy < 0.72; fy += 0.02)
+      for (let fx = 0.06; fx < 0.94; fx += 0.02) {
         const x = fx * W, y = fy * H;
         const sx = st.left + x, sy = st.top + y;
         const over = (r) => sx > r.left - 12 && sx < r.right + 12 && sy > r.top - 12 && sy < r.bottom + 12;
         if (over(cv) || over(chz)) continue;
-        if (vx.every((v) => Math.abs(v - x) > 45) && hy.every((v) => Math.abs(v - y) > 45)) return { x, y };
+        const d = Math.min(...vx.map((v) => Math.abs(v - x)), ...hy.map((v) => Math.abs(v - y)));
+        if (!best || d > best.d) best = { x, y, d };
+        if (d > 60) return { x, y };
       }
-    return { x: W * 0.2, y: H * 0.25 };
+    return best ? { x: best.x, y: best.y } : { x: W * 0.2, y: H * 0.25 };
   });
   let fp = await freeSpot();
   const far = { x: box2.x + fp.x, y: box2.y + fp.y };

@@ -372,7 +372,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.5.1";
+const APP_VERSION = "v3.6.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3040,6 +3040,58 @@ const OUTER_DARK = 0.5;    // 바깥(꼬리) — 머리카락·번짐이 있으�
       그대로 통과합니다. 중앙값 대비 비율(0.5)이 번짐(0.31)을 걸러 냅니다. 회귀 123.
    ⛔ 절대 바닥(DRAW_CONTRAST)을 빼지 마세요 — 맨살로 걸어 나갑니다. 회귀 122. */
 const OUTER_CORE = 0.5;    // 바깥(꼬리) — core 가 중앙값의 이 비율 이상이면 아직 「검은 선」
+
+/* ⭐⭐⭐ v3.6.0 — **꼬리 = 윗선과 아랫선이 만나는 자리** (원장님 지시 2026-08-31)
+   ───────────────────────────────────────────────────────────────────────────
+   원장님 말씀 그대로:
+
+     「이 꼬리 판독의 중요한 키는 단지 사진에 보이는 검은색이 있냐, 이것이 머리카락인지
+       아닌지 판독하는 데에 있지 않다. 우리는 **눈썹이라는 디자인을 그린다**는 데에 목적이
+       있다. 그러니 눈썹의 디자인을 판독하고, **있을 수 없는 자리에 포인트가 있으면 안 된다**」
+     「아치엣지에서 부드럽게 파란색 점들이 아래로 내려온다. 그 선을 따라 (내가 넣는) 점이
+       같은 방향으로 내려와야 한다. **털이나 쉐도우 때문에 포인트가 옆으로 갈 수 없다**」
+     「아치두께에서 바깥 꼬리로 부드러운 곡선을 그리며 바깥으로 이동한다. 끝으로 갈수록
+       커브가 더 생겨 아치엣지에서 내려온 선과 **만난다**. 그것이 꼬리 포인트다」
+     「선들은 픽셀에 보이는 대로 최대한 따라온다. 만약 색이 뭉개지거나 머리카락이 헷갈리게
+       되어 있어도 **눈썹 모양을 유추하여** 꼬리를 찾는 게 중요하다」
+
+   즉 꼬리는 「마지막으로 읽힌 열」이 아니라 **두 모서리가 만나는 점**입니다. 판독은 흐릿한
+   끝에서 먼저 멈추므로, 마지막 구간의 **두께가 줄어드는 기울기**를 그대로 이어서 두께가
+   0 이 되는 자리를 꼬리로 봅니다.
+   ⛔ 무한정 늘리지 마세요 — `TAIL_EXT_FRAC` 로 판독 구간의 일부까지만 늘립니다. 예전에
+      직선 연장을 상한 없이 시도했다가 25px 빗나간 적이 있습니다 (v1.70.0). 회귀 122·123·126. */
+const TAIL_FIT_COLS = 8;     // 끝에서 이만큼의 열로 두께 기울기를 잰다
+const TAIL_EXT_FRAC = 0.05;  // 판독 구간의 이 비율까지만 바깥으로 늘린다
+function tailConverge(seqT, tailIdx) {
+  const n = seqT.length;
+  if (!n || tailIdx < 1) return null;
+  const dir = Math.sign(seqT[tailIdx].x - seqT[Math.max(0, tailIdx - 1)].x) || 1;
+  const k = Math.max(4, Math.min(TAIL_FIT_COLS, tailIdx + 1));
+  const pts = [];
+  for (let i = tailIdx - k + 1; i <= tailIdx; i++) {
+    if (i < 0) continue;
+    const p = seqT[i];
+    pts.push({ u: (p.x - seqT[tailIdx].x) * dir, t: p.bot - p.top, m: (p.top + p.bot) / 2 });
+  }
+  if (pts.length < 4) return null;
+  /* 최소제곱 직선. u 는 꼬리 쪽이 + · t = 두께 · m = 가운데선 */
+  const fit = (key) => {
+    let su = 0, sv = 0, suu = 0, suv = 0;
+    for (const q of pts) { su += q.u; sv += q[key]; suu += q.u * q.u; suv += q.u * q[key]; }
+    const nn = pts.length, den = nn * suu - su * su;
+    if (!den) return null;
+    const b = (nn * suv - su * sv) / den;
+    return { b, c: (sv - b * su) / nn };
+  };
+  const ft = fit("t"), fm = fit("m");
+  if (!ft || !fm) return null;
+  if (!(ft.b < 0) || !(ft.c > 0)) return null;      // 끝으로 갈수록 두꺼워지면 꼬리가 아니다
+  const span = Math.abs(seqT[n - 1].x - seqT[0].x) || 1;
+  const ext = Math.min(-ft.c / ft.b, TAIL_EXT_FRAC * span);
+  if (!(ext > 0)) return null;
+  return { x: seqT[tailIdx].x + dir * ext, y: fm.b * ext + fm.c,
+           ext, thickEnd: ft.c, slope: ft.b };
+}
 const GROW_STEP = 0.55;    // 중심이 두께의 이 비율 넘게 어긋나면 이어진 것이 아니다
 const GROW_MAX = 0.18;     // 판독 폭의 이 비율까지만 이어 붙인다 (폭주 방지)
 /* 한쪽 끝을 이어 붙인다. `toInner` 면 안쪽(코 방향), 아니면 바깥(꼬리 방향).
@@ -4166,7 +4218,17 @@ function autoFromDrawing() {
     /* 앞두께 최후 안전판 — 우선순위①②(frontDecide) 뒤에도 3~9 눈금 밖이면 보통값(6.0) */
     ftGuard();
   }
-  setLine("v4", clamp(S.g.v1 - Math.abs(seqT[tailIdx].x - cx) / W, 0.02, 0.98));
+  /* ⭐ v3.6.0 — 꼬리는 **두 모서리가 만나는 자리**입니다 (위 tailConverge 주석).
+     판독이 흐릿한 끝에서 먼저 멈추므로, 두께가 0 이 되는 자리까지 이어서 봅니다. */
+  {
+    const tc = tailConverge(seqT, tailIdx);
+    const tipX = tc ? tc.x : seqT[tailIdx].x;
+    S.tailRead = { lastX: seqT[tailIdx].x, tipX,
+                   ext: tc ? +tc.ext.toFixed(1) : 0,
+                   tipY: tc ? +tc.y.toFixed(1) : null,
+                   thickEnd: tc ? +tc.thickEnd.toFixed(1) : null };
+    setLine("v4", clamp(S.g.v1 - Math.abs(tipX - cx) / W, 0.02, 0.98));
+  }
   /* ⭐ v3.0.0 — **아치선(v6)은 아치엣지(h2)가 확정된 뒤에 잡습니다** — 아래에서
      archDecide/archStandard 로 h2 를 다 정한 다음, 이 함수 맨 아래의 v6 판정 블록
      (ARCHV_EPS·ARCHV_HOLD·3칸 마지노선)이 seq/smoothTop 를 훑어 다시 정합니다.
@@ -4412,6 +4474,9 @@ function showArchDots() {
       svg.appendChild(c);
     };
     for (const p of S.archDots) dot(p.x, p.top, 2.4, p.tail ? "#A855F7" : "#4C8DFF");
+    /* ⭐ v3.6.0 — **아랫선도 찍는다**. 원장님이 보시는 「아치두께에서 바깥으로 나가는 곡선」
+       이 앱에서 어디로 읽히는지 눈으로 봐야 두 선의 만남을 판단할 수 있습니다 (청록). */
+    for (const p of S.archDots) if (p.bot !== undefined) dot(p.x, p.bot, 2.0, p.tail ? "#26C6DA" : "#00E5FF");
     const top0 = S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6;
     const a = S.archRead;
     if (a) {
@@ -4420,6 +4485,8 @@ function showArchDots() {
     }
     /* v3.4.1 — 꼬리선이 선 자리. 점들의 끝과 견줘 보라고 같이 찍는다 */
     if (S.g.v4 !== undefined) dot(S.g.v4 * W, top0, 4, "#FF4D94");
+    /* v3.6.0 — 두 모서리가 만난다고 본 자리(수렴점) — 흰 점 */
+    if (S.tailRead && S.tailRead.tipY !== null) dot(S.tailRead.tipX, S.tailRead.tipY, 3.2, "#FFFFFF");
     stage.appendChild(svg);
     archDotsTimer = setTimeout(() => { const el = document.getElementById("archDotsOverlay"); if (el) el.remove(); }, 8000);
   } catch (e) { /* 진단 표시는 실패해도 조용히 — 본 기능에 영향 없음 */ }
