@@ -376,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.7.1";
+const APP_VERSION = "v3.7.2";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5700,6 +5700,18 @@ function alignCenterDock() {
   x = clamp(x, Math.min(loLimit, Math.max(hiLimit, 0)), Math.max(hiLimit, 0));
   cd.style.left = "0px";
   cd.style.transform = `translateX(${Math.round(x)}px)`;
+
+  /* v3.7.1 — 밝기 버튼 묶음(#brightnessDock)은 `.cdock` 밖으로 뺐습니다
+     (BASELINE "가운데아래 .cdock = 사진잠금 하나" · 회귀 83·106 lockAlone).
+     여기서 잠금 도크와 같은 x 좌표계로 이동시켜, 늘 잠금 왼쪽 8px 자리를 찾아가게 합니다.
+     ⚠️ 좁은 화면에서 왼쪽 도크(loLimit)를 넘으면 안 됩니다 — 좁을수록 잠금과 벌어지는
+     쪽을 택합니다(BASELINE "겹치는 것보다 밀리는 게 낫다"와 같은 원칙). */
+  const brD = $("brightnessDock");
+  if (brD && brD.offsetWidth) {
+    const bx = Math.max(x - brD.offsetWidth - 8, loLimit);
+    brD.style.left = "0px";
+    brD.style.transform = `translateX(${Math.round(bx)}px)`;
+  }
 }
 
 /* ⭐ v1.93.0 — **아래 도크 자동 맞춤** (원장님 지시 2026-08-29). 화면 폭은 기기마다 다르다 —
@@ -5708,14 +5720,19 @@ function alignCenterDock() {
 function fitDocks() {
   const b = document.body;
   const ld = $("leftDock"), bd = $("bottomDock"), snap = $("btnSnap"), lk = $("btnLock");
+  const brD = $("brightnessDock");
   if (!ld || !bd || !snap || !lk || !ld.offsetWidth) return;
+  /* v3.7.1 — 밝기 버튼 묶음이 잠금 왼쪽에 붙으면서 필요한 폭이 늘었습니다.
+     brD 폭 + 8px 간격을 여유 계산에 더해야, 좁은 화면에서 dock-tight/dock-min 으로
+     제때 줄어들어 밝기 버튼이 왼쪽 도크·잠금과 겹치지 않습니다. */
   for (const cls of ["", "dock-tight", "dock-min"]) {
     b.classList.remove("dock-tight", "dock-min");
     if (cls) b.classList.add(cls);
     const snapLeft = bd.offsetLeft + snap.offsetLeft;
     const ldRight = ld.offsetLeft + ld.offsetWidth;
-    /* 잠금이 왼쪽 도크와 AI 버튼 사이에 여유 있게 들어가는가 */
-    if (snapLeft - ldRight >= lk.offsetWidth + 24) break;
+    const brWidth = brD && brD.offsetWidth ? brD.offsetWidth + 8 : 0;
+    /* 잠금이 왼쪽 도크와 AI 버튼 사이에 여유 있게 들어가는가 (밝기 버튼 몫 포함) */
+    if (snapLeft - ldRight >= lk.offsetWidth + brWidth + 24) break;
   }
   alignCenterDock();
 }

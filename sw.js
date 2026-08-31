@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v139"; /* v3.7.1 — 밝기 UI 통합: 태양 버튼 토글 + 드래그바 (사진잠금 행) */
+const VERSION = "pb-v140"; /* v3.7.2 — 밝기 도크 분리: 잠금은 센터선 홀로 · 밝기 버튼은 잠금 왼쪽 · 드래그바는 팝업 (평소 숨김) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
