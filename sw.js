@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v138"; /* v3.7.0 — EXPOSURE/Brightness 밝기 조절 추가 */
+const VERSION = "pb-v139"; /* v3.7.1 — 밝기 UI 통합: 태양 버튼 토글 + 드래그바 (사진잠금 행) */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
