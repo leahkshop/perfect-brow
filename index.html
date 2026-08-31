@@ -389,21 +389,7 @@ body.land.compact .cdock{transform:translateX(-50%)}
 /* 세로 폴백은 폭이 좁아 가운데 도크가 왼쪽 도크 위로 올라탑니다.
    유지보수 대상은 아니지만 **버튼이 서로 가려 눌리지 않으면 안 되므로** 한 줄 위로 올립니다. */
 body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
-/* v3.5.0 — EXPOSURE·밝기 보정 도크 */
-.photoCorrectionDock{display:flex;gap:6px;align-items:center;justify-content:center}
-.photoCorrectionDock button{height:40px;min-width:44px;padding:0 6px;font-size:12px;font-weight:600;
-  border:1px solid var(--border);background:var(--surface-2);color:var(--muted);border-radius:8px;
-  cursor:pointer;transition:all 0.2s ease}
-.photoCorrectionDock button:hover{color:var(--fg);background:var(--surface);border-color:var(--faint)}
-.photoCorrectionDock button.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);
-  box-shadow:0 0 12px rgba(91,127,216,0.4)}
-#exposureBrightnessSlider{height:6px;border-radius:3px;background:var(--surface-2);border:1px solid var(--border);
-  -webkit-appearance:none;appearance:none;cursor:pointer}
-#exposureBrightnessSlider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;
-  border-radius:50%;background:var(--grad);border:2px solid var(--a1);cursor:pointer;
-  box-shadow:0 0 8px rgba(91,127,216,0.6)}
-#exposureBrightnessSlider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--grad);
-  border:2px solid var(--a1);cursor:pointer;box-shadow:0 0 8px rgba(91,127,216,0.6)}
+/* v3.7.0 — 밝기 조절은 태양 버튼으로 활성화, posctl.axis-h 스타일 사용 */
 /* 즐겨찾기 버튼 (v1.29.0) — **프리셋 버튼보다 낮고 길쭉하게.**
    크기 차이로 "프리셋에 딸린 목록"임을 표현합니다. 프리셋 버튼 크기는 그대로 둡니다.
    **폭을 반드시 제한하세요** — 프리셋 이름은 원장님이 직접 지으시므로 길어질 수 있고,
@@ -939,14 +925,14 @@ body:not(.land) #railLang{display:none}
 
     <!-- 가운데 아래 도크 (v1.28.0) — `사진잠금` 이 화면 한가운데, 그 왼쪽에 `사진저장`.
          잠금은 이 앱의 모드 스위치라 손이 늘 같은 자리를 찾아가야 합니다. -->
-    <!-- 가운데 도크 (v1.43.0 · 원장님 지시 2026-08-21) — 사진저장 · 사진잠금 · 사진변경 -->
+    <!-- 가운데 도크 (v3.7.0 · 밝기 조절) — 태양 버튼으로 활성화, 드래그바로 조절 -->
     <div class="cdock" id="centerDock">
-      <div class="photoCorrectionDock">
-        <button id="btnExposure" title="EXPOSURE"><span>◀ ◀</span></button>
-        <button id="btnBrightness" title="Brightness"><span>☀</span></button>
-      </div>
-      <div class="menurow">
-        <input type="range" id="exposureBrightnessSlider" min="-100" max="100" value="0" style="flex:1; margin:0 12px;">
+      <div class="menurow" id="brightnessRow">
+        <div id="brightnessCtrl" class="posctl axis-h" hidden>
+          <span class="pbtn" role="img" aria-label="Brightness">☀</span>
+          <input type="range" id="exposureBrightnessSlider" min="-100" max="100" value="0" style="flex:1;">
+        </div>
+        <button id="btnBrightness" title="Brightness" data-i18n="editor_brightness"><span>☀</span></button>
         <button id="btnLock"><i id="lockIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/></svg></i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
       </div>
     </div>
