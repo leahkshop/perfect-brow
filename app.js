@@ -91,6 +91,7 @@ const I18N = {
     editor_photo_unlock: "잠금해제",
     editor_exposure: "EXPOSURE",
     editor_brightness: "밝기",
+    editor_illusion: "착시제거",
     editor_export: "사진저장",
     editor_change_photo: "사진변경",
     editor_rotate: "화면가로",
@@ -259,6 +260,7 @@ const I18N = {
     editor_photo_unlock: "Unlock",
     editor_exposure: "EXPOSURE",
     editor_brightness: "Brightness",
+    editor_illusion: "Focus",       /* 착시제거 — 짧게: 좁은 도크에서도 잠금이 밀리지 않게 */
     editor_export: "Save",          /* v1.92.0 — 짧게: 왼쪽 도크가 넓어지면 가운데 잠금을 밀어냅니다 */
     editor_change_photo: "Change",
     editor_rotate: "Landscape",
@@ -376,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.7.2";
+const APP_VERSION = "v3.8.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -796,6 +798,8 @@ const S = {
   picking: false,        // 사진 선택 시트가 열려 있는 동안 (v1.27.0) — 그때만 세로로 되돌린다
   brightnessOn: false,                  // 밝기 조절 활성화 상태
   exposureBrightnessValue: 0,           // -100 ~ 100
+  illusionOn: true,                     // 착시제거 활성화 상태 (v3.8.0 — 사진 불러오면 기본 ON)
+  illusionValue: 70,                    // 착시제거 강도(=블러 투명도) 0~100, 기본 70
 };
 
 /* ═══════════ DOM ═══════════ */
@@ -1275,6 +1279,7 @@ function render() {
   updatePanels();
   updateGuideTip();
   alignCenterDock();
+  updateIllusionMask();
 }
 
 /* ═══════════ 라인 값 변경 (대칭 로직) ═══════════ */
@@ -1854,6 +1859,7 @@ function updateButtons() {
   $("btnGuide").classList.toggle("on", !!S.guideOn);
   $("lockLabel").textContent = S.locked ? t("editor_photo_unlock") : t("editor_photo_lock");
   updateExposureBrightnessButtons();
+  updateIllusionButtons();
   updateUndoBtn();
 }
 
@@ -4670,6 +4676,10 @@ function loadPhoto(file) {
     S.pick = [];
     S.brightnessOn = false;
     S.exposureBrightnessValue = 0;
+    /* v3.8.0 — 착시제거는 사진을 불러오면 기본 장착(원장님 지시 2026-08-31: 「사진 불러오면
+       착시가 클릭되어 불러온다 기본 장착」). 강도는 이전 값을 유지 — 슬라이더로 조절해 두면
+       다음 사진에서도 같은 세기로 시작한다. */
+    S.illusionOn = true;
     /* v1.47.0 원장님 지시 — 「가이드는 앱이 켜지면 항상 시작 상태로 유지, 사용자가 클릭할 때만 꺼짐」
        사진이 올라와 편집이 시작될 때마다 가이드 ON + 이너부터. 끄는 건 가이드 버튼 클릭뿐. */
     S.guideOn = true;
@@ -5317,6 +5327,99 @@ $("exposureBrightnessSlider").addEventListener("change", () => {
   /* 필요시 여기에 저장 로직 추가 */
 });
 
+/* ⭐ v3.8.0 — 착시제거 (원장님 지시 2026-08-31: 「눈꺼풀, 눈줄름, 눈의크기에 따라 착시로 인해
+   동공과의 눈썹 밸런스를 착각할때가 많다」). 눈+눈썹 창만 원본 그대로 남기고 나머지는
+   흐리고 톤다운해서, 그 착시 요소들을 가려 밸런스를 눈으로 비교하기 쉽게 돕는 **화면 보조 기능**.
+   ⚠️ 이건 화면에 보이는 것만 바꿉니다 — `updateIllusionMask()` 는 #illusionDim(표시용 레이어)에만
+   손을 대고, 실제 픽셀 판독(darkBlobsUp·innerProfile·columnRuns 등)은 여전히 `S.imgEl` 원본을
+   오프스크린 캔버스에 새로 그려서(`drawImage`+`getImageData`) 읽습니다 — 화면에 뭘 덮어 씌우든
+   그 판독 경로와는 완전히 분리되어 있습니다. **AI 눈썹정렬이 착시제거 효과 때문에 더 정확해지지는
+   않습니다** — 화면판단(원장님이 눈으로 밸런스 보실 때)만 도와줍니다. */
+function toggleIllusionMode() {
+  S.illusionOn = !S.illusionOn;
+  updateIllusionButtons();
+  updateIllusionMask();
+  showHud(S.illusionOn ? t("editor_illusion") : t("multi_off"), 2600);
+}
+
+function updateIllusionButtons() {
+  const btn = $("btnIllusion");
+  const ctrl = $("illusionCtrl");
+  if (!btn || !ctrl) return;
+  btn.classList.toggle("on", S.illusionOn);
+  ctrl.hidden = !S.illusionOn;
+  if (S.illusionOn) {
+    ctrl.classList.add("active");
+  } else {
+    ctrl.classList.remove("active");
+  }
+}
+
+/* 눈썹 탐색 상자(browBoxes/fallbackBox — 판독에도 쓰는 그 좌표계)를 그대로 재사용해
+   같은 자리에 "선명 창"을 뚫는다. 아이리스 랜드마크가 있으면 눈 중심까지 아래쪽을 늘려
+   눈까지 창 안에 들어오게 하고, 없으면(fallbackBox 경로) 눈썹 높이 비율로 어림한다. */
+function illusionWindow(box, iris) {
+  const x0 = box.x0, x1 = box.x1;
+  const topY = box.y0;
+  let botY = box.y1 + box.h * 0.9;                 // 어림 — 눈꺼풀·눈까지 여유
+  if (iris) botY = Math.max(botY, iris.y + box.h * 0.55);
+  const cx = (x0 + x1) / 2, cy = (topY + botY) / 2;
+  const rx = Math.max((x1 - x0) / 2 * 1.15, 4);
+  const ry = Math.max((botY - topY) / 2 * 1.08, 4);
+  return { cx, cy, rx, ry };
+}
+
+function updateIllusionMask() {
+  const dim = $("illusionDim");
+  if (!dim) return;
+  if (!S.illusionOn || !S.imgEl || !S.dim.W || !S.dim.H) {
+    dim.classList.remove("on");
+    dim.style.opacity = "0";
+    return;
+  }
+  const { W, H } = S.dim;
+  const boxes = browBoxes();
+  const L = boxes ? boxes.left : fallbackBox("L");
+  const R = boxes ? boxes.right : fallbackBox("R");
+
+  /* 좌우 아이리스 랜드마크(있으면) — browBoxes() 와 같은 방식으로 화면상 왼쪽/오른쪽을 가린다. */
+  let irisL = null, irisR = null;
+  const lm = S.landmarks;
+  if (lm) {
+    try {
+      const a = imgToCanvas(lmAvg(lm, IRIS_L).x, lmAvg(lm, IRIS_L).y, S.p);
+      const b = imgToCanvas(lmAvg(lm, IRIS_R).x, lmAvg(lm, IRIS_R).y, S.p);
+      if (a.x <= b.x) { irisL = a; irisR = b; } else { irisL = b; irisR = a; }
+    } catch { irisL = null; irisR = null; }
+  }
+
+  const wL = illusionWindow(L, irisL), wR = illusionWindow(R, irisR);
+  const r = (n) => Math.round(n * 10) / 10;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${r(W)} ${r(H)}">` +
+    `<defs><radialGradient id="ilF"><stop offset="55%" stop-color="#000"/><stop offset="100%" stop-color="#fff"/></radialGradient></defs>` +
+    `<rect width="${r(W)}" height="${r(H)}" fill="#fff"/>` +
+    `<ellipse cx="${r(wL.cx)}" cy="${r(wL.cy)}" rx="${r(wL.rx)}" ry="${r(wL.ry)}" fill="url(#ilF)"/>` +
+    `<ellipse cx="${r(wR.cx)}" cy="${r(wR.cy)}" rx="${r(wR.rx)}" ry="${r(wR.ry)}" fill="url(#ilF)"/>` +
+    `</svg>`;
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  dim.style.maskImage = `url("${url}")`;
+  dim.style.webkitMaskImage = `url("${url}")`;
+  dim.classList.add("on");
+  dim.style.opacity = String(Math.max(0, Math.min(100, S.illusionValue)) / 100);
+}
+
+$("btnIllusion").onclick = toggleIllusionMode;
+
+$("illusionSlider").addEventListener("input", (e) => {
+  S.illusionValue = parseInt(e.target.value, 10);
+  updateIllusionMask();
+});
+
+$("illusionSlider").addEventListener("change", () => {
+  /* 필요시 여기에 저장 로직 추가 */
+});
+
 $("btnExport").onclick = exportImage;
 
 $("btnAllLine").onclick = () => step(() => {
@@ -5706,12 +5809,54 @@ function alignCenterDock() {
      여기서 잠금 도크와 같은 x 좌표계로 이동시켜, 늘 잠금 왼쪽 8px 자리를 찾아가게 합니다.
      ⚠️ 좁은 화면에서 왼쪽 도크(loLimit)를 넘으면 안 됩니다 — 좁을수록 잠금과 벌어지는
      쪽을 택합니다(BASELINE "겹치는 것보다 밀리는 게 낫다"와 같은 원칙). */
+  /* v3.8.0 — **밀림 감지**. 착시제거 도크까지 셋이 되면서, 잠금 왼쪽 공간이 정말 부족한
+     화면(예: 아이폰 가로 844×390 + 왼쪽 도크가 영어 라벨로 넓어진 경우)에서 brD/ilD 가 각각
+     loLimit 로 따로 클램프되면 **서로 겹칠 수 있습니다** (묶여 있던 자리가 없어졌는데 둘 다
+     같은 자리로 밀리기 때문). 자연 위치가 loLimit 밑으로 내려가면(=자리가 모자라면) true 를
+     반환 — fitDocks() 가 이 신호를 받아 dock-tight/dock-min 으로 더 줄입니다. */
+  let overflow = false;
   const brD = $("brightnessDock");
+  let bx = x;
   if (brD && brD.offsetWidth) {
-    const bx = Math.max(x - brD.offsetWidth - 8, loLimit);
+    const bxNatural = x - brD.offsetWidth - 8;
+    bx = Math.max(bxNatural, loLimit);
+    if (bxNatural < loLimit) overflow = true;
+    /* ⚠️ 아이폰 SE 가로(667×375)처럼 loLimit 자체가 잠금 바로 코앞이면, 밝기 도크를
+       loLimit 로 밀어도 그 오른쪽 끝이 잠금 버튼과 겹칩니다 — 착시제거/밝기 사이와
+       같은 이유로, 여기서도 "잠금과 안 겹치는 것"을 loLimit 보다 우선합니다. */
+    if (bx + brD.offsetWidth + 8 > x) { bx = x - brD.offsetWidth - 8; overflow = true; }
+    /* ⚠️ v3.8.0 — 그렇게 밀어도 여전히 **왼쪽 도크 자리**(loLimit 밑)로 들어가면, 자리를
+       못 찾은 것입니다. 왼쪽 도크(사진저장·가이드 등) 버튼과 겹쳐 눌리는 걸 막기 위해
+       — dock-min 까지 줄여도 화면이 너무 좁은 마지막 경우 — 이 도크는 잠깐 숨깁니다
+       (사진에는 그대로 적용된 채로, 조절 버튼만 이 화면 크기에서 접근 불가).
+       ⛔ 겹친 채로 보여주지 마세요 — 눌러도 안 눌리는 버튼보다 없는 게 낫습니다. */
+    /* display:none 이 아니라 visibility — display:none 이면 offsetWidth 가 0이 되어
+       다음 렌더에서 이 블록 자체를 건너뛰고 다시는 켜지지 않습니다(화면을 넓혀도 안 돌아옴). */
+    const brHide = bx < loLimit;
+    brD.style.visibility = brHide ? "hidden" : "";
+    brD.style.pointerEvents = brHide ? "none" : "";
     brD.style.left = "0px";
     brD.style.transform = `translateX(${Math.round(bx)}px)`;
   }
+
+  /* 착시제거 도크(#illusionDock)는 밝기 도크 왼쪽에 8px 간격으로 붙습니다(원장님 지시 2026-08-31). */
+  const ilD = $("illusionDock");
+  if (ilD && ilD.offsetWidth) {
+    const ixNatural = bx - ilD.offsetWidth - 8;
+    let ix = Math.max(ixNatural, loLimit);
+    if (ixNatural < loLimit) overflow = true;
+    /* ⚠️ 세로 폴백처럼 아주 좁으면 밝기 도크 자체가 이미 loLimit 에 눌려 있어, 착시제거를
+       같은 loLimit 로 또 누르면 **둘이 정확히 같은 자리**에 겹칩니다. 그럴 땐 loLimit 보다
+       "밝기 도크와 안 겹치는 것"을 우선합니다(밀리는 게 겹치는 것보다 낫다). */
+    if (ix + ilD.offsetWidth > bx) { ix = bx - ilD.offsetWidth - 8; overflow = true; }
+    /* 위 밝기 도크와 같은 이유 — 왼쪽 도크 자리까지 밀리면 숨깁니다(visibility, display 아님). */
+    const ilHide = ix < loLimit;
+    ilD.style.visibility = ilHide ? "hidden" : "";
+    ilD.style.pointerEvents = ilHide ? "none" : "";
+    ilD.style.left = "0px";
+    ilD.style.transform = `translateX(${Math.round(ix)}px)`;
+  }
+  return overflow;
 }
 
 /* ⭐ v1.93.0 — **아래 도크 자동 맞춤** (원장님 지시 2026-08-29). 화면 폭은 기기마다 다르다 —
@@ -5721,18 +5866,26 @@ function fitDocks() {
   const b = document.body;
   const ld = $("leftDock"), bd = $("bottomDock"), snap = $("btnSnap"), lk = $("btnLock");
   const brD = $("brightnessDock");
+  const ilD = $("illusionDock");
   if (!ld || !bd || !snap || !lk || !ld.offsetWidth) return;
   /* v3.7.1 — 밝기 버튼 묶음이 잠금 왼쪽에 붙으면서 필요한 폭이 늘었습니다.
      brD 폭 + 8px 간격을 여유 계산에 더해야, 좁은 화면에서 dock-tight/dock-min 으로
-     제때 줄어들어 밝기 버튼이 왼쪽 도크·잠금과 겹치지 않습니다. */
+     제때 줄어들어 밝기 버튼이 왼쪽 도크·잠금과 겹치지 않습니다.
+     v3.8.0 — 착시제거 도크(ilD) 몫도 같은 이유로 더합니다. */
+  /* v3.8.0 — 위 폭 합산 검사만으로는 부족합니다: 잠금은 **얼굴 중심**에 맞춰지므로
+     실제로 밝기·착시제거가 들어설 자리(잠금 왼쪽 ~ 왼쪽 도크 사이)는 화면 폭과 무관하게
+     좁을 수 있습니다. alignCenterDock() 이 돌려주는 overflow(자연 위치가 왼쪽 도크 밑으로
+     내려가 서로 겹침)도 함께 봐야, 겹치는데도 dock-tight 에서 멈추는 일이 없습니다. */
   for (const cls of ["", "dock-tight", "dock-min"]) {
     b.classList.remove("dock-tight", "dock-min");
     if (cls) b.classList.add(cls);
+    const overflow = alignCenterDock();
     const snapLeft = bd.offsetLeft + snap.offsetLeft;
     const ldRight = ld.offsetLeft + ld.offsetWidth;
     const brWidth = brD && brD.offsetWidth ? brD.offsetWidth + 8 : 0;
-    /* 잠금이 왼쪽 도크와 AI 버튼 사이에 여유 있게 들어가는가 (밝기 버튼 몫 포함) */
-    if (snapLeft - ldRight >= lk.offsetWidth + brWidth + 24) break;
+    const ilWidth = ilD && ilD.offsetWidth ? ilD.offsetWidth + 8 : 0;
+    /* 잠금이 왼쪽 도크와 AI 버튼 사이에 여유 있게 들어가는가 (밝기·착시제거 버튼 몫 포함) */
+    if (!overflow && snapLeft - ldRight >= lk.offsetWidth + brWidth + ilWidth + 24) break;
   }
   alignCenterDock();
 }
