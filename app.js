@@ -376,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.12.0";
+const APP_VERSION = "v3.13.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1262,6 +1262,9 @@ function renderGuides() {
     }
   }
 
+  /* ⭐ v3.13.0 — 밸런스 커브(Phase 3) — S.balOn 일 때만, 기존 토막 빨강 표시 위에 겹쳐 그린다 */
+  if (S.balOn) renderBalCurve(frag);
+
   svg.replaceChildren(frag);
 }
 
@@ -1675,6 +1678,7 @@ function commitEdit() {
   if (S.hist.length > HIST_MAX) S.hist.shift();
   S.redo = [];
   S.balance = null;                                   // 선을 건드리면 측정값이 낡는다 (v1.26.0)                                        // 새 작업을 하면 다시 실행 갈래는 버린다
+  S.balCurve = null;                                  // v3.13.0 — 커브 판정도 함께 낡는다
   updateUndoBtn();
 }
 function clearHist() { S.hist = []; S.redo = []; editSnap = null; updateUndoBtn(); }
@@ -4715,7 +4719,7 @@ function loadPhoto(file) {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
-    S.balOn = false; S.balance = null;
+    S.balOn = false; S.balance = null; S.balCurve = null;
     S.locked = false;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
@@ -5296,7 +5300,7 @@ $("btnReset").onclick = () => {
     S.g = { ...DEFAULT_GUIDE };
     if (!keepPhoto) S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
-    S.balOn = false; S.balance = null;
+    S.balOn = false; S.balance = null; S.balCurve = null;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
@@ -5517,6 +5521,176 @@ function measureSegY(img, seg, y0, band) {
   return found[Math.floor(found.length / 2)];
 }
 
+/* ⭐⭐⭐ v3.13.0 — **밸런스 커브 — 좌우를 각각 독립으로 읽어 비교한다** (Phase 3, 원장님 지시
+   2026-09-01 「곡선 기반 AI 어시스턴트」로 밸런스 재구축).
+   ─────────────────────────────────────────────────────────────────────────
+   기존 `runBalance()`의 한계 — 실기기에서 확인됨(2026-09-01):
+   「왼쪽에서도 드로잉과 거리가 멀어져도(가이드가 틀려도) 오른쪽 판정이 필요하다」
+   원인: `measureSegY`가 찾는 탐색창(x·y 모두)이 **지금 가이드 값**에서 나옵니다
+   (`segPx`→`g[anchor]`, y0=`g[key]*H`) — 오른쪽 탐색창조차 왼쪽 가이드를 거울에 비춘
+   자리입니다. 왼쪽 가이드가 틀리면 오른쪽 탐색까지 함께 틀어집니다.
+
+   이 함수는 **가이드 값을 전혀 보지 않고** 좌우를 각각 landmark(`browBoxes`)+픽셀
+   (`readDrawing`)로 독립적으로 읽습니다 — Phase 1(browBoxes)이 원래 설계된 이유가
+   이것입니다. 앞머리·아치·꼬리 세 지점에서 좌우를 직접 비교하므로, 어느 쪽 가이드가
+   얼마나 틀렸든 무관하게 실제 드로잉끼리 비교합니다.
+
+   ⛔ 기존 `runBalance()`/`segPx()`/`measureSegY()`는 **그대로 둡니다** — 회귀 77~86·180이
+   그 정확한 동작(가이드 기준 토막 비교)에 물려 있습니다. 이 함수는 완전히 별도의 새
+   판정을 **추가**하는 것이지 교체가 아닙니다 — 화면에는 기존 토막 빨강 표시 + 이 커브
+   표시가 함께 나옵니다. */
+const CURVE_FRONT_END = 0.18;      // autoFromDrawing의 앞부분 구간(0~18%)과 같은 잣대
+const CURVE_ARCHPK_NUM_MAX = 40;   // autoFromDrawing의 ARCHPK_NUM_MAX(내안각)와 같은 값
+const CURVE_TAIL_END = 0.08;       // autoFromDrawing의 END(끝점 구간)와 같은 잣대
+
+/* seq 구간의 분위수 — autoFromDrawing 안의 `at()` 닫힘과 같은 계산 (순수 함수로 분리) */
+function curveQuantile(seq, a, b, key, frac) {
+  const n = seq.length;
+  const i0 = clamp(Math.floor(a * (n - 1)), 0, n - 1);
+  const i1 = clamp(Math.ceil(b * (n - 1)), 0, n - 1);
+  const v = seq.slice(Math.min(i0, i1), Math.max(i0, i1) + 1).map((p) => p[key]).sort((x, y) => x - y);
+  if (!v.length) return null;
+  const q = frac !== undefined ? frac : 0.5;
+  return v[clamp(Math.round(q * (v.length - 1)), 0, v.length - 1)];
+}
+/* 산꼭대기(pk) 열 찾기 — autoFromDrawing 안의 산꼭대기 탐색 블록과 같은 계산 */
+function curvePeak(seq, cx) {
+  const n = seq.length;
+  const smoothTop = (i) => {
+    const a = seq[Math.max(0, i - 1)].top, b2 = seq[i].top, c2 = seq[Math.min(n - 1, i + 1)].top;
+    return (a + b2 + c2) / 3;
+  };
+  let lo = Math.max(1, Math.round(n * 0.15));
+  const hi = Math.min(n - 2, Math.round(n * 0.85));
+  const tk = frontTickPx();
+  if (tk) {
+    const numAt = (i) => 53.15 - Math.abs(seq[i].x - cx) / tk;
+    while (lo < hi && numAt(lo) > CURVE_ARCHPK_NUM_MAX) lo++;
+  }
+  let pk = lo;
+  for (let i = lo; i <= hi; i++) if (smoothTop(i) < smoothTop(pk)) pk = i;
+  return pk;
+}
+
+/* 한쪽 눈썹을 **가이드와 무관하게** landmark+픽셀로 읽어, 위·아래 경계 곡선(3점: 앞머리·아치·꼬리)
+   을 돌려준다. `readDrawing`(browBoxes/fallbackBox 기반, side 매개변수 있음)을 그대로 재사용하고,
+   그 seq 위에서 autoFromDrawing과 같은 잣대(앞부분 분위수 · 산꼭대기 · 꼬리 수렴)로 3점을 뽑는다.
+   실패하면 조용히 null — 부르는 쪽이 "못 읽음"으로 건너뛴다. */
+function readSideCurve(img, side) {
+  try {
+    const { W } = S.dim;
+    let pts = null;
+    for (const contrast of [DRAW_CONTRAST, DRAW_CONTRAST_SOFT]) {
+      const cand = readDrawing(img, contrast, side);
+      if (!cand || cand.length < DRAW_MIN_HITS) continue;
+      if (cand.refH) {
+        const th = cand.map((p) => p.bot - p.top).sort((a, b) => a - b)[Math.floor(cand.length / 2)];
+        if (th > DRAW_THICK_MAX * cand.refH || th < DRAW_THICK_MIN * cand.refH) continue;
+      }
+      pts = cand; break;
+    }
+    if (!pts) return null;
+    const cx = S.g.v1 * W;
+    const seq = seqOrient(pts, cx);
+    const n = seq.length;
+    if (n < 4) return null;
+
+    const frontX = pts.innerX !== undefined && pts.innerX !== null ? pts.innerX : seq[0].x;
+    const frontThicknessY = curveQuantile(seq, 0, CURVE_FRONT_END, "top", 0.3);
+    const frontY = curveQuantile(seq, 0, CURVE_FRONT_END, "bot", 0.7);
+
+    const pk = curvePeak(seq, cx);
+    const win = Math.max(1, Math.round(n * 0.08));
+    const pa = clamp(pk - win, 0, n - 1) / (n - 1), pb = clamp(pk + win, 0, n - 1) / (n - 1);
+    const archX = seq[pk].x;
+    const h2Y = curveQuantile(seq, pa, pb, "top");
+    const archThicknessY = curveQuantile(seq, pa, pb, "bot");
+
+    const seqT = pts.tailAdd && pts.tailAdd.length ? seq.concat(pts.tailAdd) : seq;
+    const nT = seqT.length;
+    let tailIdx = nT - 1;
+    const darks = seqT.map((p) => p.dark || 0).slice().sort((a, b) => a - b);
+    const medDark = darks[Math.floor(darks.length / 2)] || 0;
+    const cores = seqT.map((p) => p.core || 0).slice().sort((a, b) => a - b);
+    const medCore = cores[Math.floor(cores.length / 2)] || 0;
+    const coreMin = medCore > 0 ? Math.max(DRAW_CONTRAST, TAIL_INK * medCore) : null;
+    if (medDark > 0) {
+      for (let i = nT - 1; i >= Math.floor(nT * 0.45); i--) {
+        const p = seqT[i];
+        if ((p.dark || 0) >= TAIL_INK * medDark || (coreMin !== null && (p.core || 0) >= coreMin)) { tailIdx = i; break; }
+      }
+    }
+    const tc = tailConverge(seqT, tailIdx);
+    let tailX, tailY;
+    if (tc) { tailX = tc.x; tailY = tc.y; }
+    else {
+      const t0 = Math.max(0, tailIdx - Math.round(CURVE_TAIL_END * (nT - 1)));
+      const bots = seqT.slice(t0, tailIdx + 1).map((p) => p.bot).sort((x, y) => x - y);
+      tailX = seqT[tailIdx].x;
+      tailY = bots.length ? bots[clamp(Math.round(0.7 * (bots.length - 1)), 0, bots.length - 1)] : seqT[tailIdx].bot;
+    }
+
+    if ([frontThicknessY, frontY, h2Y, archThicknessY, tailY].some((v) => v === null || v === undefined || !isFinite(v))) return null;
+
+    return {
+      side,
+      top: [{ x: frontX, y: frontThicknessY }, { x: archX, y: h2Y }, { x: tailX, y: tailY }],
+      bot: [{ x: frontX, y: frontY }, { x: archX, y: archThicknessY }, { x: tailX, y: tailY }],
+    };
+  } catch (e) { return null; }
+}
+
+/* 좌우 곡선을 각각 읽어 비교 — 앞머리·아치·꼬리 세 지점에서 위·아래 경계 둘 다 본다.
+   허용 오차는 기존과 같은 `balTolPx()`(얼굴 크기 기준)를 그대로 씁니다. */
+function runBalanceCurve() {
+  try {
+    const img = photoPixels();
+    if (!img) { S.balCurve = null; return false; }
+    const L = readSideCurve(img, "L"), R = readSideCurve(img, "R");
+    if (!L || !R) { S.balCurve = null; return false; }
+    const tol = balTolPx();
+    const off = (a, b) => Math.abs(a - b) > tol;
+    const devFront = off(L.top[0].y, R.top[0].y) || off(L.bot[0].y, R.bot[0].y);
+    const devArch = off(L.top[1].y, R.top[1].y) || off(L.bot[1].y, R.bot[1].y);
+    const devTail = off(L.top[2].y, R.top[2].y) || off(L.bot[2].y, R.bot[2].y);
+    S.balCurve = { L, R, devFront, devArch, devTail, tol };
+    return true;
+  } catch (e) { S.balCurve = null; return false; }
+}
+
+/* 밸런스 커브 그리기 — **반대쪽**의 실제 곡선(위·아래 경계)을 그리고, 어긋난 구간만 빨갛게.
+   같은 구간에는 **기준쪽 높이를 반대쪽 x 자리에 얹은** 점선("정답 위치" 가이드)도 겹쳐 그린다 —
+   x(눈썹이 실제로 있는 자리)는 건드리지 않고 y(높이)만 기준쪽과 맞춰 보여 주는 것이다. */
+function renderBalCurve(frag) {
+  const bc = S.balCurve;
+  if (!bc || !bc.L || !bc.R) return;
+  const ref = S.refSide, opp = ref === "L" ? "R" : "L";
+  const refC = bc[ref], oppC = bc[opp];
+  const devs = [bc.devFront, bc.devArch, bc.devTail];
+  const seg2 = (pts, color) => {
+    for (let i = 0; i < 2; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const bad = devs[i] || devs[i + 1];
+      const d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+      frag.appendChild(mk("path", bad
+        ? { d, fill: "none", stroke: BAL_RED, "stroke-width": 3, "stroke-opacity": 0.95, "stroke-linecap": "round" }
+        : { d, fill: "none", stroke: color, "stroke-width": 1.6, "stroke-opacity": 0.5, "stroke-linecap": "round" }));
+    }
+  };
+  seg2(oppC.top, "#5EEAD4");
+  seg2(oppC.bot, "#2E8BFF");
+  const guideSeg = (oppPts, refPts) => {
+    for (let i = 0; i < 2; i++) {
+      if (!(devs[i] || devs[i + 1])) continue;
+      const a = { x: oppPts[i].x, y: refPts[i].y }, b = { x: oppPts[i + 1].x, y: refPts[i + 1].y };
+      const d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+      frag.appendChild(mk("path", { d, fill: "none", stroke: "#FFFFFF", "stroke-width": 1.3, "stroke-opacity": 0.7, "stroke-dasharray": "3,3" }));
+    }
+  };
+  guideSeg(oppC.top, refC.top);
+  guideSeg(oppC.bot, refC.bot);
+}
+
 /* 밸런스 검사 — 기준 쪽과 반대쪽의 드로잉 높이를 비교한다.
    모든 선을 **한 번에** 검사합니다 (하나씩 넘기면 전체 패턴이 안 보입니다). */
 function runBalance() {
@@ -5551,8 +5725,9 @@ function visibleLineKeys() {
 /* 전체라인 — 화면의 모든 선을 한 번에 선택해서 통째로 옮긴다. 다시 누르면 전체 해제. */
 /* 밸런스 — 기준 쪽 드로잉과 반대쪽이 같은 높이인지 검사하고, 다른 곳만 빨갛게 (v1.26.0) */
 $("btnBalance").onclick = () => {
-  if (S.balOn) { S.balOn = false; S.balance = null; render(); showHud(t("bal_off"), 1400); return; }
+  if (S.balOn) { S.balOn = false; S.balance = null; S.balCurve = null; render(); showHud(t("bal_off"), 1400); return; }
   if (!runBalance()) return;
+  runBalanceCurve();   /* ⭐ v3.13.0 — Phase 3: 좌우 독립 커브 판정도 함께 (실패해도 조용히 null) */
   S.balOn = true;
   render();
   const n = Object.keys(S.balance.off).length, sk = S.balance.skipped.length;
@@ -5935,6 +6110,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
+  runBalanceCurve, readSideCurve,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
