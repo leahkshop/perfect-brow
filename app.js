@@ -152,7 +152,7 @@ const I18N = {
     fav_max: "즐겨찾기는 3개까지입니다",
     fav_on: "즐겨찾기에 넣었습니다",
     fav_off: "즐겨찾기에서 뺐습니다",
-    editor_balance_check: "밸런스",
+    editor_balance_check: "미러링",
     bal_ref_l: "기준 왼쪽",
     bal_ref_r: "기준 오른쪽",
     bal_left: "왼쪽",
@@ -165,7 +165,7 @@ const I18N = {
     bal_ok: "모든 선이 기준과 같습니다",
     bal_diff: "곳이 기준과 다릅니다",
     bal_skip: "곳은 선을 못 읽어 건너뜀",
-    bal_off: "밸런스 표시 끔",
+    bal_off: "미러링 표시 끔",
     bal_no_photo: "사진을 먼저 불러오세요",
     /* 라인 이름 (v1.19.0) — 왼쪽 레일 버튼 · 캔버스 라벨 · 조절자 이름이 모두 이걸 쓴다 */
     line_eye: "눈",
@@ -320,7 +320,7 @@ const I18N = {
     fav_max: "Up to 3 favourites",
     fav_on: "Added to favourites",
     fav_off: "Removed from favourites",
-    editor_balance_check: "Balance",
+    editor_balance_check: "Mirror",
     bal_ref_l: "Ref: Left",
     bal_ref_r: "Ref: Right",
     bal_left: "Left",
@@ -333,7 +333,7 @@ const I18N = {
     bal_ok: "Every line matches the reference",
     bal_diff: " differ from the reference",
     bal_skip: " skipped (line not readable)",
-    bal_off: "Balance view off",
+    bal_off: "Mirror view off",
     bal_no_photo: "Load a photo first",
     line_eye: "Eye",
     line_front: "Front",
@@ -376,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.13.0";
+const APP_VERSION = "v3.14.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5632,10 +5632,21 @@ function readSideCurve(img, side) {
 
     if ([frontThicknessY, frontY, h2Y, archThicknessY, tailY].some((v) => v === null || v === undefined || !isFinite(v))) return null;
 
+    /* ⭐ v3.14.0 — 열별 원본 궤적(raw seq, showArchDots의 점선과 같은 자료)도 함께 돌려준다.
+       `renderBalCurve`가 이 점들을 거울에 비춰 반대쪽에 그대로 얹는 용도 (원장님 지시
+       2026-09-01 「점선이 반대쪽에 미러링되어 보여지는것으로」). zone: 0=앞머리~아치 구간,
+       1=아치~꼬리 구간 — pk(산꼭대기) 열을 기준으로 나눈다. 꼬리 보정 구간(tailAdd)은 항상
+       꼬리 쪽(zone 1)이다. 판정 로직에는 전혀 관여하지 않는 표시 전용 자료다. */
+    const trace = seq.map((p, i) => ({ x: p.x, top: p.top, bot: p.bot, zone: i <= pk ? 0 : 1 }));
+    if (pts.tailAdd && pts.tailAdd.length) {
+      for (const p of pts.tailAdd) trace.push({ x: p.x, top: p.top, bot: p.bot, zone: 1 });
+    }
+
     return {
       side,
       top: [{ x: frontX, y: frontThicknessY }, { x: archX, y: h2Y }, { x: tailX, y: tailY }],
       bot: [{ x: frontX, y: frontY }, { x: archX, y: archThicknessY }, { x: tailX, y: tailY }],
+      trace,
     };
   } catch (e) { return null; }
 }
@@ -5658,37 +5669,40 @@ function runBalanceCurve() {
   } catch (e) { S.balCurve = null; return false; }
 }
 
-/* 밸런스 커브 그리기 — **반대쪽**의 실제 곡선(위·아래 경계)을 그리고, 어긋난 구간만 빨갛게.
-   같은 구간에는 **기준쪽 높이를 반대쪽 x 자리에 얹은** 점선("정답 위치" 가이드)도 겹쳐 그린다 —
-   x(눈썹이 실제로 있는 자리)는 건드리지 않고 y(높이)만 기준쪽과 맞춰 보여 주는 것이다. */
+/* ⭐⭐ v3.14.0 — 밸런스 커브 그리기 **재설계** (원장님 지시 2026-09-01, 실기기 스크린샷 확인 후):
+   「오른쪽 선이 쫙 그어지는것보다 왼쪽처럼 자연스럽게 드로잉을 따라가는 느낌이 더 좋아보이네
+    흰색 빨간색 선 숨기고, 화면에서 위쪽에있는 점선들이 반대쪽에 미러링되어 보여지는것으로,
+    위치가 다른것은 빨간선 그대로 보여지기 / 왼쪽 점선들이 미러링되어 반대쪽에도 똑같이
+    입혀지기 / 그러면 사용자가 자연스럽게 본인의 드로잉과 미러링이 다르다는것을 시각적으로
+    보게됨」
+   ─────────────────────────────────────────────────────────────────────────
+   v3.13.0의 굵은 직선(민트/파랑 2토막)과 흰 점선 "정답 위치" 가이드는 **없앤다** — 대신
+   기준쪽(refC)의 열별 원본 점선 궤적(trace, showArchDots가 찍는 것과 같은 자료)을 x만
+   거울(cx 기준)에 비춰 **반대쪽 사진 위에 점으로 그대로 얹는다.** y(높이)는 그대로다 —
+   좌우가 실제로 균형 잡혀 있으면 이 미러링 점들이 반대쪽 실제 드로잉과 자연스럽게 겹쳐
+   보이고, 어긋난 구간(앞머리·아치·꼬리 판정)만 빨갛게 되어 원장님이 "내 드로잉과 미러링이
+   다르다"를 점을 눈으로 훑으며 자연스럽게 보게 된다. */
 function renderBalCurve(frag) {
   const bc = S.balCurve;
   if (!bc || !bc.L || !bc.R) return;
-  const ref = S.refSide, opp = ref === "L" ? "R" : "L";
-  const refC = bc[ref], oppC = bc[opp];
+  const ref = S.refSide;
+  const refC = bc[ref];
+  if (!refC.trace || !refC.trace.length) return;
+  const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
-  const seg2 = (pts, color) => {
-    for (let i = 0; i < 2; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const bad = devs[i] || devs[i + 1];
-      const d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
-      frag.appendChild(mk("path", bad
-        ? { d, fill: "none", stroke: BAL_RED, "stroke-width": 3, "stroke-opacity": 0.95, "stroke-linecap": "round" }
-        : { d, fill: "none", stroke: color, "stroke-width": 1.6, "stroke-opacity": 0.5, "stroke-linecap": "round" }));
+  const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
+  for (const p of refC.trace) {
+    const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
+    const bad = badZone(p.zone);
+    frag.appendChild(mk("circle", bad
+      ? { cx: mx, cy: p.top, r: 2.2, fill: BAL_RED, "fill-opacity": 0.9 }
+      : { cx: mx, cy: p.top, r: 1.7, fill: "#5EEAD4", "fill-opacity": 0.55 }));
+    if (p.bot !== undefined) {
+      frag.appendChild(mk("circle", bad
+        ? { cx: mx, cy: p.bot, r: 1.9, fill: BAL_RED, "fill-opacity": 0.9 }
+        : { cx: mx, cy: p.bot, r: 1.4, fill: "#2E8BFF", "fill-opacity": 0.55 }));
     }
-  };
-  seg2(oppC.top, "#5EEAD4");
-  seg2(oppC.bot, "#2E8BFF");
-  const guideSeg = (oppPts, refPts) => {
-    for (let i = 0; i < 2; i++) {
-      if (!(devs[i] || devs[i + 1])) continue;
-      const a = { x: oppPts[i].x, y: refPts[i].y }, b = { x: oppPts[i + 1].x, y: refPts[i + 1].y };
-      const d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
-      frag.appendChild(mk("path", { d, fill: "none", stroke: "#FFFFFF", "stroke-width": 1.3, "stroke-opacity": 0.7, "stroke-dasharray": "3,3" }));
-    }
-  };
-  guideSeg(oppC.top, refC.top);
-  guideSeg(oppC.bot, refC.bot);
+  }
 }
 
 /* 밸런스 검사 — 기준 쪽과 반대쪽의 드로잉 높이를 비교한다.
