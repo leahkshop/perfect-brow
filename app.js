@@ -376,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.11.0";
+const APP_VERSION = "v3.12.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -4479,21 +4479,21 @@ function autoFromDrawing() {
 /* ⭐ v3.3.1 — 진단: 앱이 읽은 눈썹 윗선을 점으로 8초간 표시.
    render() 와 무관한 별도 SVG 라 다음 render 에 지워지지 않고, 시간이 지나면 스스로 사라진다.
    저장본에는 안 찍힌다(exportImage 와 무관).
-     파랑  = 눈썹 몸통 판독 열(seq)의 윗선
-     보라  = v3.4.1 — 꼬리 쪽으로 **이어 붙인 열**(tailAdd)의 윗선
+     파랑(옅음) = 눈썹 몸통 판독 열(seq)의 윗선, raw
+     보라(옅음) = v3.4.1 — 꼬리 쪽으로 **이어 붙인 열**(tailAdd)의 윗선, raw
+     청록(옅음) = v3.6.0 — 아랫선, raw
      주황  = 산꼭대기(pk)   · 초록 = 아치선(v6)이 선 자리
      분홍  = v3.4.1 — 꼬리선(v4)이 선 자리 (점들과 얼마나 맞는지 눈으로 보라고)
-     민트(큰) = 앞머리 최종값 · 민트(작은) = 앞두께 최종값
-     파랑(큰) = 아치엣지 최종값 · 파랑(작은) = 아치두께 최종값
-       — v3.11.0: 위 파랑·보라 점은 **자기 열에서 혼자 고른 원본**(raw seq)이고,
-         이 네 점은 frontDecide/archDecide 가 앞머리·이너 위치·해부학 순서(아치두께
+     민트(큰,진함) = 앞머리 최종값 · 민트(작은,진함) = 앞두께 최종값
+     파랑(큰,진함) = 아치엣지 최종값 · 파랑(작은,진함) = 아치두께 최종값
+       — v3.11.0: 옅은 raw 점들은 **자기 열에서 혼자 고른 원본**(raw seq)이고,
+         진하고 큰 네 점은 frontDecide/archDecide 가 앞머리·이너 위치·해부학 순서(아치두께
          ≤ 앞머리 ≤ 꼬리)까지 반영해 **최종 확정한 값**이다. 원장님이 지적하신
-         "점선이 쌍꺼풀에 찍힌다"는 사례 대부분은 이 최종값이 아니라 raw seq 쪽이었다
-         — raw 는 원래도 열마다 따로 판단해 노이즈가 있고, 최종값은 그 위에 여러
-         안전판을 더 거친 것이다. 이 점을 새로 찍는 이유는 "실제로 앱이 최종 채택한
-         자리"와 "화면에 보이는 원본 노이즈"를 원장님이 직접 구분해서 볼 수 있게
-         하려는 것 — 최종값도 눈썹을 벗어나 있다면 그건 raw 노이즈가 아니라 진짜
-         판독 실패이므로, 그 사진으로 다시 확인이 필요하다. */
+         "점선이 쌍꺼풀에 찍힌다"는 사례는 이 최종값이 아니라 raw seq 쪽이었음을
+         2026-09-01 실기기 확인으로 확정 — 원장님 확인: "정확히 드로잉 위에".
+       — v3.12.0: raw 점을 진한 최종값 점과 헷갈리지 않도록 옅게(반투명) 처리.
+         raw 데이터 자체는 지우지 않았다 — 진짜 판독 실패를 디버깅할 때 필요할 수 있어
+         남겨두되, 평소엔 최종값(진한 점)이 시선을 끌도록 했다. */
 let archDotsTimer = null;
 function showArchDots() {
   try {
@@ -4515,10 +4515,21 @@ function showArchDots() {
       c.setAttribute("fill", fill); c.setAttribute("stroke", "#14161B"); c.setAttribute("stroke-width", "0.6");
       svg.appendChild(c);
     };
-    for (const p of S.archDots) dot(p.x, p.top, 2.4, p.tail ? "#A855F7" : "#4C8DFF");
-    /* ⭐ v3.6.0 — **아랫선도 찍는다**. 원장님이 보시는 「아치두께에서 바깥으로 나가는 곡선」
-       이 앱에서 어디로 읽히는지 눈으로 봐야 두 선의 만남을 판단할 수 있습니다 (청록). */
-    for (const p of S.archDots) if (p.bot !== undefined) dot(p.x, p.bot, 2.0, p.tail ? "#26C6DA" : "#00E5FF");
+    /* ⭐ v3.12.0 — raw 열별 원본(seq) 점은 옅게. 원장님이 확인해주신 대로 최종 확정값(민트·파랑
+       큰 점)은 실제 드로잉 위에 정확히 있었고, 쌍꺼풀 쪽으로 튀는 건 이 raw 원본 점들뿐이었다
+       (2026-09-01 실기기 확인 — "정확히 드로잉 위에"). raw 점을 없애지는 않는다 — 진짜 판독
+       실패를 디버깅할 때는 여전히 필요한 자료다. 다만 눈에 덜 띄게 옅게 찍어서, 크고 진한
+       최종값 점과 착각하지 않게 한다. */
+    const rdot = (x, y, r, fill) => {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", r);
+      c.setAttribute("fill", fill); c.setAttribute("fill-opacity", "0.35");
+      c.setAttribute("stroke", "none");
+      svg.appendChild(c);
+    };
+    for (const p of S.archDots) rdot(p.x, p.top, 2.0, p.tail ? "#A855F7" : "#4C8DFF");
+    /* v3.6.0 — 아랫선도 찍는다(청록, raw). v3.12.0부터 옅게. */
+    for (const p of S.archDots) if (p.bot !== undefined) rdot(p.x, p.bot, 1.6, p.tail ? "#26C6DA" : "#00E5FF");
     const top0 = S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6;
     const a = S.archRead;
     if (a) {
