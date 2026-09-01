@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v143"; /* v3.8.2 — 착시제거(블러처리) 기능 철회: 원장님 지시로 v3.7.2 상태로 되돌림 (2026-08-31) */
+const VERSION = "pb-v144"; /* v3.8.3 — AI 정렬 세로 기준(CENTER_Y) 0.56 → 0.53 (원장님 지시 2026-08-31). 눈 기본값(DEFAULT_GUIDE.h1) 0.36 은 회귀 14개 파손으로 0.60 유지 */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
