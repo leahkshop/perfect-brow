@@ -376,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.9.1";
+const APP_VERSION = "v3.10.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5382,9 +5382,31 @@ $("btnMulti").onclick = () => {
       · 얼굴이 옆으로 돌아가 한쪽이 짧게 찍혔을 때
    그래서 못 읽은 선은 **빨간 표시를 하지 않고 조용히 건너뜁니다.** */
 const BAL_RED = "#FF3B4E";  // 밸런스가 다른 곳 표시색
-const BAL_BAND = 0.045;    // 선 위아래로 훑는 범위 (캔버스 높이 비율)
+const BAL_BAND = 0.045;    // ⚠️ v3.10.0 이후 balBandPx() 의 안전 폴백값으로만 쓰인다 (아래 참고)
 const BAL_SAMPLES = 21;    // 한 토막에서 뽑는 x 표본 수
 const BAL_CONTRAST = 14;   // 이만큼도 안 어두우면 "선을 못 찾음"으로 본다
+
+/* ⭐⭐ v3.10.0 — 반대쪽을 **찾는** 탐색 범위도 tol 처럼 얼굴 크기(확대율)를 따라간다
+   (원장님 지시 2026-09-01: 「아치 두께부분도 맞지 않는데 빨간 표시가 나오지 않는 이유?」).
+   원인 규명: 이 탐색 범위가 그동안 캔버스 높이의 **고정 4.5%** 였다. 허용 오차(tol,
+   BAL_TOL_MM)는 이미 8/20에 확대율 방어(mm 기준)를 받았는데, 반대쪽 실제 잉크 라인을
+   "찾는" 이 범위는 그 개선을 못 받고 고정 픽셀 그대로 남아 있었다.
+   확대해서 볼수록(시술 중 늘 그러시듯) 4.5%가 실제 눈썹 기준으로는 점점 좁아져서,
+   좌우 차이가 클수록(=진짜 다른 경우일수록) 반대쪽 라인이 그 좁은 창 밖으로 빠져나가
+   못 찾고 skipped 로 조용히 빠졌다 — 차이가 클수록 더 못 잡는 역설이었다.
+   그래서 balTolPx() 와 같은 이너 간격(mm) 기준으로 맞춘다.
+   ⚠️ BAL_BAND_MM 은 첫 추정값입니다 — 실제 사진에서 너무 넓다/좁다 판단되시면
+   확인 후 조정하세요. ⛔ 다시 캔버스 고정 비율로 되돌리지 마세요 — 회귀 89 가 잡습니다. */
+const BAL_BAND_MM = 4.0;                    // 반대쪽 탐색 반경(mm)
+const BAL_BAND_MIN = 8, BAL_BAND_MAX = 40;  // px 안전선
+
+/* 지금 화면에서 반대쪽을 찾는 탐색 반경 몇 px 인가 (balTolPx() 와 짝) */
+function balBandPx() {
+  const W = S.dim.W, g = S.g;
+  const innerPx = Math.abs(g.v3 - g.v2) * W;
+  if (!W || !innerPx) return BAL_BAND * (S.dim.H || 0);   // 이너를 모르면 옛 고정값으로 폴백
+  return clamp((BAL_BAND_MM * innerPx) / INNER_MM, BAL_BAND_MIN, BAL_BAND_MAX);
+}
 
 /* ═══ 허용 오차 — 화면 px 이 아니라 **얼굴 크기 기준** (v1.29.0) ═══════
    ⛔ **px 고정으로 되돌리지 마세요.**
@@ -5461,7 +5483,7 @@ function measureSegY(img, seg, y0, band) {
 function runBalance() {
   const img = photoPixels();
   if (!img) { toast(t("bal_no_photo")); return false; }
-  const { H } = S.dim, band = BAL_BAND * H;
+  const { H } = S.dim, band = balBandPx();                       // ⭐ v3.10.0 — 얼굴 크기에 맞춘 탐색 범위
   const tol = balTolPx();                                       // 얼굴 크기에 맞춘 허용 오차 (v1.29.0)
   const off = {}, skipped = [];
   for (const sp of H_SPECS) {
@@ -5873,7 +5895,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: LOOK_DEF.arch, tail: LOOK_DEF.tail, inner: LOOK_DEF.inner, innerDim: "#C9D1D6", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   placeLinesFromEyes,
-  faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx,
+  faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
