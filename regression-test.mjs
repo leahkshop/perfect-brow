@@ -1903,9 +1903,12 @@ if (RUN(4)) for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 
         const cssBB = getComputedStyle(el("balBox"));
         return bb.left - mu.right >= 4 && cssBB.backgroundColor !== "rgba(0, 0, 0, 0)"; })(),
       favHidden: el("favRow").hidden,
-      /* v1.51.0 — 잠금 중심은 **캔버스 정중앙이 아니라 센터 세로선(v1)** 위에 온다 (원장님 지시) */
+      /* v1.51.0 — 잠금 중심은 캔버스 정중앙이 아니라 센터 세로선(v1) 위에 왔었다 (원장님 지시) —
+         v3.9.1 에서 폐기. 이제 잠금·밝기 버튼은 v1(사진마다·정렬마다 바뀜)을 따라가지 않고
+         **작업 영역 한가운데(centerX(), 늘 같은 자리)** 에 고정된다 (원장님 지시 2026-09-01:
+         「센터가 사진잠금과 붙어움직이지 않도록 사진잠금과 밝기 버튼이 화면에 고정되도록」). */
       lockOnCenterLine: Math.abs((lock.left + lock.right) / 2 - st.left
-                        - window.PB.S.g.v1 * window.PB.S.dim.W) < 4,
+                        - window.PB.centerX() * window.PB.S.dim.W) < 4,
       lockCentre: ((lock.left + lock.right) / 2 - st.left) / st.width,
       balLeftOfCentre: ((bal.left + bal.right) / 2 - st.left) / st.width,
 
@@ -1942,7 +1945,7 @@ if (RUN(4)) for (const dev of [{ n: "아이폰 가로 844×390", w: 844, h: 390 
       && place.aiInBarrow && place.aiLeftOfBar && place.aiSpecial && place.aiLockEmoji && place.aiSize
       && place.favHidden
       && place.dockGaps.every((g) => g > 8) && place.labelHitsTop === false,
-    `사진2버튼=왼쪽끝${place.photoInRDock}/순서${place.photoOrder} · 잠금단독=${place.lockAlone}/센터선일치=${place.lockOnCenterLine}(${(place.lockCentre * 100).toFixed(1)}%) · 밸런스 ${(place.balLeftOfCentre * 100).toFixed(1)}%/오른쪽끝=${place.balRight} · AI버튼 바로우=${place.aiInBarrow}/바왼쪽=${place.aiLeftOfBar}/특별색=${place.aiSpecial}/잠금이모지=${place.aiLockEmoji}/크기=${place.aiSize} · 프리셋숨김=${place.favHidden} · 도크간격=${place.dockGaps}px · 라벨겹침=${place.labelHitsTop}`);
+    `사진2버튼=왼쪽끝${place.photoInRDock}/순서${place.photoOrder} · 잠금단독=${place.lockAlone}/작업영역중앙고정=${place.lockOnCenterLine}(${(place.lockCentre * 100).toFixed(1)}%) · 밸런스 ${(place.balLeftOfCentre * 100).toFixed(1)}%/오른쪽끝=${place.balRight} · AI버튼 바로우=${place.aiInBarrow}/바왼쪽=${place.aiLeftOfBar}/특별색=${place.aiSpecial}/잠금이모지=${place.aiLockEmoji}/크기=${place.aiSize} · 프리셋숨김=${place.favHidden} · 도크간격=${place.dockGaps}px · 라벨겹침=${place.labelHitsTop}`);
   await ctx.close();
 }
 
@@ -4948,10 +4951,12 @@ if (RUN(5)) {
         overshoot, quietAllGrey, grabColored,
         thickInside, thickOutside,
         tailRatio: len("h3") / len("h2"),
+        /* v3.9.1 — 잠금 버튼은 더 이상 S.g.v1(센터 세로선)을 따라가지 않고 PBx.centerX()
+           (작업 영역 한가운데, 늘 같은 자리)에 고정된다 (원장님 지시 2026-09-01). */
         lockOnCenter: (() => {
           const st = document.getElementById("stage").getBoundingClientRect();
           const lk = document.getElementById("btnLock").getBoundingClientRect();
-          return Math.abs((lk.left + lk.right) / 2 - st.left - S.g.v1 * W) < 4;
+          return Math.abs((lk.left + lk.right) / 2 - st.left - PBx.centerX() * W) < 4;
         })(),
       };
     });
@@ -4969,7 +4974,7 @@ if (RUN(5)) {
         && r.quietAllGrey && r.grabColored
         && r.tailRatio > 0.4 && r.tailRatio < 0.6 && r.lockOnCenter,
       `조용한 자=회색전체 ${r.inGrey} · 차례인 자=고유색 한 줄 ${r.outColor} · `
-      + `조용 세로선=회색전체 ${r.quietAllGrey} · 잡으면 색 ${r.grabColored} · 꼬리/아치 길이비 ${r.tailRatio.toFixed(2)} · 잠금=센터선 ${r.lockOnCenter}`);
+      + `조용 세로선=회색전체 ${r.quietAllGrey} · 잡으면 색 ${r.grabColored} · 꼬리/아치 길이비 ${r.tailRatio.toFixed(2)} · 잠금=작업영역중앙 ${r.lockOnCenter}`);
     check("107. 프리셋 — 내장 기본 3종 없음 · 사용자가 저장한 것만",
       pr.empty && pr.rows === 0 && pr.hasBtn,
       `빈 목록 표시=${pr.empty} · 줄 수=${pr.rows}(0이어야 함) · 프리셋 버튼 유지=${pr.hasBtn}`);
