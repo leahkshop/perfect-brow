@@ -376,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.8.3";
+const APP_VERSION = "v3.8.4";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2572,13 +2572,11 @@ function autoAiOnLoad() {
      값을 직접 재 보시기 전까지 아무도 몰랐습니다. 안전판이 걸렸으면 그 사실을 알립니다.
      ⛔ 다시 조용하게 만들지 마세요. */
   if (ok) {
-    /* ⭐ v3.3.0 — **아치선이 무엇을 보고 그 자리에 섰는지 화면에 적는다** (진단용).
-       실기기에서만 나는 증상이라 컨테이너에서 재현이 안 됩니다 — 폰 화면 한 장으로
-       갈래(pixel/corner/floor)와 산꼭대기 눈금을 읽으려는 표시입니다.
-       ⏸ 원인이 잡히면 이 꼬리표는 떼도 됩니다 (알림 자체는 남깁니다). */
-    const a = S.archRead;
-    const tag = a ? `  [v6:${a.from}${a.pkNum !== undefined ? " pk" + a.pkNum : ""}${a.outNum !== null && a.outNum !== undefined ? " out" + a.outNum : ""}]` : "";
-    showNote(t("ai_auto_on") + tag, 4200);
+    /* ⭐ v3.8.4 — **성공 안내(「AI 눈썹정렬 적용됨」)는 숨김** (원장님 지시 2026-09-01: 「Ai자동정렬
+       안내 숨김, 필요가 없음」). 사진을 넣을 때마다 자동으로 뜨던 알림이라 반복적이고 더는 필요
+       없다는 판단입니다. ⚠️ 실패 안내(ai_arch_fail, 바로 아래 else)는 그대로 둡니다 — v3.3.0에서
+       「판독이 어긋난 것을 조용히 넘기지 않는다」고 명시적으로 지시하신 안전판이라, 이번 지시는
+       성공 알림에만 해당한다고 해석했습니다. */
     render();
     showArchDots();               /* v3.3.1 — 읽은 윗선을 점으로 8초 표시 (진단) */
   } else {
@@ -5291,13 +5289,11 @@ function applyExposureBrightness() {
 }
 
 function toggleBrightnessMode() {
+  /* ⭐ v3.8.4 — 닫아도 조절값 유지 (원장님 지시 2026-09-01): 태양 버튼은 조절 바를
+     보이거나 숨길 뿐, 사진에 적용된 밝기는 리셋하지 않는다. 밝기를 실제로 0으로
+     되돌리려면 슬라이더를 직접 가운데로 옮기거나(값 0) 새 사진/초기화로 리셋해야 한다.
+     ⛔ 여기서 exposureBrightnessValue 를 다시 0으로 되돌리지 마세요 — 그게 바로 이 버그였습니다. */
   S.brightnessOn = !S.brightnessOn;
-  if (!S.brightnessOn) {
-    /* 끌 때는 리셋 */
-    S.exposureBrightnessValue = 0;
-    $("exposureBrightnessSlider").value = 0;
-    applyExposureBrightness();
-  }
   updateExposureBrightnessButtons();
   showHud(S.brightnessOn ? t("editor_brightness") : t("multi_off"), 2600);
 }
