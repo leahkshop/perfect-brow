@@ -376,7 +376,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.10.0";
+const APP_VERSION = "v3.11.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -4482,7 +4482,18 @@ function autoFromDrawing() {
      파랑  = 눈썹 몸통 판독 열(seq)의 윗선
      보라  = v3.4.1 — 꼬리 쪽으로 **이어 붙인 열**(tailAdd)의 윗선
      주황  = 산꼭대기(pk)   · 초록 = 아치선(v6)이 선 자리
-     분홍  = v3.4.1 — 꼬리선(v4)이 선 자리 (점들과 얼마나 맞는지 눈으로 보라고) */
+     분홍  = v3.4.1 — 꼬리선(v4)이 선 자리 (점들과 얼마나 맞는지 눈으로 보라고)
+     민트(큰) = 앞머리 최종값 · 민트(작은) = 앞두께 최종값
+     파랑(큰) = 아치엣지 최종값 · 파랑(작은) = 아치두께 최종값
+       — v3.11.0: 위 파랑·보라 점은 **자기 열에서 혼자 고른 원본**(raw seq)이고,
+         이 네 점은 frontDecide/archDecide 가 앞머리·이너 위치·해부학 순서(아치두께
+         ≤ 앞머리 ≤ 꼬리)까지 반영해 **최종 확정한 값**이다. 원장님이 지적하신
+         "점선이 쌍꺼풀에 찍힌다"는 사례 대부분은 이 최종값이 아니라 raw seq 쪽이었다
+         — raw 는 원래도 열마다 따로 판단해 노이즈가 있고, 최종값은 그 위에 여러
+         안전판을 더 거친 것이다. 이 점을 새로 찍는 이유는 "실제로 앱이 최종 채택한
+         자리"와 "화면에 보이는 원본 노이즈"를 원장님이 직접 구분해서 볼 수 있게
+         하려는 것 — 최종값도 눈썹을 벗어나 있다면 그건 raw 노이즈가 아니라 진짜
+         판독 실패이므로, 그 사진으로 다시 확인이 필요하다. */
 let archDotsTimer = null;
 function showArchDots() {
   try {
@@ -4518,6 +4529,23 @@ function showArchDots() {
     if (S.g.v4 !== undefined) dot(S.g.v4 * W, top0, 4, "#FF4D94");
     /* v3.6.0 — 두 모서리가 만난다고 본 자리(수렴점) — 흰 점 */
     if (S.tailRead && S.tailRead.tipY !== null) dot(S.tailRead.tipX, S.tailRead.tipY, 3.2, "#FFFFFF");
+    /* ⭐ v3.11.0 — **최종 확정값**도 함께 찍는다 (원장님 지시 2026-09-01: 점선이 쌍꺼풀
+       같은 엉뚱한 자리에 찍히는 문제 — raw seq 만 보여서는 그게 "원본 노이즈"인지
+       "진짜 최종 판독 실패"인지 구분이 안 됐다). frontDecide/archDecide 가 이너·앞머리
+       위치와 해부학 순서까지 반영해 확정한 자리라, raw seq 보다 훨씬 안정적이다.
+       x 좌표는 표시용으로만 frontDecide 의 ix 계산을 그대로 옮겨 온 것 — 판독 로직에는
+       전혀 관여하지 않는다. */
+    {
+      let ix = S.g.v2 * W;
+      const ir = S.innerRead;
+      if (ir && ir.fRaw != null && ir.fRaw > INNER_F_SOFT && ir.anchor)
+        ix = clamp(S.g.v1 - ir.anchor * (1 - ir.fRaw), 0.02, 0.98) * W;
+      dot(ix, S.g.front * H, 5, "#5EEAD4");
+      dot(ix, S.g.frontThickness * H, 3.4, "#5EEAD4");
+      const pkX = a ? a.pkX : S.g.v6 * W;
+      dot(pkX, S.g.h2 * H, 5, "#2E8BFF");
+      dot(pkX, S.g.archThickness * H, 3.4, "#2E8BFF");
+    }
     stage.appendChild(svg);
     archDotsTimer = setTimeout(() => { const el = document.getElementById("archDotsOverlay"); if (el) el.remove(); }, 8000);
   } catch (e) { /* 진단 표시는 실패해도 조용히 — 본 기능에 영향 없음 */ }
