@@ -2,6 +2,7 @@
 # 테스트 중 생성되는 임시 SVG
 .draw-*.svg
 .test-*.svg
+.bal-*.svg
 
 # 회귀 테스트용 playwright 설치물 (npm i playwright) — 저장소에 안 넣는다
 node_modules/
