@@ -2933,6 +2933,34 @@ if (RUN(5)) {
     check("190. 꼬리 심 추적 — 몸통 바깥으로 이어진 검은 심(대비 60%)은 끝까지 따라가 x·y 둘 다 그 끝에 선다 · 옅은 줄(16%)은 안 따라간다 (원장님 확인 2026-09-02)",
       o190.ok && o190b.ok && followed && stayed,
       `검은 심: 아우터 ${o190.outerPx.toFixed(0)}(기대 ${lt.endX}) · 꼬리 ${o190.tailPx.toFixed(0)}(기대 ${(lt.endY + 1.5).toFixed(0)}) · 추적 ${tr190 ? `${tr190.cols}열 used=${tr190.used}` : "없음"} · 옅은 줄: 아우터 ${o190b.outerPx.toFixed(0)}(≥170) 추적 미채택=${stayed}`);
+
+    /* 191. ⭐⭐⭐ v3.30.0 — **꼬리 심이 머리카락 덩어리로 이어져도 따라 들어가지 않는다** (원장님 실기기 확인 2026-09-02,
+       고개 돌린 각도 사진: 꼬리선이 눈썹 끝을 60px 지나 관자놀이 머리카락 속에 서고, 그 높이가 눈썹 위로 올라가
+       아치두께까지 마지노선에 끌려갔다 — 「저런 확실한 드로잉을 놓치면 치명적」).
+       190 의 검은 심(x179→140) 끝에 **넓은 검은 덩어리**(머리카락, x 60~142)를 붙인다. 추적은 심의 끝(≈140)에서
+       멈춰야 하고, 덩어리 안(x<135)으로 들어가면 안 된다. 높이도 심의 끝 높이 근처여야 한다. */
+    const mkHairTail = () => {
+      const f = path.join(ROOT, ".draw-hairtail.svg");
+      const up = [], dn = [];
+      for (let x = 178; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+      const y0 = (edgeAt(SHAPE_A.cp, 178, 1) + edgeAt(SHAPE_A.cp, 178, 2)) / 2;
+      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+        + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+        + `<rect x="60" y="${(y0 - 10).toFixed(1)}" width="82" height="110" fill="#3a2e28"/>`     /* 머리카락 덩어리 */
+        + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/>`
+        + `<line x1="179" y1="${y0.toFixed(1)}" x2="140" y2="${(y0 + 30).toFixed(1)}" stroke="#6a6a6a" stroke-width="3" stroke-linecap="round"/></svg>`);
+      return { f, endX: 140, endY: y0 + 30 };
+    };
+    const ht = mkHairTail();
+    const o191 = await runDraw(false, ht.f, null, SHAPE_A);
+    fs.unlinkSync(ht.f);
+    const tr191 = (o191.tailRead && o191.tailRead.trace) || null;
+    const notInHair = o191.outerPx >= 135;                                  /* 덩어리(x<142) 안으로 안 들어감 */
+    const nearLineEnd = o191.outerPx <= 182;                                /* 그래도 몸통 끝(178)보다 밖 */
+    const heightOk = Math.abs(o191.tailPx - (ht.endY + 1.5)) <= 12;
+    check("191. 꼬리 심 추적 — 심 끝이 머리카락 덩어리에 닿아도 덩어리 안으로 들어가지 않는다 (넓은 어두운 줄 · 위아래 피부 없음 = 정지) (원장님 확인 2026-09-02)",
+      o191.ok && notInHair && nearLineEnd && heightOk,
+      `아우터 ${o191.outerPx.toFixed(0)}(135~182) · 꼬리 ${o191.tailPx.toFixed(0)}(기대 ${(ht.endY + 1.5).toFixed(0)}±12) · 추적 ${tr191 ? `${tr191.cols}열 used=${tr191.used} stop=${JSON.stringify(tr191.stop)}` : "없음"}`);
   }
 
   /* 124. ⚠️⚠️ v1.73.0 — **앞두께는 앞머리보다 위** (원장님이 화면에 번호를 찍어 확정 2026-08-25)

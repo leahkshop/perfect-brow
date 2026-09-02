@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.29.1";
+const APP_VERSION = "v3.30.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3178,6 +3178,7 @@ const TAIL_TRACE_CORE = 0.4;   // 몸통 심 대비의 이 비율 이상이어�
 const TAIL_TRACE_MAX = 0.35;   // 판독 구간(밴드 폭)의 이 비율까지만 걷는다
 const TAIL_TRACE_UP = 5, TAIL_TRACE_DN = 8;   // 직전 심 높이 기준 탐색 창 (위/아래 px)
 const TAIL_TRACE_GAP = 3;      // 연속 이 열이 모자라면 끝
+const TAIL_TRACE_RUN_MIN = 30, TAIL_TRACE_RUN_FRAC = 2.0;  // 심 주변 어두운 줄이 max(30px, 밴드 끝 두께×2) 보다 길면 덩어리 (v3.30.0 — 밴드가 멈춘 직후 열은 아직 눈썹 두께 그대로라 0.8 은 첫 열에서 끊겼다, 케이스 1)
 function tailTrace(img, seqT, tailIdx) {
   const { W, H } = S.dim;
   if (!img || !seqT || tailIdx < 8 || !W || !H) return null;
@@ -3195,7 +3196,21 @@ function tailTrace(img, seqT, tailIdx) {
     if (around.length < 4) return null;
     around.sort((u, v) => u - v);
     const skin = around[Math.floor(around.length * 0.7)];
-    return { y: minY, minL, skin, contrast: skin - minL };
+    const contrast = skin - minL;
+    /* ⭐ v3.30.0 — **머리카락·그늘 덩어리 방어** (원장님 실기기 확인 2026-09-02, 고개 돌린 각도 사진: 꼬리 심이
+       관자놀이 머리카락으로 이어져 꼬리선이 눈썹 끝을 60px 지나 머리카락 속에 섰고, 그 높이(h3)가 눈썹 위로
+       올라가 아치두께까지 마지노선에 끌려 올라갔다 — 「저런 확실한 드로잉을 놓치면 치명적」).
+       꼬리 심은 **가는 한 줄**(2~3px)이고 위·아래가 곧 피부다. 머리카락·그늘은 **넓은 덩어리**라 심 주변 어두운
+       줄(run)이 길고, 위·아래 12px 안에 피부가 없다. 그 두 가지를 열마다 함께 잰다. */
+    const half = skin - contrast * 0.5;
+    let up = minY, dn = minY;
+    while (up - 1 >= 0 && px(x, up - 1) < half) up--;
+    while (dn + 1 <= H - 1 && px(x, dn + 1) < half) dn++;
+    const soft = skin - contrast * 0.3;
+    let skinNear = false;
+    for (let y = Math.max(0, up - 12); y < up; y++) if (px(x, y) >= soft) { skinNear = true; break; }
+    if (!skinNear) for (let y = dn + 1; y <= Math.min(H - 1, dn + 12); y++) if (px(x, y) >= soft) { skinNear = true; break; }
+    return { y: minY, minL, skin, contrast, run: dn - up + 1, skinNear };
   };
   /* 몸통 심 대비 — 밴드 끝 8열의 중앙값 */
   const refs = [];
@@ -3213,9 +3228,14 @@ function tailTrace(img, seqT, tailIdx) {
   const last = seqT[tailIdx];
   const c0 = colCore(last.x, last.top - 2, last.bot + 2);
   if (!c0) return null;
-  let prevY = c0.y, lastGood = null, gap = 0, walked = 0;
+  /* 머리카락 방어의 자: 밴드 끝 열의 두께 — 꼬리 심의 어두운 줄은 이보다 두꺼울 수 없다 (v3.30.0) */
+  const lastThick = Math.max(4, Math.abs(last.bot - last.top));
+  const maxRun = Math.max(TAIL_TRACE_RUN_MIN, TAIL_TRACE_RUN_FRAC * lastThick);
+  let prevY = c0.y, lastGood = null, gap = 0, walked = 0, stop = null;
   for (let x = last.x + dir; x >= 1 && x <= W - 2 && walked <= maxX; x += dir, walked++) {
     const c = colCore(x, prevY - TAIL_TRACE_UP, prevY + TAIL_TRACE_DN);
+    if (c && c.contrast >= need && c.run > maxRun) { stop = { x, why: "mass", run: c.run }; break; }      /* 넓은 덩어리 = 머리카락·그늘 */
+    if (c && c.contrast >= need && !c.skinNear) { stop = { x, why: "noskin", run: c.run }; break; }      /* 위아래에 피부가 없다 */
     if (c && c.contrast >= need) { prevY = c.y; lastGood = { x, ...c }; gap = 0; }
     else { gap++; if (gap >= TAIL_TRACE_GAP) break; }
   }
@@ -3225,7 +3245,7 @@ function tailTrace(img, seqT, tailIdx) {
   let yb = lastGood.y;
   for (let y = lastGood.y + 1; y <= Math.min(H - 1, lastGood.y + 6); y++) { if (px(lastGood.x, y) < half) yb = y; else break; }
   return { x: lastGood.x, y: yb, coreY: lastGood.y, bodyCore: +bodyCore.toFixed(1), endContrast: +lastGood.contrast.toFixed(1),
-           cols: Math.abs(lastGood.x - last.x) };
+           cols: Math.abs(lastGood.x - last.x), stop, maxRun: +maxRun.toFixed(1) };
 }
 const GROW_STEP = 0.55;    // 중심이 두께의 이 비율 넘게 어긋나면 이어진 것이 아니다
 const GROW_MAX = 0.18;     // 판독 폭의 이 비율까지만 이어 붙인다 (폭주 방지)
@@ -4373,7 +4393,7 @@ function autoFromDrawing() {
     const dirT = Math.sign(seqT[tailIdx].x - seqT[Math.max(0, tailIdx - 1)].x) || 1;
     const traced = !!(tt && (tt.x - tipX) * dirT >= 4);
     if (traced) tipX = tt.x;
-    S.tailRead.trace = tt ? { x: tt.x, y: tt.y, cols: tt.cols, bodyCore: tt.bodyCore, endContrast: tt.endContrast, used: traced } : null;
+    S.tailRead.trace = tt ? { x: tt.x, y: tt.y, cols: tt.cols, bodyCore: tt.bodyCore, endContrast: tt.endContrast, used: traced, stop: tt.stop || null, maxRun: tt.maxRun } : null;
     setLine("v4", clamp(S.g.v1 - Math.abs(tipX - cx) / W, 0.02, 0.98));
     /* ⭐⭐ v3.6.1 — **꼬리 자의 높이도 수렴점으로 내려온다** (원장님 확인 2026-08-31:
        「흰점 잘 들어옴, 뻗어나간 끝지점 선택 잘됨. 상하 위치만 잘 잡으면 된다.
