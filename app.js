@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.28.0";
+const APP_VERSION = "v3.29.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2471,7 +2471,42 @@ function autoAlign(lm) {
   /* 라인 자동 배치 — **기준쪽 실측만** 쓴다 (데칼코마니 · placeLines 의 주석 참고) */
   placeLines(lm);
 
-  fitBrowsInFrame(lm);   // 눈썹 꼬리가 잘리면 배율을 낮춘다
+  /* ⭐⭐⭐ v3.29.0 — **배율의 자는 눈이 아니라 눈썹** (원장님 확정 2026-09-02 「이걸로 하자 고도화」).
+     위의 INNER_FRAC 배율은 출발값일 뿐이고, 여기서 **양쪽 눈썹 꼬리 끝 간격이 작업 영역 폭의
+     BROW_FRAC(80%)** 가 되도록 배율을 다시 맞춘다 (fitBrowsToFrame). 고객이 누구든 눈썹이 같은 크기로
+     화면을 채운다 — 시술은 눈썹을 보고 하기 때문. 눈 사이가 좁고 눈썹이 긴 얼굴(케이스 1)은 예전엔
+     INNER_FRAC 로 크게 확대됐다가 fitBrowsInFrame 이 꼬리를 넣느라 한참 줄여 얼굴이 작아 보였고,
+     눈 사이가 넓고 눈썹이 짧은 얼굴(케이스 2)은 크게 남았다 — 같은 앱에서 두 고객의 눈썹 크기가 달랐다.
+     ⚠️ 눈금 자·40~53 룰은 사진 기준(innerAnchor)이라 배율과 무관 — 회귀 153 이 「내안각 = 40」을 그대로 잠근다.
+     ⚠️ 내안각의 **화면 위치**는 이제 고객마다 다르다 (1눈금 = 화면 1% 는 더 이상 보장하지 않는다). */
+  fitBrowsToFrame(lm);
+  fitBrowsInFrame(lm);   // 안전판 — 그래도 잘리면 배율을 낮춘다 (80% < 88% 라 보통은 작동하지 않는다)
+}
+
+const BROW_FRAC = 0.80;          // 양쪽 눈썹 꼬리 끝 간격 / 작업 영역 폭 (v3.29.0)
+/* 지금 배율에서 눈썹이 작업 영역을 얼마나 채우는가 — 1 이면 딱 BROW_FRAC.
+   fitBrowsInFrame 과 같은 자로 잰다: 랜드마크 꼬리(70·300)와 아우터 연장선 끝 중 먼 쪽. */
+function browFillNeed(lm) {
+  const { W } = S.dim, g = S.g;
+  const lmXs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
+  const half = browTailHalf(lm, S.p, g.v1);
+  const lo = Math.min(...lmXs, g.v1 - half), hi = Math.max(...lmXs, g.v1 + half);
+  const span = workRight() - workLeft();
+  const c = g.v1;
+  const extent = Math.max(c - lo, hi - c);            // 센터에서 먼 쪽 꼬리까지
+  return { need: extent / Math.max((BROW_FRAC / 2) * span, 1e-6), lo, hi, c, span };
+}
+function fitBrowsToFrame(lm) {
+  if (!lm || !S.dim.W || !lm[70] || !lm[300]) return;
+  for (let pass = 0; pass < 6; pass++) {
+    const { need } = browFillNeed(lm);
+    if (!isFinite(need) || need <= 0) return;
+    if (Math.abs(need - 1) <= 0.005) return;          // 수렴
+    const zoom = clamp(S.p.zoom / need, ZOOM_MIN, ZOOM_MAX);
+    if (Math.abs(zoom - S.p.zoom) < 1e-4) return;     // 배율 한계에 닿음
+    S.p.zoom = zoom;
+    autoAlignRelayout(lm);
+  }
 }
 
 /* ═══ 눈썹이 화면 안에 들어오게 (v1.22.0) ═════════════════════
@@ -6431,6 +6466,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, darkBlobsUp, archDecide, eyeArchRange,
+  BROW_FRAC, browFillNeed, fitBrowsToFrame,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
