@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.19.0";
+const APP_VERSION = "v3.20.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2957,7 +2957,9 @@ function keepBand(pts) {
     return s[1];
   };
   /* ⭐ v3.5.0 — `core`(피부 대비 절대 어둡기)도 그대로 넘긴다. 꼬리 끝 판정이 씁니다 */
-  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot"), ink: p.ink, dark: p.dark, core: p.core, edge: p.edge }));
+  /* v3.20.0 — rawTop(심으로 자르기 전 윗끝, 표시 전용)도 같은 3점 중앙값으로 넘긴다 */
+  return keep.map((p, i) => ({ x: p.x, top: m3(i, "top"), bot: m3(i, "bot"), ink: p.ink, dark: p.dark, core: p.core, edge: p.edge,
+                               rawTop: isFinite(p.rawTop) ? m3(i, "rawTop") : undefined }));
 }
 
 /* ⚠️ v1.66.0 — **머리카락·그림자 방어** (원장님 지시 2026-08-23)
@@ -3988,7 +3990,10 @@ function readDrawing(img, contrast, side) {
     return { x: c.x, top, bot, ink: sd0.ink,
              /* ⭐ v3.5.0 — core = 피부 대비 절대 어둡기(가장 진한 점). 꼬리 끝 판정용 */
              core: contrast + (sd0.peak || 0),
-             dark: sd0.ink / Math.max(1, sd0.len), edge: r.top <= y0 + 1 };
+             dark: sd0.ink / Math.max(1, sd0.len), edge: r.top <= y0 + 1,
+             /* ⭐ v3.20.0 — 심(core)으로 자르기 **전**의 덩어리 윗끝. 판정은 안 쓴다 — 미러링 표시용
+                윗선이 흐린 가장자리까지 나가게 하려고 `readSideCurve` 가 읽는다(1-18b 참고). */
+             rawTop: r.top };
   });
   pts.sort((p, q) => p.x - q.x);
   const kept = keepBand(pts);
@@ -5528,6 +5533,7 @@ function measureSegY(img, seg, y0, band) {
    그 정확한 동작(가이드 기준 토막 비교)에 물려 있습니다. 이 함수는 완전히 별도의 새
    판정을 **추가**하는 것이지 교체가 아닙니다 — 화면에는 기존 토막 빨강 표시 + 이 커브
    표시가 함께 나옵니다. */
+const SOFT_TOP_MAX = 0.40;         // v3.20.0 — 표시용 윗선을 연한 패스로 넓힐 때 1차 두께의 이 비율까지만
 const CURVE_FRONT_END = 0.18;      // autoFromDrawing의 앞부분 구간(0~18%)과 같은 잣대
 const CURVE_ARCHPK_NUM_MAX = 40;   // autoFromDrawing의 ARCHPK_NUM_MAX(내안각)와 같은 값
 const CURVE_TAIL_END = 0.08;       // autoFromDrawing의 END(끝점 구간)와 같은 잣대
@@ -5568,7 +5574,7 @@ function curvePeak(seq, cx) {
 function readSideCurve(img, side) {
   try {
     const { W } = S.dim;
-    let pts = null;
+    let pts = null, usedContrast = null;
     for (const contrast of [DRAW_CONTRAST, DRAW_CONTRAST_SOFT]) {
       const cand = readDrawing(img, contrast, side);
       if (!cand || cand.length < DRAW_MIN_HITS) continue;
@@ -5576,7 +5582,7 @@ function readSideCurve(img, side) {
         const th = cand.map((p) => p.bot - p.top).sort((a, b) => a - b)[Math.floor(cand.length / 2)];
         if (th > DRAW_THICK_MAX * cand.refH || th < DRAW_THICK_MIN * cand.refH) continue;
       }
-      pts = cand; break;
+      pts = cand; usedContrast = contrast; break;
     }
     if (!pts) return null;
     const cx = S.g.v1 * W;
@@ -5635,6 +5641,30 @@ function readSideCurve(img, side) {
     if (pts.tailAdd && pts.tailAdd.length) {
       for (const p of pts.tailAdd) trace.push({ x: p.x, top: p.top, bot: p.bot, zone: 1 });
     }
+    /* ⭐ v3.20.0 — **표시용 윗선은 연한 가장자리까지** (원장님 지시 2026-09-02, 실기기 스크린샷에
+       노란 점선으로 윗선이 있어야 할 자리를 그려 주심: 「현재 모습, 아래 라인은 좋아보인다」 —
+       즉 윗선이 문제). 1차 패스(DRAW_CONTRAST=18)는 "확실히 어두운" 픽셀만 잡아서, 문신·연한
+       드로잉처럼 위쪽 가장자리가 흐리게 번지는 눈썹은 윗선이 실제 보이는 가장자리보다
+       안쪽(눈 쪽)으로 들어온다 — 특히 아치→꼬리에서 그렇다. 아래선은 피부와 경계가 또렷해
+       문제없다. 그래서 **표시용 trace 의 top 만** 연한 패스(DRAW_CONTRAST_SOFT=9)로 한 번 더
+       읽어 바깥으로 넓힌다 — 단 같은 열의 1차 두께의 SOFT_TOP_MAX(40%)까지만(관자놀이 머리카락·
+       그림자로 튀어나가는 것 방지). bot 은 1차 그대로. ⛔ 판정에 쓰는 top/bot 3점은 1차 그대로 —
+       trace 는 표시 전용이다. */
+    try {
+      /* 같은 열의 "자르기 전 윗끝"(rawTop): 채택된 패스의 것과, 1차였으면 연한 패스(대비 9)의 것 —
+         둘 중 더 바깥(작은 y)을 쓰되 한도 안에서. (readDrawing 의 top 은 v1.77.0 규칙대로 심까지
+         잘라낸 값이라 흐린 가장자리를 못 담는다 — 그 규칙은 자(앞두께) 배치용이고, 여기는 표시용.) */
+      const byX = new Map();
+      const put = (arr) => { for (const p of arr || []) { const k = Math.round(p.x); const v = p.rawTop; if (!isFinite(v)) continue; const cur = byX.get(k); byX.set(k, cur === undefined ? v : Math.min(cur, v)); } };
+      put(seqT);
+      if (usedContrast === DRAW_CONTRAST) put(readDrawing(img, DRAW_CONTRAST_SOFT, side));
+      for (const p of trace) {
+        const st = byX.get(Math.round(p.x));
+        if (st === undefined) continue;
+        const lim = p.top - SOFT_TOP_MAX * Math.max(0, p.bot - p.top);
+        if (st < p.top) p.top = Math.max(st, lim);
+      }
+    } catch (e) { /* 표시 보조일 뿐 — 실패하면 1차 궤적 그대로 */ }
 
     return {
       side,
@@ -5734,6 +5764,27 @@ function balSmooth1D(arr, medWin, avgWin) {
   return out;
 }
 
+/* ⭐ v3.20.0 — 등장 회귀(PAV, pool-adjacent-violators): 수열을 **가장 가까운 단조 수열**로 고친다
+   (최소제곱). 누적 max/min 은 한 열짜리 튐이 그 뒤 전체를 끌고 가지만(v3.18~19.0 — 실기기에서
+   윗선이 아치 뒤로 안쪽에 눌러앉는 원인 중 하나), PAV 는 튐을 이웃과 평균 내어 흡수한다. */
+function balIsotonic(arr, nonDecreasing) {
+  const n = arr.length;
+  if (n < 2) return arr.slice();
+  const sgn = nonDecreasing ? 1 : -1;
+  const vals = [], cnts = [];
+  for (let i = 0; i < n; i++) {
+    let v = arr[i] * sgn, c = 1;
+    while (vals.length && vals[vals.length - 1] > v) {
+      const pv = vals.pop(), pc = cnts.pop();
+      v = (v * c + pv * pc) / (c + pc); c += pc;
+    }
+    vals.push(v); cnts.push(c);
+  }
+  const out = [];
+  for (let k = 0; k < vals.length; k++) for (let j = 0; j < cnts[k]; j++) out.push(vals[k] * sgn);
+  return out;
+}
+
 /* 3차 에르미트 보간 — p0→p1, 양끝 기울기 m0·m1 은 "t 한 단위당" 변화량 */
 function balHermite(p0, p1, m0, m1, t) {
   const t2 = t * t, t3 = t2 * t;
@@ -5820,12 +5871,16 @@ function balDisplayCurve(refC) {
     // 1) 두께 띠 → 2) 앞 끝 붙이기(x·top·두께를 (1-u)² 로) → 3) 앞에서 아치로 가며 올라가기만(아치 y 가 한계)
     for (let i = 0; i < rawA.length; i++) rawA[i].thick = clamp(rawA[i].bot - rawA[i].top, tLo, tHi);
     const dX = rawA.length ? frontX - rawA[0].x : 0, dT = rawA.length ? frontTop - rawA[0].top : 0, dK = rawA.length ? frontThick - rawA[0].thick : 0;
-    let run = frontTop;
+    /* (v3.20.0) 단조는 PAV 로 — 앞→아치로 가며 y 가 줄기만(dirA>0). 붙이기 오프셋을 더한 뒤
+       PAV 를 돌리고, 아치 y 를 한계로 두며, 마지막에 아주 작은 어긋남만 누적으로 다듬는다. */
+    const topsA = rawA.map((q, i) => { const u = i / stepsA, w = (1 - u) * (1 - u); return q.top + dT * w; });
+    const fitA = balIsotonic(topsA, dirA < 0);
+    let run = dirA > 0 ? Infinity : -Infinity;
     for (let i = 0; i < rawA.length; i++) {
       const u = i / stepsA, w = (1 - u) * (1 - u);
       const q = rawA[i];
-      let top = q.top + dT * w;
-      if (dirA > 0) { top = Math.max(Math.min(top, run), archTop); } else { top = Math.min(Math.max(top, run), archTop); }
+      let top = dirA > 0 ? Math.max(fitA[i], archTop) : Math.min(fitA[i], archTop);
+      top = dirA > 0 ? Math.min(top, run) : Math.max(top, run);
       run = top;
       const thick = clamp(q.thick + dK * w, tLo, tHi);
       pts.push({ x: q.x + dX * w, top, bot: top + thick, zone: 0 });
@@ -5857,17 +5912,21 @@ function balDisplayCurve(refC) {
   }
   const dir = tailY >= archTop ? 1 : -1;                  // 꼬리가 아치보다 아래(보통) → y 증가 방향
   const xspan = endX - archX;
-  let runTop = archTop, runThick = Math.max(0, archBot - archTop);
-  for (let j = 0; j < raw.length; j++) {
-    const q = raw[j];
+  /* (v3.20.0) (a) 직선 클램프는 표본별로, (b)(c) 단조는 PAV 로 — 한 열짜리 튐이 뒤를 끌고 가지 않게.
+     아치 점(j=0)은 그대로 두어 ④와 이음새가 없다. */
+  const topsB = raw.map((q, j) => {
     const s = Math.abs(xspan) > 1e-6 ? clamp((q.x - archX) / xspan, 0, 1) : j / stepsB;
     const chord = archTop + (tailY - archTop) * s;        // 아치→꼬리 직선의 윗선 y
-    let top = dir > 0 ? Math.min(q.top, chord) : Math.max(q.top, chord);   // (a) 직선 안쪽으로 패이지 않음
-    top = dir > 0 ? Math.max(top, runTop) : Math.min(top, runTop);          // (b) 되돌아 오르지 않음
-    runTop = top;
-    const thick = Math.max(0, q.bot - q.top);
-    runThick = Math.min(runThick, thick);                                     // (c) 가늘어지기만
-    q.top = top; q.bot = top + runThick;
+    return dir > 0 ? Math.min(q.top, chord) : Math.max(q.top, chord);   // (a) 직선 안쪽으로 패이지 않음
+  });
+  const fitTop = balIsotonic(topsB, dir > 0);            // (b) 되돌아 오르지 않음
+  const thickB = raw.map((q) => Math.max(0, q.bot - q.top));
+  const fitThick = balIsotonic(thickB, false);           // (c) 가늘어지기만
+  for (let j = 0; j < raw.length; j++) {
+    const q = raw[j];
+    let top = dir > 0 ? Math.max(fitTop[j], archTop) : Math.min(fitTop[j], archTop);
+    if (j === 0) top = archTop;
+    q.top = top; q.bot = top + (j === 0 ? Math.max(0, archBot - archTop) : clamp(fitThick[j], 0, Math.max(0, archBot - archTop)));
   }
   const endTop = raw[raw.length - 1].top, endBot = raw[raw.length - 1].bot;
   for (let j = 0; j < raw.length; j++) {
@@ -6377,7 +6436,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  runBalanceCurve, readSideCurve, balDisplayCurve, balSmoothAxis, balSmooth1D, balHermite, BAL_CURVE_MIN, BAL_CURVE_MAX,   /* v3.16.0~17.0 — 미러링 곡선 검사용 */
+  runBalanceCurve, readSideCurve, balDisplayCurve, balSmoothAxis, balSmooth1D, balHermite, balIsotonic, BAL_CURVE_MIN, BAL_CURVE_MAX, SOFT_TOP_MAX,   /* v3.16.0~20.0 — 미러링 곡선 검사용 */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
