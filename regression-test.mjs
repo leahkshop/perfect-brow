@@ -2812,6 +2812,7 @@ if (RUN(5)) {
       };
       return { ok, W, H, exp, innerCapPx, orient,
         cxPx: g.v1 * W, archRead: S.archRead ? { ...S.archRead } : null,
+        tailRead: S.tailRead ? JSON.parse(JSON.stringify(S.tailRead)) : null,
         frontPx: g.front * H, ftPx: g.frontThickness * H,
         archPx: g.h2 * H, atPx: g.archThickness * H, tailPx: g.h3 * H,
         innerPx: g.v2 * W, outerPx: g.v4 * W, archVPx: g.v6 * W,
@@ -2896,6 +2897,35 @@ if (RUN(5)) {
     check("122. 얇은 털 추적 금지 — 아우터는 진한 눈썹의 끝에 선다 (잔털까지 따라가지 않는다)",
       o122.ok && atBody && notChased,
       `아우터 ${o122.outerPx.toFixed(0)} (진한 눈썹 끝 ${SHAPE_TAPER.bandEndX} 에 섬=${atBody} · 잔털 끝 ${SHAPE_TAPER.tipX} 까지 안 감=${notChased})`);
+
+    /* 190. ⭐⭐⭐ v3.28.0 — **가늘어진 꼬리 심을 끝까지 따라간다** (원장님 확인 2026-09-02, 일자형 파우더 눈썹
+       실제 사진: 「아치 세로선 맞고 아치엣지·두께 맞고 꼬리만 안 맞다」 — 노란 십자 = 꼬리 심이 끝나는 아래·바깥).
+       몸통(x 178~340) 바깥으로 **폭 3px 의 검은 심 한 줄**(대비 = 몸통의 60%)이 비스듬히 내려가며 x140 까지 이어진다.
+       꼬리(v4·h3)는 그 심의 **끝(x≈140)·아랫끝**에 서야 한다. 대조: 같은 자리에 **옅은 줄**(대비 16%)만 있으면
+       122·123 처럼 몸통 끝(≈178)에 남아야 한다 — 「얇은 털 따라가기 금지」는 그대로. */
+    const mkLineTail = (color) => {
+      const f = path.join(ROOT, `.draw-linetail-${color.slice(1)}.svg`);
+      const up = [], dn = [];
+      for (let x = 178; x <= 340; x += 2) { up.push(`${x},${edgeAt(SHAPE_A.cp, x, 1).toFixed(1)}`); dn.push(`${x},${edgeAt(SHAPE_A.cp, x, 2).toFixed(1)}`); }
+      const y0 = (edgeAt(SHAPE_A.cp, 178, 1) + edgeAt(SHAPE_A.cp, 178, 2)) / 2;
+      fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+        + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+        + `<polygon points="${up.concat(dn.reverse()).join(" ")}" fill="#2a1c14"/>`
+        + `<line x1="179" y1="${y0.toFixed(1)}" x2="140" y2="${(y0 + 30).toFixed(1)}" stroke="${color}" stroke-width="3" stroke-linecap="round"/></svg>`);
+      return { f, endX: 140, endY: y0 + 30 };
+    };
+    const lt = mkLineTail("#6a6a6a");                       /* 검은 심 (대비 ≈ 몸통의 60%) */
+    const o190 = await runDraw(false, lt.f, null, SHAPE_A);
+    fs.unlinkSync(lt.f);
+    const lf = mkLineTail("#bebebe");                       /* 옅은 줄 (대비 ≈ 16%) — 따라가면 안 된다 */
+    const o190b = await runDraw(false, lf.f, null, SHAPE_A);
+    fs.unlinkSync(lf.f);
+    const tr190 = (o190.tailRead && o190.tailRead.trace) || null;
+    const followed = Math.abs(o190.outerPx - lt.endX) <= 6 && Math.abs(o190.tailPx - (lt.endY + 1.5)) <= 6;
+    const stayed = o190b.outerPx >= 170 && !(o190b.tailRead && o190b.tailRead.trace && o190b.tailRead.trace.used);
+    check("190. 꼬리 심 추적 — 몸통 바깥으로 이어진 검은 심(대비 60%)은 끝까지 따라가 x·y 둘 다 그 끝에 선다 · 옅은 줄(16%)은 안 따라간다 (원장님 확인 2026-09-02)",
+      o190.ok && o190b.ok && followed && stayed,
+      `검은 심: 아우터 ${o190.outerPx.toFixed(0)}(기대 ${lt.endX}) · 꼬리 ${o190.tailPx.toFixed(0)}(기대 ${(lt.endY + 1.5).toFixed(0)}) · 추적 ${tr190 ? `${tr190.cols}열 used=${tr190.used}` : "없음"} · 옅은 줄: 아우터 ${o190b.outerPx.toFixed(0)}(≥170) 추적 미채택=${stayed}`);
   }
 
   /* 124. ⚠️⚠️ v1.73.0 — **앞두께는 앞머리보다 위** (원장님이 화면에 번호를 찍어 확정 2026-08-25)

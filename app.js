@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.27.0";
+const APP_VERSION = "v3.28.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3122,6 +3122,71 @@ function tailConverge(seqT, tailIdx) {
   return { x: seqT[tailIdx].x + dir * ext, y: fm.b * ext + fm.c,
            ext, thickEnd: ft.c, slope: ft.b };
 }
+/* ⭐⭐⭐ v3.28.0 — **가늘어진 꼬리 심을 끝까지 따라간다** (원장님 확인 2026-09-02, 일자형 파우더 눈썹 실제 사진:
+   「아치 세로선 맞고 아치엣지·두께 맞고 꼬리만 안 맞다」 — 노란 십자를 꼬리 끝 **아래·바깥**에 찍어 주심).
+   그 사진에서 밴드 판독은 x123 에서 멈췄고(열 평균이 옅어져서), tailConverge 는 5% 상한(12.7px)에 걸려 x110 의
+   **가운데 높이**에 섰다. 그런데 픽셀을 보면 x123→x90 까지 폭 2~3px 의 **검은 심 한 줄**이 비스듬히 내려가며
+   이어져 있었고(대비 70~85, 몸통 심 120 의 60%), 원장님 십자는 그 심이 끝나는 자리(x≈89, y≈183)였다.
+   → 밴드가 멈춘 열부터 바깥으로 **한 열씩** 걸으며, 직전 열의 심 높이 근처(위 5px·아래 8px — 꼬리는 내려간다)에서
+     가장 어두운 픽셀을 찾는다. 그 대비가 **몸통 심 대비의 TAIL_TRACE_CORE(40%) 이상**이면 아직 꼬리, 3열 연속
+     모자라면 끝. 끝 열의 심 **아랫끝**(대비 절반 아래로 떨어지는 마지막 줄)이 꼬리 자리(x·y 둘 다).
+   ⚠️ 이것은 「얇은 털 따라가기」(v1.71.0 금지)가 아니다 — 잔털·번짐은 대비가 몸통의 절반에 못 미치거나(회귀 122·123)
+      열마다 높이가 튀어 창(±5/8px)을 벗어난다. **연속된 한 줄의 검은 심**만 따라간다 (v3.5.0 「검은 심이 끝나는 곳」의
+      연장선, 회귀 178). 밴드 끝보다 4px 이상 더 나갔을 때만 채택 — 못 나가면 v3.6.x 수렴점 그대로.
+   ⛔ 폭주 방지: 판독 구간의 TAIL_TRACE_MAX(35%) 까지만. */
+const TAIL_TRACE_CORE = 0.4;   // 몸통 심 대비의 이 비율 이상이어야 아직 꼬리 (실제 사진: 0.5 는 5열 만에 끊김 · 0.4 = 원장님 십자 자리(89,182) · 0.3 도 같은 자리)
+const TAIL_TRACE_MAX = 0.35;   // 판독 구간(밴드 폭)의 이 비율까지만 걷는다
+const TAIL_TRACE_UP = 5, TAIL_TRACE_DN = 8;   // 직전 심 높이 기준 탐색 창 (위/아래 px)
+const TAIL_TRACE_GAP = 3;      // 연속 이 열이 모자라면 끝
+function tailTrace(img, seqT, tailIdx) {
+  const { W, H } = S.dim;
+  if (!img || !seqT || tailIdx < 8 || !W || !H) return null;
+  const dir = Math.sign(seqT[tailIdx].x - seqT[Math.max(0, tailIdx - 1)].x) || 1;
+  const px = (x, y) => lumaAt(img, W, Math.round(x), Math.round(y));
+  /* 열 하나의 심: 창 안 최암부와, 창 위·아래 바깥의 밝은 값(피부)으로 대비를 낸다 */
+  const colCore = (x, y0, y1) => {
+    const a = Math.max(0, Math.floor(y0)), b = Math.min(H - 1, Math.ceil(y1));
+    if (b - a < 2) return null;
+    let minL = 1e9, minY = a;
+    for (let y = a; y <= b; y++) { const l = px(x, y); if (l < minL) { minL = l; minY = y; } }
+    const around = [];
+    for (let y = Math.max(0, a - 14); y < a - 4; y++) around.push(px(x, y));
+    for (let y = b + 5; y <= Math.min(H - 1, b + 15); y++) around.push(px(x, y));
+    if (around.length < 4) return null;
+    around.sort((u, v) => u - v);
+    const skin = around[Math.floor(around.length * 0.7)];
+    return { y: minY, minL, skin, contrast: skin - minL };
+  };
+  /* 몸통 심 대비 — 밴드 끝 8열의 중앙값 */
+  const refs = [];
+  for (let i = tailIdx - 7; i <= tailIdx; i++) {
+    const q = seqT[i]; if (!q) continue;
+    const c = colCore(q.x, q.top - 2, q.bot + 2); if (c && c.contrast > 0) refs.push(c.contrast);
+  }
+  if (refs.length < 4) return null;
+  refs.sort((u, v) => u - v);
+  const bodyCore = refs[Math.floor(refs.length / 2)];
+  if (!(bodyCore >= DRAW_CONTRAST)) return null;
+  const need = TAIL_TRACE_CORE * bodyCore;
+  const span = Math.abs(seqT[seqT.length - 1].x - seqT[0].x) || 1;
+  const maxX = TAIL_TRACE_MAX * span;
+  const last = seqT[tailIdx];
+  const c0 = colCore(last.x, last.top - 2, last.bot + 2);
+  if (!c0) return null;
+  let prevY = c0.y, lastGood = null, gap = 0, walked = 0;
+  for (let x = last.x + dir; x >= 1 && x <= W - 2 && walked <= maxX; x += dir, walked++) {
+    const c = colCore(x, prevY - TAIL_TRACE_UP, prevY + TAIL_TRACE_DN);
+    if (c && c.contrast >= need) { prevY = c.y; lastGood = { x, ...c }; gap = 0; }
+    else { gap++; if (gap >= TAIL_TRACE_GAP) break; }
+  }
+  if (!lastGood) return null;
+  /* 끝 열의 심 아랫끝 — 대비의 절반 아래로 떨어지는 마지막 줄 */
+  const half = lastGood.skin - lastGood.contrast * 0.5;
+  let yb = lastGood.y;
+  for (let y = lastGood.y + 1; y <= Math.min(H - 1, lastGood.y + 6); y++) { if (px(lastGood.x, y) < half) yb = y; else break; }
+  return { x: lastGood.x, y: yb, coreY: lastGood.y, bodyCore: +bodyCore.toFixed(1), endContrast: +lastGood.contrast.toFixed(1),
+           cols: Math.abs(lastGood.x - last.x) };
+}
 const GROW_STEP = 0.55;    // 중심이 두께의 이 비율 넘게 어긋나면 이어진 것이 아니다
 const GROW_MAX = 0.18;     // 판독 폭의 이 비율까지만 이어 붙인다 (폭주 방지)
 /* 한쪽 끝을 이어 붙인다. `toInner` 면 안쪽(코 방향), 아니면 바깥(꼬리 방향).
@@ -4258,11 +4323,17 @@ function autoFromDrawing() {
      판독이 흐릿한 끝에서 먼저 멈추므로, 두께가 0 이 되는 자리까지 이어서 봅니다. */
   {
     const tc = tailConverge(seqT, tailIdx);
-    const tipX = tc ? tc.x : seqT[tailIdx].x;
+    let tipX = tc ? tc.x : seqT[tailIdx].x;
     S.tailRead = { lastX: seqT[tailIdx].x, tipX,
                    ext: tc ? +tc.ext.toFixed(1) : 0,
                    tipY: tc ? +tc.y.toFixed(1) : null,
                    thickEnd: tc ? +tc.thickEnd.toFixed(1) : null };
+    /* ⭐ v3.28.0 — 가늘어진 꼬리 심 추적 (위 tailTrace 주석). 수렴점보다 4px 이상 더 나갔을 때만 채택 */
+    const tt = tailTrace(img, seqT, tailIdx);
+    const dirT = Math.sign(seqT[tailIdx].x - seqT[Math.max(0, tailIdx - 1)].x) || 1;
+    const traced = !!(tt && (tt.x - tipX) * dirT >= 4);
+    if (traced) tipX = tt.x;
+    S.tailRead.trace = tt ? { x: tt.x, y: tt.y, cols: tt.cols, bodyCore: tt.bodyCore, endContrast: tt.endContrast, used: traced } : null;
     setLine("v4", clamp(S.g.v1 - Math.abs(tipX - cx) / W, 0.02, 0.98));
     /* ⭐⭐ v3.6.1 — **꼬리 자의 높이도 수렴점으로 내려온다** (원장님 확인 2026-08-31:
        「흰점 잘 들어옴, 뻗어나간 끝지점 선택 잘됨. 상하 위치만 잘 잡으면 된다.
@@ -4273,7 +4344,8 @@ function autoFromDrawing() {
        그대로입니다 — 회귀 121 이 그 경우를 지킵니다.
        ⛔ 「끝 구간 아랫선의 70% 분위」로 되돌리지 마세요. 그것은 판독이 멈춘 자리의
           아랫선이지 **꼬리 끝**이 아닙니다. */
-    if (tc) setY("h3", tc.y);
+    if (traced) setY("h3", tt.y);          /* v3.28.0 — 추적한 심의 아랫끝 (x·y 둘 다) */
+    else if (tc) setY("h3", tc.y);
   }
   /* ⭐ v3.0.0 — **아치선(v6)은 아치엣지(h2)가 확정된 뒤에 잡습니다** — 아래에서
      archDecide/archStandard 로 h2 를 다 정한 다음, 이 함수 맨 아래의 v6 판정 블록
@@ -6359,6 +6431,6 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, darkBlobsUp, archDecide, eyeArchRange,
-  ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor,
+  ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
