@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.18.0";
+const APP_VERSION = "v3.19.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5694,10 +5694,10 @@ const BAL_ANIM_MS = 650;
     표기되는일은 없어야 한다」
    ─────────────────────────────────────────────────────────────────────────
    그래서 두 구간을 **다르게** 그린다:
-   · 앞→아치 (윗라인 = 앞두께→아치엣지 · 아래라인 = 앞머리→아치두께): 고객 드로잉을 **보지
-     않고** 두 점만 매끈한 곡선(3차 에르미트)으로 잇는다 — 고객이 지그재그로 그렸어도 "포인트와
-     포인트 사이는 부드러워야 한다"를 화면이 보여준다. 아치 쪽 끝의 기울기는 그 다음 구간
-     (드로잉을 따라가는 꼬리 구간)의 기울기와 맞춰서 이음새에 꺾임이 없게 한다.
+   · 앞→아치 (윗라인 = 앞두께→아치엣지 · 아래라인 = 앞머리→아치두께): (v3.19.0) 편 궤적을
+     따라가되 "아치로 갈수록 올라가기만 · 두께는 앞머리~아치 두께 사이" 두 규칙만 지킨다 —
+     v3.17~18.0의 두 점 에르미트(드로잉 무시)는 「사용자가 드로잉한것을 최대한 반영하도록」
+     지시로 폐지. 지그재그는 스무딩이 지우므로 "포인트 사이는 부드럽다"는 그대로다.
    · 아치→꼬리 (아치엣지→꼬리 · 아치두께→꼬리): `readSideCurve().trace`(열별 원본 궤적)의
      pk~tailIdx 구간을 **중앙값(창 5)+이동평균(창 9)으로 편 뒤** 따라간다 — 고객 드로잉의
      실제 모양(산꼭대기 뒤로 얼마나 오래 높게 가다가 어떻게 내려오는지)을 최대한 살리되
@@ -5710,7 +5710,7 @@ const BAL_ANIM_MS = 650;
    표시에만 쓰인다. 판정 로직(devFront/devArch/devTail)은 여전히 원본 3점 그대로 비교. */
 const BAL_CURVE_PX = 3;            // 표본 간격(캔버스 px) — 점선이 촘촘해 보이는 정도
 const BAL_CURVE_MIN = 16, BAL_CURVE_MAX = 80;   // 구간당 표본 수 하한/상한
-const BAL_TAIL_BLEND = 0.35;       // 꼬리 구간 뒤쪽 이 비율에서 수렴점으로 모은다
+const BAL_TAIL_BLEND = 0.25;       // 꼬리 구간 뒤쪽 이 비율에서 수렴점으로 모은다 (v3.19.0: 0.35→0.25, 드로잉을 더 오래 따라감)
 
 /* 1차원 스무딩 — 중앙값(창 medWin)으로 한 열짜리 튐을 지우고, 이동평균(창 avgWin)으로
    잔떨림을 편다. 양끝은 창을 줄여 처리(값을 잃지 않는다). */
@@ -5778,8 +5778,8 @@ function balDisplayCurve(refC) {
 
   /* ① 원본 궤적을 편다 — 한 열짜리 튐(털 한 올·점)은 중앙값이 지우고, 잔떨림은 이동평균이 편다 */
   const xs = tr.map((p) => p.x);
-  const tops = balSmooth1D(tr.map((p) => p.top), 5, 9);
-  const bots = balSmooth1D(tr.map((p) => p.bot), 5, 9);
+  const tops = balSmooth1D(tr.map((p) => p.top), 5, 7);   // v3.19.0: 이동평균 창 9→7 (드로잉에 더 붙게)
+  const bots = balSmooth1D(tr.map((p) => p.bot), 5, 7);
 
   /* ② 표시용 아치 점 = 편 궤적의 산꼭대기(pk) 열 — readSideCurve 의 아치 3점(pk±8% 중앙값)과
      1~2px 안에서 같다. 여기서 이어 붙여야 앞→아치 곡선과 아치→꼬리 궤적 사이에 단차가 없다. */
@@ -5795,29 +5795,41 @@ function balDisplayCurve(refC) {
   const frontThickRaw = Math.max(0, frontBot - frontTopRaw);
   const frontTop = frontThickRaw < archThick ? (frontBot - archThick) : frontTopRaw;
 
-  /* ④ 앞→아치: 두 점만 3차 에르미트로 잇는다(규칙 1·2, 고객 드로잉 무시). x 는 t 에 선형 —
-     그래서 곡선은 y(x) 그래프(눈썹 경계선답게 한 x 에 한 y). 앞 끝 기울기 = 두 점을 잇는
-     직선 기울기(앞에서 곧게 출발), 아치 끝 기울기 = 편 궤적의 pk 근처 기울기(다음 구간과
-     이음새가 매끈하게). 기울기가 튀면(잡음) 직선 기울기의 2배까지로 막는다. */
-  const span = archX - frontX;
-  const i0 = Math.max(0, pk - 3), i1 = Math.min(n - 1, pk + 3);
-  const dxk = xs[i1] - xs[i0];
-  const slopeAt = (arr) => (Math.abs(dxk) > 1e-6 ? (arr[i1] - arr[i0]) / dxk : 0);
-  const tan1 = (arr, y0, y1) => {
-    const chord = y1 - y0;                     // t 한 단위당 직선 변화량
-    const m = slopeAt(arr) * span;             // 궤적 기울기를 t 단위로
-    const lim = Math.max(Math.abs(chord) * 2, 4);
-    return clamp(m, -lim, lim);
-  };
-  const stepsA = stepsFor(span);
+  /* ④ 앞→아치 ⭐ v3.19.0 — **이 구간도 고객 드로잉을 따라간다** (원장님 지시 2026-09-02
+     「사용자가 드로잉한것을 최대한 반영하도록」). v3.17~18.0은 두 점만 에르미트로 이어 드로잉을
+     아예 무시했는데, 이제 편 궤적(0~pk)을 다시 뽑아 그대로 따라가되 눈썹 규칙 두 가지만 지킨다:
+       (a) 윗선은 산꼭대기(아치)로 갈수록 올라가기만 한다 — 아치에서 앞으로 거슬러 오며 누적
+           max(되돌아 내려갔다 올라오는 잡음 제거). 아치 점(pk)은 그대로라 ⑤와 이음새가 없다.
+       (b) 두께는 앞머리 두께와 아치 두께 **사이**에 있다(규칙 1「굵기가 비슷해야 한다」) —
+           그늘·털 때문에 아래선이 위아래로 튀는 원본(실제 사진에서 확인)을 이 띠 안으로 누른다.
+     앞 끝은 5점의 앞 점(frontX, frontTop(두께 규칙 적용), frontBot)에 정확히 붙인다 — 편 궤적의
+     첫 열과의 차이를 앞에서 (1-u)² 로 줄여 가며 얹는다(아치 쪽에선 0). 지그재그·털 한 올은
+     ①의 중앙값+이동평균이 이미 지웠다. */
+  const stepsA = stepsFor(archX - frontX);
   const pts = [];
-  const m1Top = tan1(tops, frontTop, archTop), m1Bot = tan1(bots, frontBot, archBot);
-  for (let i = 0; i < stepsA; i++) {          // 아치 점 자체는 ⑤의 첫 점이 맡는다
-    const t = i / stepsA;
-    pts.push({ x: frontX + t * span,
-               top: balHermite(frontTop, archTop, archTop - frontTop, m1Top, t),
-               bot: balHermite(frontBot, archBot, archBot - frontBot, m1Bot, t),
-               zone: 0 });
+  {
+    const rawA = [];
+    for (let i = 0; i < stepsA; i++) {          // 아치 점 자체는 ⑤의 첫 점이 맡는다
+      const fi = (i / stepsA) * pk;
+      const a = Math.floor(fi), b = Math.min(pk, a + 1), f = fi - a;
+      rawA.push({ x: xs[a] + (xs[b] - xs[a]) * f, top: tops[a] + (tops[b] - tops[a]) * f, bot: bots[a] + (bots[b] - bots[a]) * f });
+    }
+    const dirA = archTop <= frontTop ? 1 : -1;   // 보통: 아치가 앞머리보다 위(y 작음)
+    const frontThick = frontBot - frontTop;
+    const tLo = Math.min(frontThick, archThick), tHi = Math.max(frontThick, archThick);
+    // 1) 두께 띠 → 2) 앞 끝 붙이기(x·top·두께를 (1-u)² 로) → 3) 앞에서 아치로 가며 올라가기만(아치 y 가 한계)
+    for (let i = 0; i < rawA.length; i++) rawA[i].thick = clamp(rawA[i].bot - rawA[i].top, tLo, tHi);
+    const dX = rawA.length ? frontX - rawA[0].x : 0, dT = rawA.length ? frontTop - rawA[0].top : 0, dK = rawA.length ? frontThick - rawA[0].thick : 0;
+    let run = frontTop;
+    for (let i = 0; i < rawA.length; i++) {
+      const u = i / stepsA, w = (1 - u) * (1 - u);
+      const q = rawA[i];
+      let top = q.top + dT * w;
+      if (dirA > 0) { top = Math.max(Math.min(top, run), archTop); } else { top = Math.min(Math.max(top, run), archTop); }
+      run = top;
+      const thick = clamp(q.thick + dK * w, tLo, tHi);
+      pts.push({ x: q.x + dX * w, top, bot: top + thick, zone: 0 });
+    }
   }
 
   /* ⑤ 아치→꼬리: 편 궤적 pk~tailIdx 를 고른 간격으로 다시 뽑아 그대로 따라간다(규칙 3·4,

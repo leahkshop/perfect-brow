@@ -2364,7 +2364,7 @@ if (RUN(5)) {
       + `2100ms 점${done1.circles}(끝=${done1.animDone}) → 2300ms 점${done2} · 빨간점=${done1.redCount}`);
   }
 
-  /* 186. ⭐ v3.16.0→v3.18.0 — **미러링 점선 = 눈썹 기본 디자인 규칙** (원장님 지시 2026-09-02
+  /* 186. ⭐ v3.16.0→v3.19.0 — **미러링 점선 = 눈썹 기본 디자인 규칙** (원장님 지시 2026-09-02
      「1. 앞두께는 아치엣지와 연결된다 무조건 / 2. 앞머리와 아치두께는 연결된다 무조건 /
       3. 아치엣지에서 꼬리선 — 고객 드로잉을 최대한 활용하여 부드럽게 / 4. 아치두께에서 꼬리선
       고객 드로잉을 최대한 활용하여 연결 / 5포인트 이외에 다른 짙은 부분이 점으로 표기되는일은
@@ -2436,6 +2436,20 @@ if (RUN(5)) {
       }
       devFollow /= Math.max(1, cnt); devChord /= Math.max(1, cnt);
       const noClampA = nearf(cA[0].top, A.frontTop, 1e-6);
+      /* v3.19.0 — 앞→아치도 드로잉을 따라간다(「사용자가 드로잉한것을 최대한 반영하도록」):
+         zone0 표본이 잡음 뺀 원형과 가깝고 · 아치로 갈수록 올라가기만 하고(단조) · 두께가
+         앞머리~아치 두께 띠 안에 있는지 */
+      let devFront = 0, cntF = 0, frontMono = true, frontBand = true, prevT = cA[0].top;
+      const tLo = Math.min(A.frontBot - A.frontTop, arch.bot - arch.top) - 1e-6, tHi = Math.max(A.frontBot - A.frontTop, arch.bot - arch.top) + 1e-6;
+      for (const q of z0) {
+        const u = (q.x - x0) / (x1 - x0);
+        if (u > 0.12) { devFront += Math.abs(q.top - pureA(u)); cntF++; }   // 앞 끝 붙이기 구간은 제외
+        if (q.top > prevT + 1e-6) frontMono = false;
+        prevT = q.top;
+        const th = q.bot - q.top;
+        if (th < tLo || th > tHi) frontBand = false;
+      }
+      devFront /= Math.max(1, cntF);
 
       /* ── B ── */
       const B = mk(pureA, thickA, true), cB = window.PB.balDisplayCurve(B.refC);
@@ -2460,18 +2474,21 @@ if (RUN(5)) {
         inDipMax = Math.max(inDipMax, pureC(u) - chord);
       }
       return { n, z0: z0.length, z1: z1.length, startOk, endOk, d2In, d2Out, seamOk, devFollow, devChord, cnt,
-               clamped, noClampA, frontThickB, archThickB, noDip, noRise, noThicken, inDipMax, zC: zC.length };
+               clamped, noClampA, frontThickB, archThickB, noDip, noRise, noThicken, inDipMax, zC: zC.length,
+               devFront, cntF, frontMono, frontBand };
     });
     await ctx.close();
-    check("186. 미러링 점선 = 눈썹 기본 규칙 — 앞→아치는 두 점을 매끈하게 · 아치→꼬리는 고객 드로잉을 편 뒤 따라감(안쪽 패임·되돌아 오름·다시 굵어짐 금지) · 튐 안 새어나옴 · 꼬리 한 점 수렴 · 앞머리 두께 하한 (원장님 지시 2026-09-02)",
+    check("186. 미러링 점선 = 눈썹 기본 규칙 — 앞→아치·아치→꼬리 모두 고객 드로잉을 편 뒤 따라감(앞: 올라가기만·두께 띠 / 뒤: 안쪽 패임·되돌아 오름·다시 굵어짐 금지) · 튐 안 새어나옴 · 꼬리 한 점 수렴 · 앞머리 두께 하한 (원장님 지시 2026-09-02)",
       errs.length === 0 && r186.startOk && r186.endOk && r186.seamOk
         && r186.z0 >= 16 && r186.z1 >= 16
         && r186.d2Out < r186.d2In / 4
         && r186.devFollow < 3 && r186.devChord > 4 && r186.devFollow < r186.devChord / 3
         && r186.clamped && r186.noClampA
-        && r186.noDip && r186.noRise && r186.noThicken && r186.inDipMax > 10,
+        && r186.noDip && r186.noRise && r186.noThicken && r186.inDipMax > 10
+        && r186.devFront < 3 && r186.frontMono && r186.frontBand,
       `A: 점 ${r186.n}(앞→아치 ${r186.z0} · 아치→꼬리 ${r186.z1}) 앞점시작=${r186.startOk} 꼬리수렴=${r186.endOk} 이음새=${r186.seamOk}`
       + ` 꺾임 ${r186.d2In.toFixed(1)}→${r186.d2Out.toFixed(2)} 원형편차 궤적추종 ${r186.devFollow.toFixed(2)}px vs 직선 ${r186.devChord.toFixed(1)}px(${r186.cnt}점) 두꺼우면 그대로=${r186.noClampA}`
+      + ` · 앞→아치 드로잉추종 ${r186.devFront.toFixed(2)}px(${r186.cntF}점) 올라가기만=${r186.frontMono} 두께띠=${r186.frontBand}`
       + ` · B: 두께보정=${r186.clamped}(앞 ${r186.frontThickB.toFixed(1)} = 아치 ${r186.archThickB.toFixed(1)})`
       + ` · C(입력이 직선 아래로 ${r186.inDipMax.toFixed(0)}px 패임): 안패임=${r186.noDip} 안되돌아오름=${r186.noRise} 안굵어짐=${r186.noThicken} (${r186.zC}점)`);
   }
