@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.26.0";
+const APP_VERSION = "v3.27.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3632,6 +3632,12 @@ function archDecide(img, peakX, info) {
         (실제 사진 5번: 읽은 값 8.5 → 5칸 자리 9.3 · 원장님 정답 9.5)
      ⚠️ ②를 「무조건 5칸」으로 바꾸지 마세요 — 원장님이 **그려 놓은 드로잉**은 아치가 5칸보다
         얇을 수 있고, 그때는 그린 선의 아랫끝이 정답입니다 (회귀 87·90·91·92·115·116·128). */
+  /* ⭐⭐⭐ v3.27.0 — **② 「5칸을 넘지 못한다」는 폐지** (원장님 확정 2026-09-02, 실제 사진(일자형 파우더 눈썹,
+     아치 두께 8.4칸)으로 A~D 네 가지를 비교한 뒤: 「두께는 C(읽은 값 그대로)가 맞다」).
+     이 눈썹은 눈 사이가 좁아 눈금 1칸이 작게 잡혀 두께가 8~12칸으로 계산되는데, 5칸 상한이 정답(아랫끝)을
+     잘라 아치두께를 눈썹 한가운데에 세웠다. 이제 아랫끝을 읽었으면 **읽은 값 그대로**. ①(아랫끝을 아예 못
+     읽은 열들 → 아치엣지+5칸 대체값, 회귀 164)은 그대로 둔다. ⛔ 사진 5번(읽은 값 8.5 → 상한 9.3 → 정답 9.5)
+     같은 잔털 케이스는 이제 1칸쯤 낮게 잡힐 수 있다 — 원장님이 그것을 알고 C 를 고르셨다. */
   const cap = u ? AT_FROM_ARCH * u : null;
   /* ⭐ v2.8.0 — 아치엣지 맥시멈 (위 ARCH_MAX_OVER_FT 주석). ⚠️ **밴드 판독에는 걸지 않습니다** —
      밴드가 읽는 것은 원장님이 그려 놓은 드로잉이고, 드로잉은 그 자체가 정답입니다. */
@@ -3642,7 +3648,7 @@ function archDecide(img, peakX, info) {
   if (edges.length >= 3) {                               // ① 아치엣지를 읽었다 — 여기가 기준
     const edge = capEdge(mid(edges));
     let thick = bots.length >= 3 ? mid(bots) : null;
-    if (cap) thick = thick === null ? edge + cap : Math.min(thick, edge + cap);
+    if (cap && thick === null) thick = edge + cap;      /* v3.27.0 — 상한(Math.min) 제거, 대체값만 */
     if (thick === null) return null;                     // 자도 없고 아랫끝도 없으면 말할 수 없다
     if (!(edge < thick - 1)) return null;                // 윗선이 아랫선보다 위가 아니면 오독
     return { edge, thick };
@@ -4309,12 +4315,7 @@ function autoFromDrawing() {
       if (std) { setY("archThickness", std.thick); setY("h2", std.edge); }
     }
   }
-  {
-    const AT_GAP = 3 / H;                        // 캔버스 3px — 못박음 검사와 부딪히지 않는 최소 간격
-    const floor = S.g.h2 + 4 / H;                // 아치 윗선보다는 반드시 아래
-    const lim = Math.max(floor, Math.min(S.g.h3, S.g.front) - AT_GAP);
-    if (S.g.archThickness > lim) setLine("archThickness", lim);
-  }
+  applyArchThickFloor();   /* 아치두께 마지노선 (v1.81.0 · v3.27.0 1.5칸 여유) — 아래 함수 */
 
   /* ⭐⭐⭐ v3.0.0 — **아치선(v6) — 아치엣지 가로선이 눈썹과 맞닿는 자리** (원장님 지시
      2026-08-30, 실제 사진 3장에 파란 선으로 손수 표시해 확인):
@@ -4389,7 +4390,14 @@ function autoFromDrawing() {
        모양 B)의 확정 지점이 넘버링으로 30.46 이라 30 에 걸렸기 때문입니다. 31 이어도
        오류값(34~35.4)과는 3.5칸 여유가 있습니다. 더 좁히려면 모양 B 같은 눈썹을 포기해야
        합니다 — 그러지 마세요. */
-    const ARCHV_NUM_LO = 15, ARCHV_NUM_HI = ARCHV_NUM_MAX, ARCHV_NUM_STD = ARCHV_NUM_23;
+    /* ⭐⭐ v3.27.0 — **하한 15 폐지 → 「꼬리 자리에서 3칸 안쪽」** (원장님 확인 2026-09-02, 실제 사진에 노란 선으로
+       아치선을 짚어 주심: 「아치 세로선부터 잘못되었다」). 그 사진에서 픽셀 판독은 원장님 노란선 자리(num 8.4)를
+       정확히 찾았는데 절대 하한 15 에 걸려 버려지고 표준값 23(눈썹 몸통 한가운데)에 섰다. 눈 사이가 좁고
+       눈썹이 긴 얼굴은 눈금 자가 작아 넘버링이 통째로 바깥으로 밀리므로(꼬리가 num 0 이하), 하한은
+       **그 얼굴의 꼬리 자리(v4)에 상대적**이어야 한다. 상한 25(실기기 오류 34~35 방어)는 그대로.
+       v3.1.0 주석에 적어 둔 「긴 눈썹 사진이 오면 넓혀야 한다」의 그 사례다. 확정 4장(17.6~25.5)은 영향 없음. */
+    const ARCHV_NUM_HI = ARCHV_NUM_MAX, ARCHV_NUM_STD = ARCHV_NUM_23;
+    const ARCHV_TAIL_IN = 3;
     const browSpanUnits = tickPx ? Math.abs(seq[n - 1].x - seq[pk].x) / tickPx : 0;
     const spanT = Math.max(0, Math.min(1, (browSpanUnits - BROW_SPAN_LO) / (BROW_SPAN_HI - BROW_SPAN_LO)));
     const floorUnits = FLOOR_LO + spanT * (FLOOR_HI - FLOOR_LO);
@@ -4442,12 +4450,16 @@ function autoFromDrawing() {
           하지 않는지 회귀 91 로 확인했습니다 — 그래서 상한이 31 입니다. */
     const numOf = (xpx) => tickPx ? 53.15 - Math.abs(xpx - cx) / tickPx : null;
     const outNum = outI >= 0 ? numOf(seq[outI].x) : null;
+    const tailNum = numOf(S.g.v4 * W);                                   /* 꼬리 자리(방금 위에서 확정) */
+    const ARCHV_NUM_LO = tailNum === null ? -Infinity : tailNum + ARCHV_TAIL_IN;
     const numOk = outNum === null || (outNum >= ARCHV_NUM_LO && outNum <= ARCHV_NUM_HI);
     /* ⭐ v3.2.0 — **판독 근거를 남긴다** (이너의 `S.innerRead` 와 같은 방식).
        이번 실기기 버그를 찾는 데 오래 걸린 이유가 「무엇을 보고 그 자리에 섰는지」가
        아무 데도 안 남아서였습니다. 회귀 176 이 이 값을 읽습니다. */
     S.archRead = { pkX: seq[pk].x, outX: outI >= 0 ? seq[outI].x : null,
                    floorUnits, minOutPx: MIN_OUT_PX, browSpanUnits,
+                   tailNum: tailNum === null ? null : Math.round(tailNum * 10) / 10,
+                   numLo: Number.isFinite(ARCHV_NUM_LO) ? Math.round(ARCHV_NUM_LO * 10) / 10 : null,
                    pkNum: dispV(seq[pk].x / W),
                    outNum: outNum === null ? null : Math.round(outNum * 10) / 10, numOk,
                    from: outI >= 0 && numOk ? "pixel" : tickPx ? "std23" : "floor" };
@@ -4576,6 +4588,27 @@ function showArchDots() {
       원장님 규칙이 절대값이므로 **픽스처 기대값을 규칙에 맞춰 고쳤습니다** (회귀 90·91·177). */
 const ARCHV_NUM_MAX = 25;   // 아치선 절대 상한 (원장님 확정)
 const ARCHV_NUM_23  = 23;   // 넘으면 무조건 이 자리
+/* ⭐⭐ v1.81.0 — **아치두께의 마지노선** (원장님 지시 2026-08-27 「아치두께는 절대로 꼬리 밑으로 내려오지 않는다 ·
+   앞머리와 같은 선이거나 높은 곳」). 해부학 순서 **아치두께 ≤ 앞머리 ≤ 꼬리**(y 는 아래로 갈수록 큼)를 넘었다면
+   눈꺼풀 그늘을 읽은 것 → 마지노선까지 올린다. ⛔ 지우지 마세요 — 회귀 133.
+   AT_GAP — 상한에 딱 붙이지 않고 3px 위(못박음 검사 131 과 부딪히지 않게).
+   ⭐ v3.27.0 — **1.5칸 여유** (원장님 확정 2026-09-02 「두께는 C」). 일자형 눈썹은 아치 아랫선과 꼬리·앞머리가
+   거의 같은 높이라 읽은 값이 마지노선을 1.5칸 이내로 넘는데, 그것까지 올려 세우면 정답이 밀린다(실제 사진:
+   꼬리 자 20.4칸 · 읽은 아치두께 19.6칸 → 예전엔 20.9칸으로 올렸다). archDecide 의 해부학 여유(frontTk − 1.5)와
+   같은 숫자. **1.5칸을 넘게 낮으면 그늘로 보고 예전처럼 마지노선까지 올린다** — 회귀 133 그대로 · 189 신규.
+   돌려주는 값: 올렸으면 true. */
+function applyArchThickFloor() {
+  const { H } = S.dim;
+  if (!H) return false;
+  const AT_GAP = 3 / H;
+  const floor = S.g.h2 + 4 / H;                          // 아치 윗선보다는 반드시 아래
+  const lim = Math.max(floor, Math.min(S.g.h3, S.g.front) - AT_GAP);
+  const tk = frontTickPx();
+  const tol = tk ? (1.5 * tk) / H : 0;
+  if (S.g.archThickness > lim + tol) { setLine("archThickness", lim); return true; }
+  return false;
+}
+
 function archVCap() {
   const { W } = S.dim, g = S.g;
   if (!W) return false;
@@ -6326,6 +6359,6 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, darkBlobsUp, archDecide, eyeArchRange,
-  ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard,
+  ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
