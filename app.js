@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.16.0";
+const APP_VERSION = "v3.17.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5625,10 +5625,12 @@ function readSideCurve(img, side) {
        zone: 0=앞머리~아치 구간, 1=아치~꼬리 구간 — pk(산꼭대기) 열을 기준으로 나눈다.
        꼬리 보정 구간(tailAdd)은 항상 꼬리 쪽(zone 1)이다. 판정 로직에는 전혀 관여하지
        않는 표시 전용 자료다.
-       ⛔ v3.16.0 — `renderBalCurve`는 더는 이 원본 궤적을 점으로 찍지 않는다(고객이 삐뚤빼뚤
-       그리면 그대로 삐뚤빼뚤 보이는 문제 → `balDisplayCurve()`가 아래 top/bot 5점을 지나는
-       매끈한 곡선으로 대신 그린다, 원장님 지시 2026-09-02). 그래도 이 필드는 남겨 둔다 —
-       판정에 쓰는 자료는 아니고, 다른 화면(예: showArchDots)이나 진단용으로 여전히 쓸모있다. */
+       ⛔ v3.16.0 — `renderBalCurve`는 이 원본 궤적을 **그대로** 점으로 찍지 않는다(고객이
+       삐뚤빼뚤 그리면 그대로 삐뚤빼뚤 보이는 문제). v3.17.0부터 `balDisplayCurve()`가
+       앞머리→아치는 5점만으로 매끈하게 잇고, 아치→꼬리는 이 궤적을 **부드럽게 편 뒤** 따라간다
+       (원장님 지시 2026-09-02 「아치엣지/아치두께에서 꼬리선 — 고객 드로잉을 최대한 활용하여
+       부드럽게 연결하라」). 그래서 `pk`(산꼭대기 열)·`tailIdx`(꼬리 열)도 같이 돌려준다 —
+       둘 다 trace 의 index 다(trace[i] ↔ seqT[i]). 판정에 쓰는 자료는 아니다. */
     const trace = seq.map((p, i) => ({ x: p.x, top: p.top, bot: p.bot, zone: i <= pk ? 0 : 1 }));
     if (pts.tailAdd && pts.tailAdd.length) {
       for (const p of pts.tailAdd) trace.push({ x: p.x, top: p.top, bot: p.bot, zone: 1 });
@@ -5638,7 +5640,7 @@ function readSideCurve(img, side) {
       side,
       top: [{ x: frontX, y: frontThicknessY }, { x: archX, y: h2Y }, { x: tailX, y: tailY }],
       bot: [{ x: frontX, y: frontY }, { x: archX, y: archThicknessY }, { x: tailX, y: tailY }],
-      trace,
+      trace, pk, tailIdx,
     };
   } catch (e) { return null; }
 }
@@ -5678,69 +5680,167 @@ function runBalanceCurve() {
    그리고 오른쪽 미러링도 앞머리부터 꼬리까지 순차적으로 생긴다」 — 두 단계라 전체는 이 값의 2배. */
 const BAL_ANIM_MS = 650;
 
-/* ⭐⭐⭐ v3.16.0 — 점선을 **원본 픽셀 궤적(raw trace)이 아니라 5포인트를 지나는 부드러운
-   곡선**으로 바꾼다 (원장님 지시 2026-09-02, 실기기 스크린샷 2장 확인 후):
-   「사용자가 드로잉을 어떻게 하든 우리는 눈썹이라는 기본에 충실하여... 앞머리와 아치두께
-    포인트까지 부드러운 곡선을 그려야한다 / 앞두께와 아치엣지 포인트가 부드러운 곡선으로
-    이어질것 / 아치엣지와 꼬리, 아치두께와 꼬리도 마찬가지로 부드럽게 연결 / 이에따라 위
-    5포인트 이외에 다른 짙은 부분이 판독되어 점으로 표기되는일은 없어야 한다」
+/* ⭐⭐⭐ v3.16.0 → v3.17.0 — 미러링 점선 = **눈썹 기본 디자인 규칙**으로 그린다
+   (원장님 지시 2026-09-02, 실기기 스크린샷 2회 확인 후. v3.16.0의 첫 시도는 아치→꼬리까지
+   5점만으로 곡선을 "만들어" 버려서 눈썹 모양이 안 나왔다 — 「너가 처리한 점은 눈썹이라는
+   모양을 유추하는것 실패」. 그래서 v3.17.0에서 아래 규칙을 못 박는다):
+   「눈썹 기본디자인의 룰 못박아라
+    1. 앞두께는 아치엣지와 연결된다 이건 무조건 지켜라
+    2. 앞머리와 아치두께는 연결된다 이것도 무조건 지켜라
+    3. 아치엣지에서 꼬리선이 연결 — 고객 드로잉을 최대한 활용하여 부드럽게 연결하라
+    4. 아치두께에서 꼬리선 고객 드로잉을 최대한 활용하여 연결하라
+    … 앞머리와 아치두께 포인트까지 부드러운 곡선을 그려야한다는점 그게 프로패셔널한
+    드로잉으로 발전하는 목표인것 … 위 5포인트 이외에 다른 짙은 부분이 판독되어 점으로
+    표기되는일은 없어야 한다」
    ─────────────────────────────────────────────────────────────────────────
-   v3.14~15.0까지는 `readSideCurve().trace`(열마다 가장 어두운 픽셀을 찍은 원본 궤적 —
-   고객이 삐뚤빼뚤 그리면 그대로 삐뚤빼뚤하게 표시됨)를 그대로 점으로 뿌렸다. 이제는 이미
-   계산되어 있는 5개 기준점만 쓴다 — `readSideCurve()`가 돌려주는 `top`(앞두께·아치엣지·꼬리)
-   · `bot`(앞머리·아치두께·꼬리) 3점씩, 합쳐서 5점(꼬리는 위·아래가 같은 자리로 수렴).
-   그 5점을 Catmull-Rom(3점, 양끝 복제 경계)으로 이어 "앞→아치"·"아치→꼬리" 두 구간을 매끈한
-   곡선으로 보간하고, 그 곡선 위에서 고르게 표본을 뽑아 기존과 같은 방식(점 구름·순차 애니메이션·
-   반대쪽 미러링)으로 찍는다. 원본 열별 트레이스는 더는 쓰지 않으므로 "5포인트 이외의 다른
-   짙은 부분"이 점으로 새어 나올 일이 없다.
+   그래서 두 구간을 **다르게** 그린다:
+   · 앞→아치 (윗라인 = 앞두께→아치엣지 · 아래라인 = 앞머리→아치두께): 고객 드로잉을 **보지
+     않고** 두 점만 매끈한 곡선(3차 에르미트)으로 잇는다 — 고객이 지그재그로 그렸어도 "포인트와
+     포인트 사이는 부드러워야 한다"를 화면이 보여준다. 아치 쪽 끝의 기울기는 그 다음 구간
+     (드로잉을 따라가는 꼬리 구간)의 기울기와 맞춰서 이음새에 꺾임이 없게 한다.
+   · 아치→꼬리 (아치엣지→꼬리 · 아치두께→꼬리): `readSideCurve().trace`(열별 원본 궤적)의
+     pk~tailIdx 구간을 **중앙값(창 5)+이동평균(창 9)으로 편 뒤** 따라간다 — 고객 드로잉의
+     실제 모양(산꼭대기 뒤로 얼마나 오래 높게 가다가 어떻게 내려오는지)을 최대한 살리되
+     한 열짜리 튐·털 한 올은 지운다. 마지막 35%에서는 꼬리 수렴점(tailX, tailY)으로 부드럽게
+     모아 위·아래가 정확히 한 점에서 만난다.
+   · 두께 규칙(아래)은 앞 점에만 적용된다.
 
    ⛔ `readSideCurve()`가 돌려주는 `top`/`bot` 원본 값(=`runBalanceCurve()`의 좌우 비교/판정
-   기준)은 **절대 건드리지 않는다** — 아래 두께 보정(굵기 규칙)은 이 함수 안에서만 쓰는
-   지역 복사본에 적용한다. 판정 로직(devFront/devArch/devTail)은 여전히 원본 3점 그대로 비교. */
-const BAL_CURVE_STEPS = 24;   // 구간(앞→아치, 아치→꼬리)당 표본 수 — 총 2*24+1 = 49점
+   기준)은 **절대 건드리지 않는다** — 여기서 하는 모든 계산은 이 함수 안의 지역 복사본이고
+   표시에만 쓰인다. 판정 로직(devFront/devArch/devTail)은 여전히 원본 3점 그대로 비교. */
+const BAL_CURVE_PX = 3;            // 표본 간격(캔버스 px) — 점선이 촘촘해 보이는 정도
+const BAL_CURVE_MIN = 16, BAL_CURVE_MAX = 80;   // 구간당 표본 수 하한/상한
+const BAL_TAIL_BLEND = 0.35;       // 꼬리 구간 뒤쪽 이 비율에서 수렴점으로 모은다
 
-/* 3점(k0→k1→k2)을 지나는 매끈한 곡선을 Catmull-Rom→3차 베지어로 만들어 표본을 뽑는다.
-   1차원(스칼라) 버전 — x·y를 따로 불러 쓴다(양끝 지점을 복제해 경계를 처리하므로, 3점만
-   있어도 자연스럽게 휘어진다. 시작·끝 값은 원래 값 그대로, 가운데(k1)도 정확히 지난다). */
+/* 1차원 스무딩 — 중앙값(창 medWin)으로 한 열짜리 튐을 지우고, 이동평균(창 avgWin)으로
+   잔떨림을 편다. 양끝은 창을 줄여 처리(값을 잃지 않는다). */
+function balSmooth1D(arr, medWin, avgWin) {
+  const n = arr.length;
+  if (n < 3) return arr.slice();
+  const half = (w) => Math.floor(w / 2);
+  const med = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - half(medWin)), b = Math.min(n - 1, i + half(medWin));
+    const s = arr.slice(a, b + 1).sort((p, q) => p - q);
+    med[i] = s[Math.floor(s.length / 2)];
+  }
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - half(avgWin)), b = Math.min(n - 1, i + half(avgWin));
+    let sum = 0;
+    for (let j = a; j <= b; j++) sum += med[j];
+    out[i] = sum / (b - a + 1);
+  }
+  return out;
+}
+
+/* 3차 에르미트 보간 — p0→p1, 양끝 기울기 m0·m1 은 "t 한 단위당" 변화량 */
+function balHermite(p0, p1, m0, m1, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * p0 + (t3 - 2 * t2 + t) * m0 + (-2 * t3 + 3 * t2) * p1 + (t3 - t2) * m1;
+}
+
+/* (호환용) 3점(k0→k1→k2)을 지나는 Catmull-Rom→3차 베지어 표본 — v3.16.0에서 쓰던 것.
+   v3.17.0부터 표시 곡선은 balDisplayCurve 가 에르미트+궤적 추종으로 만들고, 이 함수는
+   trace 가 없는(아주 짧은) 예외 경로에서만 폴백으로 쓴다. */
 function balSmoothAxis(k0, k1, k2, steps) {
   const cubic = (p0, c1, c2, p3, t) => {
     const m = 1 - t;
     return m * m * m * p0 + 3 * m * m * t * c1 + 3 * m * t * t * c2 + t * t * t * p3;
   };
   const out = [];
-  // 앞→아치(k0→k1): 앞쪽 가상 이웃점을 k0 자신으로 복제
   const c1a = k0 + (k1 - k0) / 6, c2a = k1 - (k2 - k0) / 6;
   for (let i = 0; i <= steps; i++) out.push(cubic(k0, c1a, c2a, k1, i / steps));
-  // 아치→꼬리(k1→k2): 뒤쪽 가상 이웃점을 k2 자신으로 복제
   const c1b = k1 + (k2 - k0) / 6, c2b = k2 - (k2 - k1) / 6;
   for (let i = 1; i <= steps; i++) out.push(cubic(k1, c1b, c2b, k2, i / steps));
-  return out;   // length = 2*steps + 1
+  return out;
 }
 
-/* refC(readSideCurve 결과 하나, L 또는 R)에서 표시용 5점을 뽑아 두께 규칙을 적용한 뒤
-   부드러운 표본 점 배열({x, top, bot, zone})을 만든다. 판정에 쓰이는 refC.top/bot 원본은
-   읽기만 하고 절대 수정하지 않는다(지역 변수만 바꾼다). */
-function balDisplayCurve(refC, steps) {
-  const frontX = refC.bot[0].x, archX = refC.top[1].x, tailX = refC.top[2].x;
-  const frontTopYRaw = refC.top[0].y, frontBotY = refC.bot[0].y;
-  const archTopY = refC.top[1].y, archBotY = refC.bot[1].y;
-  const tailY = refC.top[2].y;   // top[2]와 bot[2]는 같은 꼬리 수렴점
+/* refC(readSideCurve 결과 하나, L 또는 R) → 표시용 점 배열 [{x, top, bot, zone}], 앞머리→꼬리
+   순서. 판정에 쓰이는 refC.top/bot 원본은 읽기만 하고 절대 수정하지 않는다. */
+function balDisplayCurve(refC) {
+  const tr = refC.trace || [];
+  const n = tr.length;
+  const frontX = refC.bot[0].x, frontTopRaw = refC.top[0].y, frontBot = refC.bot[0].y;
+  const tailX = refC.top[2].x, tailY = refC.top[2].y;   // top[2]와 bot[2]는 같은 꼬리 수렴점
+  const stepsFor = (span) => clamp(Math.round(Math.abs(span) / BAL_CURVE_PX), BAL_CURVE_MIN, BAL_CURVE_MAX);
 
-  /* ⭐ v3.16.0 — 앞머리·앞두께 두께 규칙(원장님 지시 2026-09-02):
+  /* 궤적이 너무 짧으면(정상 경로에선 없음) 5점만으로 폴백 */
+  let pk = refC.pk, tailIdx = refC.tailIdx;
+  if (n < 6 || !(pk >= 0) || !(tailIdx > pk + 1) || tailIdx >= n) {
+    const archX = refC.top[1].x, archTop = refC.top[1].y, archBot = refC.bot[1].y;
+    const archThick = Math.max(0, archBot - archTop);
+    const frontTop = Math.max(0, frontBot - frontTopRaw) < archThick ? frontBot - archThick : frontTopRaw;
+    const st = stepsFor(tailX - frontX) >> 1 || BAL_CURVE_MIN;
+    const xs = balSmoothAxis(frontX, archX, tailX, st), tops = balSmoothAxis(frontTop, archTop, tailY, st), bots = balSmoothAxis(frontBot, archBot, tailY, st);
+    return xs.map((x, i) => ({ x, top: tops[i], bot: bots[i], zone: i <= st ? 0 : 1 }));
+  }
+
+  /* ① 원본 궤적을 편다 — 한 열짜리 튐(털 한 올·점)은 중앙값이 지우고, 잔떨림은 이동평균이 편다 */
+  const xs = tr.map((p) => p.x);
+  const tops = balSmooth1D(tr.map((p) => p.top), 5, 9);
+  const bots = balSmooth1D(tr.map((p) => p.bot), 5, 9);
+
+  /* ② 표시용 아치 점 = 편 궤적의 산꼭대기(pk) 열 — readSideCurve 의 아치 3점(pk±8% 중앙값)과
+     1~2px 안에서 같다. 여기서 이어 붙여야 앞→아치 곡선과 아치→꼬리 궤적 사이에 단차가 없다. */
+  const archX = xs[pk], archTop = tops[pk], archBot = bots[pk];
+
+  /* ③ 두께 규칙(원장님 지시 2026-09-02):
      1. 아래라인·윗라인은 앞포인트~아치포인트까지 굵기(두 라인 사이 거리)가 비슷해야 한다.
-     2. 앞머리 두께가 아치 두께보다 "조금 더" 굵은 디자인은 허용한다.
-     3. 앞머리 두께가 아치 두께보다 얇아질 수는 없다 — 얇게 읽혔으면 1번을 적용해
-        아치 두께만큼으로 끌어올린다(앞머리의 "아래" 점 = 눈 쪽 경계는 그대로 두고,
-        "위" 점만 들어올려 두께를 맞춘다 — 눈에 더 가까운 아래 점이 랜드마크에 더 가깝다). */
-  const archThick = Math.max(0, archBotY - archTopY);
-  const frontThickRaw = Math.max(0, frontBotY - frontTopYRaw);
-  const frontTopY = frontThickRaw < archThick ? (frontBotY - archThick) : frontTopYRaw;
+     2. 앞머리 두께가 아치 두께보다 "조금 더" 굵은 디자인은 허용한다(상한 없음).
+     3. 앞머리 두께가 아치 두께보다 얇아질 수는 없다 — 얇게 읽혔으면 1번을 적용해 아치
+        두께만큼으로 끌어올린다(눈 쪽 "아래" 점은 그대로, "위" 점만 들어올린다 — 눈에 더
+        가까운 아래 점이 랜드마크에 더 가깝다). */
+  const archThick = Math.max(0, archBot - archTop);
+  const frontThickRaw = Math.max(0, frontBot - frontTopRaw);
+  const frontTop = frontThickRaw < archThick ? (frontBot - archThick) : frontTopRaw;
 
-  const xs = balSmoothAxis(frontX, archX, tailX, steps);
-  const tops = balSmoothAxis(frontTopY, archTopY, tailY, steps);
-  const bots = balSmoothAxis(frontBotY, archBotY, tailY, steps);
+  /* ④ 앞→아치: 두 점만 3차 에르미트로 잇는다(규칙 1·2, 고객 드로잉 무시). x 는 t 에 선형 —
+     그래서 곡선은 y(x) 그래프(눈썹 경계선답게 한 x 에 한 y). 앞 끝 기울기 = 두 점을 잇는
+     직선 기울기(앞에서 곧게 출발), 아치 끝 기울기 = 편 궤적의 pk 근처 기울기(다음 구간과
+     이음새가 매끈하게). 기울기가 튀면(잡음) 직선 기울기의 2배까지로 막는다. */
+  const span = archX - frontX;
+  const i0 = Math.max(0, pk - 3), i1 = Math.min(n - 1, pk + 3);
+  const dxk = xs[i1] - xs[i0];
+  const slopeAt = (arr) => (Math.abs(dxk) > 1e-6 ? (arr[i1] - arr[i0]) / dxk : 0);
+  const tan1 = (arr, y0, y1) => {
+    const chord = y1 - y0;                     // t 한 단위당 직선 변화량
+    const m = slopeAt(arr) * span;             // 궤적 기울기를 t 단위로
+    const lim = Math.max(Math.abs(chord) * 2, 4);
+    return clamp(m, -lim, lim);
+  };
+  const stepsA = stepsFor(span);
   const pts = [];
-  for (let i = 0; i < xs.length; i++) pts.push({ x: xs[i], top: tops[i], bot: bots[i], zone: i <= steps ? 0 : 1 });
+  const m1Top = tan1(tops, frontTop, archTop), m1Bot = tan1(bots, frontBot, archBot);
+  for (let i = 0; i < stepsA; i++) {          // 아치 점 자체는 ⑤의 첫 점이 맡는다
+    const t = i / stepsA;
+    pts.push({ x: frontX + t * span,
+               top: balHermite(frontTop, archTop, archTop - frontTop, m1Top, t),
+               bot: balHermite(frontBot, archBot, archBot - frontBot, m1Bot, t),
+               zone: 0 });
+  }
+
+  /* ⑤ 아치→꼬리: 편 궤적 pk~tailIdx 를 고른 간격으로 다시 뽑아 그대로 따라간다(규칙 3·4,
+     "고객 드로잉을 최대한 활용"). 뒤쪽 BAL_TAIL_BLEND 구간에서 꼬리 수렴점(tailX, tailY)으로
+     부드럽게(smoothstep) 모아, 위·아래가 정확히 한 점에서 만난다. */
+  const stepsB = stepsFor(tailX - archX);
+  const lastI = tailIdx;
+  const at = (arr, fi) => {
+    const a = Math.floor(fi), b = Math.min(lastI, a + 1), f = fi - a;
+    return arr[a] + (arr[b] - arr[a]) * f;
+  };
+  const endX = xs[lastI], endTop = tops[lastI], endBot = bots[lastI];
+  for (let j = 0; j <= stepsB; j++) {
+    const u = j / stepsB;
+    const fi = pk + u * (lastI - pk);
+    let x = at(xs, fi), top = at(tops, fi), bot = at(bots, fi);
+    if (u > 1 - BAL_TAIL_BLEND) {
+      const s = (u - (1 - BAL_TAIL_BLEND)) / BAL_TAIL_BLEND;
+      const w = s * s * (3 - 2 * s);
+      x += (tailX - endX) * w; top += (tailY - endTop) * w; bot += (tailY - endBot) * w;
+    }
+    pts.push({ x, top, bot, zone: j === 0 ? 0 : 1 });
+  }
   return pts;
 }
 
@@ -5753,7 +5853,7 @@ function renderBalCurve(frag) {
   const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
   const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  const curve = balDisplayCurve(refC, BAL_CURVE_STEPS);
+  const curve = balDisplayCurve(refC);
   const n = curve.length;
 
   /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
@@ -6238,7 +6338,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  runBalanceCurve, readSideCurve, balDisplayCurve, balSmoothAxis, BAL_CURVE_STEPS,   /* v3.16.0 — 미러링 곡선 검사용 */
+  runBalanceCurve, readSideCurve, balDisplayCurve, balSmoothAxis, balSmooth1D, balHermite, BAL_CURVE_MIN, BAL_CURVE_MAX,   /* v3.16.0~17.0 — 미러링 곡선 검사용 */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,

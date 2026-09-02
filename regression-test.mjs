@@ -2364,13 +2364,19 @@ if (RUN(5)) {
       + `2100ms 점${done1.circles}(끝=${done1.animDone}) → 2300ms 점${done2} · 빨간점=${done1.redCount}`);
   }
 
-  /* 186. ⭐ v3.16.0 — **미러링 점선을 5포인트를 지나는 매끈한 곡선으로** (원장님 지시 2026-09-02
-     「사용자가 드로잉을 어떻게 하든… 앞머리와 아치두께 포인트까지 부드러운 곡선을 그려야한다 /
-      이에따라 위 5포인트 이외에 다른 짙은 부분이 판독되어 점으로 표기되는일은 없어야 한다」).
-     `readSideCurve()`의 원본 열별 트레이스가 아니라 5점(top/bot 3점씩, 꼬리는 공유)만으로
-     `balDisplayCurve()`가 곡선을 만드는지 — 순수 함수라 사진 없이 합성 refC로 바로 검사한다.
-     ⛔ 두께 규칙(원장님 지시 2026-09-02 「앞머리 두께가 아치 두께보다 얇아질순 없다」)도 함께
-     검사 — 앞머리가 아치보다 얇게 읽혔을 때 위쪽 점이 끌어올려져 두께가 아치와 같아지는지. */
+  /* 186. ⭐ v3.16.0→v3.17.0 — **미러링 점선 = 눈썹 기본 디자인 규칙** (원장님 지시 2026-09-02
+     「1. 앞두께는 아치엣지와 연결된다 무조건 / 2. 앞머리와 아치두께는 연결된다 무조건 /
+      3. 아치엣지에서 꼬리선 — 고객 드로잉을 최대한 활용하여 부드럽게 / 4. 아치두께에서 꼬리선
+      고객 드로잉을 최대한 활용하여 연결 / 5포인트 이외에 다른 짙은 부분이 점으로 표기되는일은
+      없어야 한다」 + 두께 규칙 「앞머리 두께가 아치 두께보다 얇아질순 없다」).
+     `balDisplayCurve()`는 순수 함수라 사진 없이 합성 refC(궤적 포함)로 바로 검사한다:
+     지그재그(±4px)와 털 한 올 튐(-14px, 두 열)을 섞은 궤적을 넣고 —
+     (a) 앞→아치 구간은 궤적을 무시하고 두 점을 매끈하게 잇는가(표본 사이 튐 없음),
+     (b) 아치→꼬리 구간은 궤적의 **실제 모양**(잡음 뺀 원형)을 따라가는가 — 아치→꼬리를 직선/
+         단순 곡선으로 "만들어" 버리면(v3.16.0 실패) 원형과 크게 어긋나는 모양으로 만들어 둔다,
+     (c) 튐·지그재그가 화면에 새어 나오지 않는가(표본 간 2차 차분이 입력보다 훨씬 작음),
+     (d) 앞 점 정확히 시작·꼬리 점 정확히 수렴(위=아래), 아치 이음새에 단차 없음,
+     (e) 앞머리 두께가 아치보다 얇으면 위 점만 끌어올려 아치 두께와 같아지는가. */
   {
     const ctx = await browser.newContext({ viewport: { width: 400, height: 300 } });
     const p = await ctx.newPage();
@@ -2379,40 +2385,75 @@ if (RUN(5)) {
     await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(300);
     const r186 = await p.evaluate(() => {
-      const STEPS = window.PB.BAL_CURVE_STEPS;
-      // A: 앞머리 두께(20) >= 아치 두께(10) — 보정 없이 그대로
-      const refA = { top: [{ x: 0, y: 40 }, { x: 50, y: 45 }, { x: 100, y: 58 }],
-                     bot: [{ x: 0, y: 60 }, { x: 50, y: 55 }, { x: 100, y: 58 }] };
-      const cA = window.PB.balDisplayCurve(refA, STEPS);
-      // B: 앞머리 두께(5) < 아치 두께(10) — 위쪽 점이 끌어올려져 두께가 아치와 같아져야 함
-      const refB = { top: [{ x: 0, y: 50 }, { x: 50, y: 45 }, { x: 100, y: 58 }],
-                     bot: [{ x: 0, y: 55 }, { x: 50, y: 55 }, { x: 100, y: 58 }] };
-      const cB = window.PB.balDisplayCurve(refB, STEPS);
-      const n = 2 * STEPS + 1;
-      const near = (a, b) => Math.abs(a - b) < 1e-6;
-      // 5점을 정확히 지나는가(시작=앞, 가운데=아치, 끝=꼬리) — A는 원래 두께 그대로
-      const passesA = near(cA[0].x, 0) && near(cA[0].bot, 60) && near(cA[0].top, 40)
-        && near(cA[STEPS].x, 50) && near(cA[STEPS].top, 45) && near(cA[STEPS].bot, 55)
-        && near(cA[n - 1].x, 100) && near(cA[n - 1].top, 58) && near(cA[n - 1].bot, 58);
-      // B는 아래(눈쪽) 점은 그대로, 위 점만 끌어올려져 두께가 아치두께(10)와 같아짐
-      const archThickB = 55 - 45;
+      const N = 120, x0 = 100, x1 = 400;
+      /* 원형: 산꼭대기(u≈0.43) 뒤로 오래 높게 가다가 꼬리로 내려오는 눈썹 — 아치→꼬리를
+         직선으로 이으면 중간에서 원형과 15px 이상 벌어진다 */
+      const pure = (u) => 200 - 60 * Math.sin(Math.PI * Math.min(1, u * 1.15)) + 45 * Math.pow(Math.max(0, u - 0.6), 1.6);
+      const thick = (u) => 30 * (1 - u * 0.15) * (u < 0.75 ? 1 : Math.max(0, (1 - u) / 0.25));
+      const mk = (frontThin) => {
+        const trace = [];
+        for (let i = 0; i < N; i++) {
+          const u = i / (N - 1), x = x0 + (x1 - x0) * u;
+          const zig = i % 2 ? 4 : -4, spike = (i === 30 || i === 70) ? -14 : 0;
+          trace.push({ x, top: pure(u) + zig + spike, bot: pure(u) + thick(u) - zig, zone: 0 });
+        }
+        let pk = 15; for (let i = 15; i < N * 0.85; i++) { const s = (trace[i - 1].top + trace[i].top + trace[i + 1].top) / 3, sp = (trace[pk - 1].top + trace[pk].top + trace[pk + 1].top) / 3; if (s < sp) pk = i; }
+        const tailIdx = N - 1, tailY = trace[N - 1].bot;
+        const archTop = trace[pk].top, archBot = trace[pk].bot;
+        const frontBot = trace[0].bot;
+        const frontTop = frontThin ? frontBot - 8 : trace[0].top;   // 얇게: 두께 8 (아치 ≈ 27)
+        return { refC: { top: [{ x: x0, y: frontTop }, { x: trace[pk].x, y: archTop }, { x: x1, y: tailY }],
+                         bot: [{ x: x0, y: frontBot }, { x: trace[pk].x, y: archBot }, { x: x1, y: tailY }], trace, pk, tailIdx },
+                 pure, pk, frontTop, frontBot, tailY };
+      };
+      const A = mk(false), cA = window.PB.balDisplayCurve(A.refC);
+      const B = mk(true), cB = window.PB.balDisplayCurve(B.refC);
+      const n = cA.length, z0 = cA.filter((q) => q.zone === 0), z1 = cA.filter((q) => q.zone === 1);
+      const nearf = (a, b, t) => Math.abs(a - b) <= t;
+      /* (d) 시작=앞 점(위·아래 그대로), 끝=꼬리 수렴점(위=아래=tailY) */
+      const startOk = nearf(cA[0].x, x0, 1e-6) && nearf(cA[0].top, A.frontTop, 1e-6) && nearf(cA[0].bot, A.frontBot, 1e-6);
+      const last = cA[n - 1];
+      const endOk = nearf(last.x, x1, 1e-6) && nearf(last.top, A.tailY, 1e-6) && nearf(last.bot, A.tailY, 1e-6);
+      /* (a)+(c) 매끈함: 표본 간 2차 차분(꺾임)의 최대값 — 입력 궤적(지그재그 ±4 → 2차 차분 16)보다 훨씬 작아야 */
+      const d2 = (arr, key) => { let m = 0; for (let i = 1; i + 1 < arr.length; i++) m = Math.max(m, Math.abs(arr[i - 1][key] - 2 * arr[i][key] + arr[i + 1][key])); return m; };
+      const d2In = Math.max(d2(A.refC.trace, "top"), d2(A.refC.trace, "bot"));
+      const d2Out = Math.max(d2(cA, "top"), d2(cA, "bot"));
+      /* 아치 이음새: zone0 마지막 → zone1 첫 점 사이 x·y 단차가 표본 간격 수준 */
+      const j = z0.length - 1;   // cA[j] = 아치 점(zone0 의 마지막 · 아치→꼬리 구간의 첫 점)
+      const seamOk = j > 0 && j + 1 < n && Math.abs(cA[j].top - cA[j - 1].top) < 4 && Math.abs(cA[j].bot - cA[j - 1].bot) < 4 && Math.abs(cA[j].x - cA[j - 1].x) < 8
+        && Math.abs(cA[j + 1].top - cA[j].top) < 4 && Math.abs(cA[j + 1].bot - cA[j].bot) < 4;
+      /* (b) 아치→꼬리: 원형(잡음 뺀 pure)과의 평균 편차 — 궤적을 따라가면 작고, 직선으로 이으면 크다 */
+      let devFollow = 0, devChord = 0, cnt = 0;
+      const arch = cA[j];
+      for (const q of z1) {
+        if (q.x > x1 - (x1 - x0) * 0.35) continue;   // 꼬리 수렴 구간은 원형과 다르게 모으므로 제외
+        const u = (q.x - x0) / (x1 - x0);
+        devFollow += Math.abs(q.top - pure(u));
+        const s = (q.x - arch.x) / (x1 - arch.x);
+        devChord += Math.abs((arch.top + (A.tailY - arch.top) * s) - pure(u));
+        cnt++;
+      }
+      devFollow /= Math.max(1, cnt); devChord /= Math.max(1, cnt);
+      /* (e) 두께 규칙 */
+      const jB = cB.filter((q) => q.zone === 0).length - 1;
+      const archThickB = cB[jB].bot - cB[jB].top;
       const frontThickB = cB[0].bot - cB[0].top;
-      const clamped = near(cB[0].bot, 55) && near(frontThickB, archThickB) && cB[0].top < 50; // 원래 top=50 보다 위(작은 값)로 이동
-      // 매끈함 — 연속 표본 사이 y 변화가 크게 튀지 않음(원본 트레이스처럼 들쭉날쭉하지 않음)
-      let maxJump = 0;
-      for (let i = 1; i < cA.length; i++) maxJump = Math.max(maxJump, Math.abs(cA[i].top - cA[i - 1].top), Math.abs(cA[i].bot - cA[i - 1].bot));
-      // zone — 앞~아치(<=STEPS)는 0, 아치~꼬리(>STEPS)는 1
-      const zoneOk = cA[0].zone === 0 && cA[STEPS].zone === 0 && cA[STEPS + 1].zone === 1 && cA[n - 1].zone === 1;
-      return { count: cA.length, expectN: n, passesA, clamped, maxJump, zoneOk,
-               frontTopB: cB[0].top, frontThickB, archThickB };
+      const clamped = nearf(cB[0].bot, B.frontBot, 1e-6) && nearf(frontThickB, archThickB, 1e-6) && cB[0].top < B.frontTop;
+      const noClampA = nearf(cA[0].top, A.frontTop, 1e-6);
+      return { n, z0: z0.length, z1: z1.length, startOk, endOk, d2In, d2Out, seamOk, devFollow, devChord, cnt,
+               clamped, noClampA, frontThickB, archThickB };
     });
     await ctx.close();
-    check("186. 미러링 점선 — 원본 궤적 대신 5포인트를 지나는 매끈한 곡선(49점) · 앞머리 두께가 아치보다 얇으면 끌어올려 보정 (원장님 지시 2026-09-02)",
-      errs.length === 0 && r186.count === r186.expectN && r186.passesA === true && r186.clamped === true
-        && r186.maxJump < 5 && r186.zoneOk === true,
-      `점개수=${r186.count}(기대 ${r186.expectN}) · 5점통과=${r186.passesA} · 두께보정=${r186.clamped}`
-      + `(앞머리위점 ${r186.frontTopB.toFixed(1)}, 앞두께 ${r186.frontThickB.toFixed(1)}=아치두께 ${r186.archThickB}) · `
-      + `최대점프=${r186.maxJump.toFixed(2)}px · zone구간=${r186.zoneOk}`);
+    check("186. 미러링 점선 = 눈썹 기본 규칙 — 앞→아치는 두 점을 매끈하게 · 아치→꼬리는 고객 드로잉을 편 뒤 따라감 · 튐 안 새어나옴 · 꼬리 한 점 수렴 · 앞머리 두께 하한 (원장님 지시 2026-09-02)",
+      errs.length === 0 && r186.startOk && r186.endOk && r186.seamOk
+        && r186.z0 >= 16 && r186.z1 >= 16
+        && r186.d2Out < r186.d2In / 4
+        && r186.devFollow < 3 && r186.devChord > 4 && r186.devFollow < r186.devChord / 3
+        && r186.clamped && r186.noClampA,
+      `점 ${r186.n}(앞→아치 ${r186.z0} · 아치→꼬리 ${r186.z1}) · 앞점시작=${r186.startOk} 꼬리수렴=${r186.endOk} 아치이음새=${r186.seamOk}`
+      + ` · 꺾임 입력 ${r186.d2In.toFixed(1)} → 출력 ${r186.d2Out.toFixed(2)}`
+      + ` · 아치→꼬리 원형과 편차: 궤적추종 ${r186.devFollow.toFixed(2)}px vs 직선이었다면 ${r186.devChord.toFixed(1)}px (${r186.cnt}점)`
+      + ` · 두께보정=${r186.clamped}(앞 ${r186.frontThickB.toFixed(1)} = 아치 ${r186.archThickB.toFixed(1)}) · 두꺼우면 그대로=${r186.noClampA}`);
   }
 
   /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)
