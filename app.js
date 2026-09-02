@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.15.0";
+const APP_VERSION = "v3.16.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5622,10 +5622,13 @@ function readSideCurve(img, side) {
     if ([frontThicknessY, frontY, h2Y, archThicknessY, tailY].some((v) => v === null || v === undefined || !isFinite(v))) return null;
 
     /* ⭐ v3.14.0 — 열별 원본 궤적(raw seq, showArchDots의 점선과 같은 자료)도 함께 돌려준다.
-       `renderBalCurve`가 이 점들을 거울에 비춰 반대쪽에 그대로 얹는 용도 (원장님 지시
-       2026-09-01 「점선이 반대쪽에 미러링되어 보여지는것으로」). zone: 0=앞머리~아치 구간,
-       1=아치~꼬리 구간 — pk(산꼭대기) 열을 기준으로 나눈다. 꼬리 보정 구간(tailAdd)은 항상
-       꼬리 쪽(zone 1)이다. 판정 로직에는 전혀 관여하지 않는 표시 전용 자료다. */
+       zone: 0=앞머리~아치 구간, 1=아치~꼬리 구간 — pk(산꼭대기) 열을 기준으로 나눈다.
+       꼬리 보정 구간(tailAdd)은 항상 꼬리 쪽(zone 1)이다. 판정 로직에는 전혀 관여하지
+       않는 표시 전용 자료다.
+       ⛔ v3.16.0 — `renderBalCurve`는 더는 이 원본 궤적을 점으로 찍지 않는다(고객이 삐뚤빼뚤
+       그리면 그대로 삐뚤빼뚤 보이는 문제 → `balDisplayCurve()`가 아래 top/bot 5점을 지나는
+       매끈한 곡선으로 대신 그린다, 원장님 지시 2026-09-02). 그래도 이 필드는 남겨 둔다 —
+       판정에 쓰는 자료는 아니고, 다른 화면(예: showArchDots)이나 진단용으로 여전히 쓸모있다. */
     const trace = seq.map((p, i) => ({ x: p.x, top: p.top, bot: p.bot, zone: i <= pk ? 0 : 1 }));
     if (pts.tailAdd && pts.tailAdd.length) {
       for (const p of pts.tailAdd) trace.push({ x: p.x, top: p.top, bot: p.bot, zone: 1 });
@@ -5666,26 +5669,92 @@ function runBalanceCurve() {
     보게됨」
    ─────────────────────────────────────────────────────────────────────────
    v3.13.0의 굵은 직선(민트/파랑 2토막)과 흰 점선 "정답 위치" 가이드는 **없앤다** — 대신
-   기준쪽(refC)의 열별 원본 점선 궤적(trace, showArchDots가 찍는 것과 같은 자료)을 x만
-   거울(cx 기준)에 비춰 **반대쪽 사진 위에 점으로 그대로 얹는다.** y(높이)는 그대로다 —
-   좌우가 실제로 균형 잡혀 있으면 이 미러링 점들이 반대쪽 실제 드로잉과 자연스럽게 겹쳐
-   보이고, 어긋난 구간(앞머리·아치·꼬리 판정)만 빨갛게 되어 원장님이 "내 드로잉과 미러링이
-   다르다"를 점을 눈으로 훑으며 자연스럽게 보게 된다. */
+   기준쪽(refC)의 점선을 x만 거울(cx 기준)에 비춰 **반대쪽 사진 위에 점으로 그대로 얹는다.**
+   y(높이)는 그대로다 — 좌우가 실제로 균형 잡혀 있으면 이 미러링 점들이 반대쪽 실제 드로잉과
+   자연스럽게 겹쳐 보이고, 어긋난 구간(앞머리·아치·꼬리 판정)만 빨갛게 되어 원장님이
+   "내 드로잉과 미러링이 다르다"를 점을 눈으로 훑으며 자연스럽게 보게 된다. */
 /* v3.15.0 — 한 단계(기준쪽 실제 점 · 반대쪽 미러링 점) 애니메이션 길이(ms).
    원장님 지시 2026-09-02: 「왼쪽 점들이 먼저 앞머리부터 순차적으로 점이 꼬리까지 찍힌다 ·
    그리고 오른쪽 미러링도 앞머리부터 꼬리까지 순차적으로 생긴다」 — 두 단계라 전체는 이 값의 2배. */
 const BAL_ANIM_MS = 650;
+
+/* ⭐⭐⭐ v3.16.0 — 점선을 **원본 픽셀 궤적(raw trace)이 아니라 5포인트를 지나는 부드러운
+   곡선**으로 바꾼다 (원장님 지시 2026-09-02, 실기기 스크린샷 2장 확인 후):
+   「사용자가 드로잉을 어떻게 하든 우리는 눈썹이라는 기본에 충실하여... 앞머리와 아치두께
+    포인트까지 부드러운 곡선을 그려야한다 / 앞두께와 아치엣지 포인트가 부드러운 곡선으로
+    이어질것 / 아치엣지와 꼬리, 아치두께와 꼬리도 마찬가지로 부드럽게 연결 / 이에따라 위
+    5포인트 이외에 다른 짙은 부분이 판독되어 점으로 표기되는일은 없어야 한다」
+   ─────────────────────────────────────────────────────────────────────────
+   v3.14~15.0까지는 `readSideCurve().trace`(열마다 가장 어두운 픽셀을 찍은 원본 궤적 —
+   고객이 삐뚤빼뚤 그리면 그대로 삐뚤빼뚤하게 표시됨)를 그대로 점으로 뿌렸다. 이제는 이미
+   계산되어 있는 5개 기준점만 쓴다 — `readSideCurve()`가 돌려주는 `top`(앞두께·아치엣지·꼬리)
+   · `bot`(앞머리·아치두께·꼬리) 3점씩, 합쳐서 5점(꼬리는 위·아래가 같은 자리로 수렴).
+   그 5점을 Catmull-Rom(3점, 양끝 복제 경계)으로 이어 "앞→아치"·"아치→꼬리" 두 구간을 매끈한
+   곡선으로 보간하고, 그 곡선 위에서 고르게 표본을 뽑아 기존과 같은 방식(점 구름·순차 애니메이션·
+   반대쪽 미러링)으로 찍는다. 원본 열별 트레이스는 더는 쓰지 않으므로 "5포인트 이외의 다른
+   짙은 부분"이 점으로 새어 나올 일이 없다.
+
+   ⛔ `readSideCurve()`가 돌려주는 `top`/`bot` 원본 값(=`runBalanceCurve()`의 좌우 비교/판정
+   기준)은 **절대 건드리지 않는다** — 아래 두께 보정(굵기 규칙)은 이 함수 안에서만 쓰는
+   지역 복사본에 적용한다. 판정 로직(devFront/devArch/devTail)은 여전히 원본 3점 그대로 비교. */
+const BAL_CURVE_STEPS = 24;   // 구간(앞→아치, 아치→꼬리)당 표본 수 — 총 2*24+1 = 49점
+
+/* 3점(k0→k1→k2)을 지나는 매끈한 곡선을 Catmull-Rom→3차 베지어로 만들어 표본을 뽑는다.
+   1차원(스칼라) 버전 — x·y를 따로 불러 쓴다(양끝 지점을 복제해 경계를 처리하므로, 3점만
+   있어도 자연스럽게 휘어진다. 시작·끝 값은 원래 값 그대로, 가운데(k1)도 정확히 지난다). */
+function balSmoothAxis(k0, k1, k2, steps) {
+  const cubic = (p0, c1, c2, p3, t) => {
+    const m = 1 - t;
+    return m * m * m * p0 + 3 * m * m * t * c1 + 3 * m * t * t * c2 + t * t * t * p3;
+  };
+  const out = [];
+  // 앞→아치(k0→k1): 앞쪽 가상 이웃점을 k0 자신으로 복제
+  const c1a = k0 + (k1 - k0) / 6, c2a = k1 - (k2 - k0) / 6;
+  for (let i = 0; i <= steps; i++) out.push(cubic(k0, c1a, c2a, k1, i / steps));
+  // 아치→꼬리(k1→k2): 뒤쪽 가상 이웃점을 k2 자신으로 복제
+  const c1b = k1 + (k2 - k0) / 6, c2b = k2 - (k2 - k1) / 6;
+  for (let i = 1; i <= steps; i++) out.push(cubic(k1, c1b, c2b, k2, i / steps));
+  return out;   // length = 2*steps + 1
+}
+
+/* refC(readSideCurve 결과 하나, L 또는 R)에서 표시용 5점을 뽑아 두께 규칙을 적용한 뒤
+   부드러운 표본 점 배열({x, top, bot, zone})을 만든다. 판정에 쓰이는 refC.top/bot 원본은
+   읽기만 하고 절대 수정하지 않는다(지역 변수만 바꾼다). */
+function balDisplayCurve(refC, steps) {
+  const frontX = refC.bot[0].x, archX = refC.top[1].x, tailX = refC.top[2].x;
+  const frontTopYRaw = refC.top[0].y, frontBotY = refC.bot[0].y;
+  const archTopY = refC.top[1].y, archBotY = refC.bot[1].y;
+  const tailY = refC.top[2].y;   // top[2]와 bot[2]는 같은 꼬리 수렴점
+
+  /* ⭐ v3.16.0 — 앞머리·앞두께 두께 규칙(원장님 지시 2026-09-02):
+     1. 아래라인·윗라인은 앞포인트~아치포인트까지 굵기(두 라인 사이 거리)가 비슷해야 한다.
+     2. 앞머리 두께가 아치 두께보다 "조금 더" 굵은 디자인은 허용한다.
+     3. 앞머리 두께가 아치 두께보다 얇아질 수는 없다 — 얇게 읽혔으면 1번을 적용해
+        아치 두께만큼으로 끌어올린다(앞머리의 "아래" 점 = 눈 쪽 경계는 그대로 두고,
+        "위" 점만 들어올려 두께를 맞춘다 — 눈에 더 가까운 아래 점이 랜드마크에 더 가깝다). */
+  const archThick = Math.max(0, archBotY - archTopY);
+  const frontThickRaw = Math.max(0, frontBotY - frontTopYRaw);
+  const frontTopY = frontThickRaw < archThick ? (frontBotY - archThick) : frontTopYRaw;
+
+  const xs = balSmoothAxis(frontX, archX, tailX, steps);
+  const tops = balSmoothAxis(frontTopY, archTopY, tailY, steps);
+  const bots = balSmoothAxis(frontBotY, archBotY, tailY, steps);
+  const pts = [];
+  for (let i = 0; i < xs.length; i++) pts.push({ x: xs[i], top: tops[i], bot: bots[i], zone: i <= steps ? 0 : 1 });
+  return pts;
+}
 
 function renderBalCurve(frag) {
   const bc = S.balCurve;
   if (!bc || !bc.L || !bc.R) return;
   const ref = S.refSide;
   const refC = bc[ref];
-  if (!refC.trace || !refC.trace.length) return;
+  if (!refC.top || !refC.bot) return;
   const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
   const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  const n = refC.trace.length;
+  const curve = balDisplayCurve(refC, BAL_CURVE_STEPS);
+  const n = curve.length;
 
   /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
      1단계: 기준쪽(refC, 실제 위치) 점이 순서대로 채워진다. 2단계: 그 다음 반대쪽 미러링
@@ -5700,7 +5769,7 @@ function renderBalCurve(frag) {
   }
 
   for (let i = 0; i < refCount; i++) {
-    const p = refC.trace[i];
+    const p = curve[i];
     const bad = badZone(p.zone);
     frag.appendChild(mk("circle", { cx: p.x, cy: p.top, r: 1.5,
       fill: bad ? BAL_RED : "#5EEAD4", "fill-opacity": bad ? 0.75 : 0.4 }));
@@ -5708,7 +5777,7 @@ function renderBalCurve(frag) {
       fill: bad ? BAL_RED : "#2E8BFF", "fill-opacity": bad ? 0.75 : 0.4 }));
   }
   for (let i = 0; i < mirCount; i++) {
-    const p = refC.trace[i];
+    const p = curve[i];
     const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
     const bad = badZone(p.zone);
     frag.appendChild(mk("circle", bad
@@ -6169,7 +6238,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  runBalanceCurve, readSideCurve,
+  runBalanceCurve, readSideCurve, balDisplayCurve, balSmoothAxis, BAL_CURVE_STEPS,   /* v3.16.0 — 미러링 곡선 검사용 */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,

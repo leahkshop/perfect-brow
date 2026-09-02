@@ -2364,6 +2364,57 @@ if (RUN(5)) {
       + `2100ms 점${done1.circles}(끝=${done1.animDone}) → 2300ms 점${done2} · 빨간점=${done1.redCount}`);
   }
 
+  /* 186. ⭐ v3.16.0 — **미러링 점선을 5포인트를 지나는 매끈한 곡선으로** (원장님 지시 2026-09-02
+     「사용자가 드로잉을 어떻게 하든… 앞머리와 아치두께 포인트까지 부드러운 곡선을 그려야한다 /
+      이에따라 위 5포인트 이외에 다른 짙은 부분이 판독되어 점으로 표기되는일은 없어야 한다」).
+     `readSideCurve()`의 원본 열별 트레이스가 아니라 5점(top/bot 3점씩, 꼬리는 공유)만으로
+     `balDisplayCurve()`가 곡선을 만드는지 — 순수 함수라 사진 없이 합성 refC로 바로 검사한다.
+     ⛔ 두께 규칙(원장님 지시 2026-09-02 「앞머리 두께가 아치 두께보다 얇아질순 없다」)도 함께
+     검사 — 앞머리가 아치보다 얇게 읽혔을 때 위쪽 점이 끌어올려져 두께가 아치와 같아지는지. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 400, height: 300 } });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r186 = await p.evaluate(() => {
+      const STEPS = window.PB.BAL_CURVE_STEPS;
+      // A: 앞머리 두께(20) >= 아치 두께(10) — 보정 없이 그대로
+      const refA = { top: [{ x: 0, y: 40 }, { x: 50, y: 45 }, { x: 100, y: 58 }],
+                     bot: [{ x: 0, y: 60 }, { x: 50, y: 55 }, { x: 100, y: 58 }] };
+      const cA = window.PB.balDisplayCurve(refA, STEPS);
+      // B: 앞머리 두께(5) < 아치 두께(10) — 위쪽 점이 끌어올려져 두께가 아치와 같아져야 함
+      const refB = { top: [{ x: 0, y: 50 }, { x: 50, y: 45 }, { x: 100, y: 58 }],
+                     bot: [{ x: 0, y: 55 }, { x: 50, y: 55 }, { x: 100, y: 58 }] };
+      const cB = window.PB.balDisplayCurve(refB, STEPS);
+      const n = 2 * STEPS + 1;
+      const near = (a, b) => Math.abs(a - b) < 1e-6;
+      // 5점을 정확히 지나는가(시작=앞, 가운데=아치, 끝=꼬리) — A는 원래 두께 그대로
+      const passesA = near(cA[0].x, 0) && near(cA[0].bot, 60) && near(cA[0].top, 40)
+        && near(cA[STEPS].x, 50) && near(cA[STEPS].top, 45) && near(cA[STEPS].bot, 55)
+        && near(cA[n - 1].x, 100) && near(cA[n - 1].top, 58) && near(cA[n - 1].bot, 58);
+      // B는 아래(눈쪽) 점은 그대로, 위 점만 끌어올려져 두께가 아치두께(10)와 같아짐
+      const archThickB = 55 - 45;
+      const frontThickB = cB[0].bot - cB[0].top;
+      const clamped = near(cB[0].bot, 55) && near(frontThickB, archThickB) && cB[0].top < 50; // 원래 top=50 보다 위(작은 값)로 이동
+      // 매끈함 — 연속 표본 사이 y 변화가 크게 튀지 않음(원본 트레이스처럼 들쭉날쭉하지 않음)
+      let maxJump = 0;
+      for (let i = 1; i < cA.length; i++) maxJump = Math.max(maxJump, Math.abs(cA[i].top - cA[i - 1].top), Math.abs(cA[i].bot - cA[i - 1].bot));
+      // zone — 앞~아치(<=STEPS)는 0, 아치~꼬리(>STEPS)는 1
+      const zoneOk = cA[0].zone === 0 && cA[STEPS].zone === 0 && cA[STEPS + 1].zone === 1 && cA[n - 1].zone === 1;
+      return { count: cA.length, expectN: n, passesA, clamped, maxJump, zoneOk,
+               frontTopB: cB[0].top, frontThickB, archThickB };
+    });
+    await ctx.close();
+    check("186. 미러링 점선 — 원본 궤적 대신 5포인트를 지나는 매끈한 곡선(49점) · 앞머리 두께가 아치보다 얇으면 끌어올려 보정 (원장님 지시 2026-09-02)",
+      errs.length === 0 && r186.count === r186.expectN && r186.passesA === true && r186.clamped === true
+        && r186.maxJump < 5 && r186.zoneOk === true,
+      `점개수=${r186.count}(기대 ${r186.expectN}) · 5점통과=${r186.passesA} · 두께보정=${r186.clamped}`
+      + `(앞머리위점 ${r186.frontTopB.toFixed(1)}, 앞두께 ${r186.frontThickB.toFixed(1)}=아치두께 ${r186.archThickB}) · `
+      + `최대점프=${r186.maxJump.toFixed(2)}px · zone구간=${r186.zoneOk}`);
+  }
+
   /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)
      몸통(x 170~340)은 진하고, 꼬리(x 145~172)는 피부와 겨우 14 차이라 **본 판독이 못 봅니다.**
      그래서 판독 열은 x≈172 에서 끊깁니다 — **거기가 꼬리 자리입니다.** 잔털을 따라가면 안 됩니다. */
