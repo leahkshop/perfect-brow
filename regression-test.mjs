@@ -2547,6 +2547,79 @@ if (RUN(5)) {
       `시작잠금=${pre.startLocked}/채움=${pre.lockOnGrad} · 왼쪽오른쪽=${pre.refVisible} · 켬: HUD="${on.hudText}" 점=${on.circles} 빨강=${on.red} 민트점=${on.mintDots} 애니=${on.animated} 민트토막=${on.mintLines}(애니 ${on.lineAnim}) · 끔: HUD="${off.hudText}" · 풀림: 그라데이션=${unlocked.grad} 글자=${unlocked.color}`);
   }
 
+  /* 195. ⭐ v3.33.0 — **미러링 점 색 3종 도크 · 점은 미러링 버튼으로 끄기 전까지 유지** (원장님 지시 2026-09-02:
+     「미러링 선택되면 초기화 왼쪽에 3개 색으로 미러링 점 색상 변경 · 눈썹 드로잉과 대조되는 색 · 미러링 켜면 생기고 끄면 없어짐 ·
+       미러링 도트는 사진변경 버튼을 몇 번 누르니 사라짐 → 미러링 버튼으로 종료되기 전까지 점이 사라지지 않도록」).
+     ① 꺼짐: 도크 안 보임 ② 켬: 도크 표시 · 3개 · 초기화 왼쪽 같은 행 · 점은 기본 빨강 ③ 노랑 누르면 점이 전부 노랑 · 저장(pb_balcolor)
+     ④ 선을 편집(step)해도 점(balCurve)이 남는다 ⑤ 사진 선택 시트 열고 닫기(openPicker/endPicking) 후에도 남는다
+     ⑥ 사진을 옮기는 편집 뒤에도 남는다(다시 잼) ⑦ 미러링 버튼으로 끄면 도크·점 모두 없어진다 */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fShift);
+    await p.waitForTimeout(1300);
+    const pre195 = await p.evaluate((lm) => {
+      const S = window.PB.S;
+      S.landmarks = lm; S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 }; S.g = { ...window.PB.DEFAULT_GUIDE };
+      S.g.h1 = window.PB.imgToCanvas(0, 250, S.p).y / S.dim.H; S.refSide = "L"; S.balColor = "red";
+      window.PB.render();
+      const dk = document.getElementById("balColorDock");
+      return { dockHidden: !dk || dk.offsetWidth === 0 };
+    }, LMK);
+    await p.click("#btnBalance");
+    await p.waitForTimeout(1900);
+    const on195 = await p.evaluate(() => {
+      const S = window.PB.S, dk = document.getElementById("balColorDock"), rs = document.getElementById("btnReset");
+      const d = dk.getBoundingClientRect(), r = rs.getBoundingClientRect();
+      const circles = Array.from(document.getElementById("guides").querySelectorAll("circle"));
+      return { shown: dk.offsetWidth > 0, n: dk.querySelectorAll("button").length,
+               leftOfReset: d.right <= r.left + 1 && Math.abs(d.top - r.top) <= 4 && d.right > r.left - 40,
+               red: circles.filter((c) => /ff3b4e/i.test(c.getAttribute("fill") || "")).length, circles: circles.length,
+               selRed: !!dk.querySelector('button[data-color="red"].on'), curve: !!S.balCurve };
+    });
+    await p.click('#balColorDock button[data-color="yellow"]');
+    await p.waitForTimeout(150);
+    const yel = await p.evaluate(() => {
+      const S = window.PB.S, dk = document.getElementById("balColorDock");
+      const circles = Array.from(document.getElementById("guides").querySelectorAll("circle"));
+      const yellow = circles.filter((c) => /ffe14d/i.test(c.getAttribute("fill") || "")).length;
+      /* ④ 선 편집 ⑤ 시트 열고 닫기 ⑥ 사진 이동 편집 */
+      const PB = window.PB;
+      const stepFn = (fn) => { PB.S.hist; /* step 은 비공개 — 같은 순서로 */ };
+      return { yellow, circles: circles.length, saved: localStorage.getItem("pb_balcolor"), selYellow: !!dk.querySelector('button[data-color="yellow"].on') };
+    });
+    /* ④ 가로 선 하나를 손으로 끌어 편집 기록을 만든다 (commitEdit 경로) */
+    const gb = await p.evaluate(() => { const g = window.PB.S.g, W = window.PB.S.dim.W, H = window.PB.S.dim.H; const r = document.getElementById("stage").getBoundingClientRect(); return { x: r.left + g.v1 * W, y: r.top + g.h1 * H, top: r.top, left: r.left }; });
+    await p.mouse.move(gb.x, gb.y); await p.mouse.down(); await p.mouse.move(gb.x, gb.y + 12, { steps: 5 }); await p.mouse.up();
+    await p.waitForTimeout(150);
+    const afterEdit = await p.evaluate(() => ({ curve: !!window.PB.S.balCurve, balOn: window.PB.S.balOn, hist: window.PB.S.hist.length }));
+    /* ⑤ 사진 선택 시트 열고(사진변경) 닫기 — 시트는 헤드리스에서 안 뜨므로 endPicking 을 직접 */
+    await p.evaluate(() => { window.PB.openPicker(); window.PB.endPicking(); window.PB.render(); });
+    await p.waitForTimeout(100);
+    const afterPick = await p.evaluate(() => ({ curve: !!window.PB.S.balCurve, dots: document.getElementById("guides").querySelectorAll("circle").length }));
+    /* ⑥ 사진 이동(잠금 해제 후 두 손가락 대신 S.p 편집을 step 으로) */
+    const afterMove = await p.evaluate(() => {
+      const S = window.PB.S; S.locked = false;
+      window.PB.stepEdit(() => { S.p = { ...S.p, ox: S.p.ox + 0.01 }; });
+      window.PB.render();
+      return { curve: !!S.balCurve, dots: document.getElementById("guides").querySelectorAll("circle").length };
+    });
+    await p.click("#btnBalance");
+    await p.waitForTimeout(200);
+    const off195 = await p.evaluate(() => { const dk = document.getElementById("balColorDock"); return { balOn: window.PB.S.balOn, dockHidden: dk.offsetWidth === 0, curve: !!window.PB.S.balCurve }; });
+    await ctx.close();
+    check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
+      errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve
+        && yel.yellow === yel.circles && yel.circles > 0 && yel.saved === "yellow" && yel.selYellow
+        && afterEdit.curve && afterEdit.balOn && afterEdit.hist > 0 && afterPick.curve && afterPick.dots > 0 && afterMove.curve && afterMove.dots > 0
+        && off195.balOn === false && off195.dockHidden && !off195.curve,
+      `꺼짐 숨김=${pre195.dockHidden} · 켬: 표시=${on195.shown} 개수=${on195.n} 초기화왼쪽=${on195.leftOfReset} 빨강 ${on195.red}/${on195.circles} · 노랑 ${yel.yellow}/${yel.circles} 저장=${yel.saved} · 편집후 유지=${afterEdit.curve}(기록 ${afterEdit.hist}) · 시트후=${afterPick.curve}(${afterPick.dots}점) · 이동후=${afterMove.curve}(${afterMove.dots}점) · 끔: 숨김=${off195.dockHidden} 점없음=${!off195.curve} · 오류 ${errs.length}`);
+  }
+
   /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)
      몸통(x 170~340)은 진하고, 꼬리(x 145~172)는 피부와 겨우 14 차이라 **본 판독이 못 봅니다.**
      그래서 판독 열은 x≈172 에서 끊깁니다 — **거기가 꼬리 자리입니다.** 잔털을 따라가면 안 됩니다. */

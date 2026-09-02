@@ -546,6 +546,13 @@ body.dock-min .modebtns button{padding:0 5px;font-size:8.5px}
 #btnReset{position:absolute;top:8px;right:var(--redge);z-index:30;
   flex-direction:row;gap:4px;font-size:10px}
 #btnReset i{width:14px;height:14px}
+/* v3.33.0 — 미러링 점 색 도크: 초기화와 같은 행, 그 왼쪽 (right 는 app.js 가 초기화 폭에 맞춰 놓는다) */
+.balcolor-dock{position:absolute;top:8px;right:80px;z-index:30;height:34px;display:flex;gap:8px;align-items:center;
+  padding:0 8px;border-radius:13px;background:var(--glass);border:1px solid var(--hair);
+  backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2)}
+.balcolor-dock button{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.35);padding:0;
+  box-shadow:0 2px 8px rgba(0,0,0,.45);flex:0 0 auto}
+.balcolor-dock button.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.55),0 2px 8px rgba(0,0,0,.45);transform:scale(1.12)}
 #btnUndo:not(:disabled), #btnRedo:not(:disabled){background:var(--grad-deep);border-color:var(--a1);color:#fff}
 #btnUndo:not(:disabled):active, #btnRedo:not(:disabled):active{filter:brightness(1.2)}
 /* 되돌리기 — 자주 쓰는 버튼이라 한 단계 크게 */
@@ -924,6 +931,8 @@ body:not(.land) #railLang{display:none}
     <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
     <!-- ⭐ v1.96.0 — 다시실행·되돌리기는 **초기화 밑 1행** (원장님 지시 2026-08-29:
          「초기화 밑에가 되돌리기, 되돌리기 왼쪽에 다시실행」). 왼쪽 도크에는 위아래 바만 남습니다. -->
+    <!-- ⭐ v3.33.0 — 미러링 점 색 3종 (초기화 왼쪽 · 미러링 켜졌을 때만 · app.js buildBalColorDock 이 채운다) -->
+    <div class="balcolor-dock" id="balColorDock" style="display:none"></div>
     <div class="urow" id="undoRow">
       <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
       <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>

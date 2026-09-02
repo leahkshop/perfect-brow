@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.32.0";
+const APP_VERSION = "v3.33.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -773,6 +773,7 @@ const S = {
   redo: [],              // 다시 실행 스택 (v1.19.0) — 되돌린 작업을 앞으로 되감는다
   activePreset: null,    // 지금 적용 중인 프리셋 id (v1.25.0)
   balOn: false,          // 밸런스 표시 중 (v1.26.0)
+  balColor: (localStorage.getItem("pb_balcolor") || "red"),   // v3.33.0 — 미러링 점 색 (red·yellow·blue)
   refSide: localStorage.getItem("pb_refside") === "R" ? "R" : "L",   // 기준 쪽 — 다음에도 유지
   /* v1.90.0 — 가이드 안내(중앙 위 프롬프트) 켜기/끄기.
      v1.90.1 (원장님 확정 2026-08-28) — **앱을 열 때는 언제나 켜진 채 시작**한다.
@@ -1680,9 +1681,24 @@ function commitEdit() {
   S.hist.push(before);
   if (S.hist.length > HIST_MAX) S.hist.shift();
   S.redo = [];
-  S.balance = null;                                   // 선을 건드리면 측정값이 낡는다 (v1.26.0)                                        // 새 작업을 하면 다시 실행 갈래는 버린다
-  S.balCurve = null;                                  // v3.13.0 — 커브 판정도 함께 낡는다
-  S.balAnim = null;                                   // v3.15.0 — 애니메이션도 함께 낡는다
+  /* ⭐⭐ v3.33.0 — **미러링 점은 미러링 버튼으로 끄기 전까지 사라지지 않는다** (원장님 지시 2026-09-02: 「미러링 도트는
+     사진변경 버튼을 몇 번 누르니 사라짐 · 미러링이 시작되면 미러링 버튼으로 종료되기 전까지 점이 사라지지 않도록 유지」).
+     예전엔 어떤 편집이든 기록되면 판정(balance·balCurve)을 버렸다(v1.26.0·v3.13.0). 사진 선택 시트를 닫으며 생긴 첫 터치가
+     선을 스치거나 배경 탭이 단계를 넘기면(v1.98.0) 편집으로 기록되어 점이 통째로 없어졌다.
+     미러링 점은 **드로잉 실측**이라 선을 옮겨도 낡지 않는다(회귀 182). 사진(S.p)이 움직였을 때만 같은 사진 위에서 다시
+     잰다 — 실패하면 이전 판정을 그대로 둔다(점을 비우지 않는다). 미러링이 꺼져 있을 때는 예전대로 버린다. */
+  if (S.balOn) {
+    if (JSON.stringify(before.p) !== JSON.stringify(S.p)) {
+      const keepB = S.balance, keepC = S.balCurve;
+      try { runBalance(); runBalanceCurve(); } catch (e) { /* 조용히 */ }
+      if (!S.balance) S.balance = keepB;
+      if (!S.balCurve) S.balCurve = keepC;
+    }
+  } else {
+    S.balance = null;                                   // 선을 건드리면 측정값이 낡는다 (v1.26.0)
+    S.balCurve = null;                                  // v3.13.0 — 커브 판정도 함께 낡는다
+    S.balAnim = null;                                   // v3.15.0 — 애니메이션도 함께 낡는다
+  }
   updateUndoBtn();
 }
 function clearHist() { S.hist = []; S.redo = []; editSnap = null; updateUndoBtn(); }
@@ -1870,6 +1886,14 @@ function updateButtons() {
   setLockIcon(S.locked);
   $("btnPresetLoad").classList.toggle("preset-on", !!S.activePreset);
   $("btnBalance").classList.toggle("on", S.balOn);
+  /* v3.33.0 — 미러링 점 색 도크: 미러링 켜졌을 때만 · 초기화 왼쪽 */
+  { const dk = $("balColorDock");
+    if (dk) {
+      dk.style.display = S.balOn ? "flex" : "none";
+      for (const b of dk.querySelectorAll("button")) b.classList.toggle("on", b.dataset.color === S.balColor);
+      const rs = $("btnReset");
+      if (S.balOn && rs) dk.style.right = (parseFloat(getComputedStyle(rs).right) || 8) + rs.offsetWidth + 8 + "px";
+    } }
   /* 기준 쪽 — **왼쪽/오른쪽 중 켜진 쪽만** 색이 들어온다 (v1.29.0).
      v3.25.0 — 「밸런스를 켜야 나온다」(hidden 토글)는 CSS 에 져서 한 번도 동작한 적이 없었고
      원장님은 늘 보이는 상태로 써 오셨다 → 항상 표시로 확정 (index.html #refWrap 주석). */
@@ -5671,6 +5695,13 @@ const BAL_RED = "#FF3B4E";  // 미러링 점선 색 (v3.26.0 부터 **전체 점
      반대쪽 토막)만 **민트 BAL_BAD, 정지**(깜빡임 없음). v3.25.0 의 민트 점선+깜빡임은 폐기.
    판정 로직(runBalance·runBalanceCurve)은 그대로 — devFront 등은 내부 값으로만 남는다. */
 const BAL_BAD = "#3DFFC9";
+/* ⭐ v3.33.0 — **미러링 점 색 3종** (원장님 지시 2026-09-02: 「미러링 선택되면 동그라미 쳐진 오른쪽 부분(초기화 왼쪽)에
+   3개 색으로 미러링 점 색상을 바꿔 볼 수 있도록 · 눈썹 드로잉과 대조되어 잘 보이는 색 · 미러링 켜면 생기고 끄면 없어짐」).
+   드로잉은 검정~짙은 갈색, 피부는 살구색이라 **채도 높은 원색**이 가장 잘 뜬다: 빨강(기본·v3.26.0) · 노랑 · 파랑.
+   ⚠️ 민트(BAL_BAD, 5포인트 틀린 토막)와 헷갈리지 않도록 초록·청록 계열은 뺐다. 흰색은 흰 점(진단)과 겹쳐 뺐다.
+   고른 색은 localStorage(pb_balcolor)에 남는다. 점만 바뀌고 판정(민트 토막)은 그대로. */
+const BAL_COLORS = { red: "#FF3B4E", yellow: "#FFE14D", blue: "#2E8BFF" };
+const balColor = () => BAL_COLORS[S.balColor] || BAL_RED;
 const BAL_BAND = 0.045;    // ⚠️ v3.10.0 이후 balBandPx() 의 안전 폴백값으로만 쓰인다 (아래 참고)
 const BAL_SAMPLES = 21;    // 한 토막에서 뽑는 x 표본 수
 const BAL_CONTRAST = 14;   // 이만큼도 안 어두우면 "선을 못 찾음"으로 본다
@@ -6069,14 +6100,14 @@ function renderBalCurve(frag) {
   void badZone;
   for (let i = 0; i < refCount; i++) {
     const p = trace[i];
-    frag.appendChild(mk("circle", { cx: p.x, cy: p.top, r: 1.5, fill: BAL_RED, "fill-opacity": 0.5 }));
-    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: p.x, cy: p.bot, r: 1.2, fill: BAL_RED, "fill-opacity": 0.5 }));
+    frag.appendChild(mk("circle", { cx: p.x, cy: p.top, r: 1.5, fill: balColor(), "fill-opacity": 0.5 }));
+    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: p.x, cy: p.bot, r: 1.2, fill: balColor(), "fill-opacity": 0.5 }));
   }
   for (let i = 0; i < mirCount; i++) {
     const p = trace[i];
     const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
-    frag.appendChild(mk("circle", { cx: mx, cy: p.top, r: 2.0, fill: BAL_RED, "fill-opacity": 0.9 }));
-    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: mx, cy: p.bot, r: 1.7, fill: BAL_RED, "fill-opacity": 0.9 }));
+    frag.appendChild(mk("circle", { cx: mx, cy: p.top, r: 2.0, fill: balColor(), "fill-opacity": 0.9 }));
+    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: mx, cy: p.bot, r: 1.7, fill: balColor(), "fill-opacity": 0.9 }));
   }
 }
 
@@ -6147,6 +6178,18 @@ $("btnBalance").onclick = () => {
   S.balOn = true;
   startBalAnim();      /* ⭐ v3.15.0 — 앞머리→꼬리 순차 애니메이션으로 켠다 (아래) */
 };
+/* v3.33.0 — 미러링 점 색 도크 (위 BAL_COLORS 주석) */
+function buildBalColorDock() {
+  const dk = $("balColorDock"); if (!dk) return;
+  dk.innerHTML = "";
+  for (const [id, c] of Object.entries(BAL_COLORS)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.color = id; b.style.background = c; b.setAttribute("aria-label", id);
+    b.onclick = () => { S.balColor = id; try { localStorage.setItem("pb_balcolor", id); } catch (e) {} updateButtons(); render(); };
+    dk.appendChild(b);
+  }
+}
+buildBalColorDock();
 
 /* 기준 쪽 — 밸런스의 후속 버튼. 고른 값은 다음에도 유지된다.
    v1.29.0: 토글 하나가 아니라 **왼쪽/오른쪽 두 버튼**. 지금 어느 쪽이 기준인지 눌러 보지 않아도 보인다. */
@@ -6562,7 +6605,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
-  applyLayout, openPicker, endPicking, setLang,
+  applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
   updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
@@ -6571,7 +6614,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, darkBlobsUp, archDecide, eyeArchRange,
-  BROW_FRAC, browFillNeed, fitBrowsToFrame,
+  BROW_FRAC, browFillNeed, fitBrowsToFrame, BAL_COLORS, balColor,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
