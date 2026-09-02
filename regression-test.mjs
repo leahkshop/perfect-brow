@@ -2268,6 +2268,102 @@ if (RUN(5)) {
     cC.errs.length === 0 && cC.newOk === true && cC.devFront === false && cC.devArch === false && cC.devTail === false,
     `앞머리다름=${cC.devFront} · 아치다름=${cC.devArch} · 꼬리다름=${cC.devTail}`);
 
+  /* 184. ⭐ v3.15.0 — **진단 점(showArchDots) 기본 표시를 5개로 줄임** (원장님 지시 2026-09-02
+     「처음 들어가면 … 민트점두개, 아치선위에초록점, 꼬리선 위에 핑크, 흰점 빼고 모든점은
+      숨기기 · 다른 점들은 시스템 내부에서만 작동하도록」). raw 열별 점·아치엣지/아치두께
+     파랑 최종값·산꼭대기 주황 점은 더 이상 그리지 않는다 — 계산은 그대로, 화면만 줄었다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fShift);
+    await p.waitForTimeout(1300);
+    const r184 = await p.evaluate((lm) => {
+      const S = window.PB.S;
+      S.landmarks = lm;
+      S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.g = { ...window.PB.DEFAULT_GUIDE };
+      S.g.h1 = window.PB.imgToCanvas(0, 250, S.p).y / S.dim.H;
+      window.PB.render();
+      const ok = window.PB.autoFromDrawing();
+      window.PB.showArchDots();
+      const svg = document.getElementById("archDotsOverlay");
+      const fills = svg ? Array.from(svg.querySelectorAll("circle")).map((c) => c.getAttribute("fill")) : [];
+      const count = (hex) => fills.filter((f) => f === hex).length;
+      const hiddenColors = ["#4C8DFF", "#A855F7", "#00E5FF", "#26C6DA", "#FFA500", "#2E8BFF"];
+      const noHidden = hiddenColors.every((hex) => count(hex) === 0);
+      return { ok, total: fills.length, mint: count("#5EEAD4"), green: count("#00C853"),
+               pink: count("#FF4D94"), white: count("#FFFFFF"), noHidden };
+    }, LMK);
+    await ctx.close();
+    check("184. 진단 점(showArchDots) 기본 표시 — 민트2·초록1·분홍1·흰1 다섯 개만, raw·파랑·주황은 숨김 (원장님 지시 2026-09-02)",
+      errs.length === 0 && r184.ok === true && r184.total === 5 && r184.mint === 2 && r184.green === 1
+        && r184.pink === 1 && r184.white === 1 && r184.noHidden,
+      `점 개수=${r184.total}(기대 5) · 민트=${r184.mint} 초록=${r184.green} 분홍=${r184.pink} 흰=${r184.white} · 숨긴 색 없음=${r184.noHidden}`);
+  }
+
+  /* 185. ⭐ v3.15.0 — **미러링 켤 때 앞머리→꼬리 순차 애니메이션** (원장님 지시 2026-09-02
+     「미러링 클릭시 - 왼쪽 점들이 먼저 앞머리부터 순차적으로 점이 꼬리까지 찍힌다(애니메이션
+      처럼) · 그리고 오른쪽 미러링도 앞머리부터 꼬리까지 순차적으로 생긴다 · 이때 위 안내에
+      (밸런스체킹중)」). 클릭 직후엔 1단계(기준쪽, phase="ref")이고 "밸런스 체킹중" 안내가
+     뜬다 · 진행되며 점 개수가 늘어난다(1단계→2단계) · 다 끝나면(S.balAnim=null) 더 늘지
+     않고 안정되며, 어긋난 zone 은 빨간 점(BAL_RED)으로 보인다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    await p.setInputFiles("#fileInput", fShift);
+    await p.waitForTimeout(1300);
+    await p.evaluate((lm) => {
+      const S = window.PB.S;
+      S.landmarks = lm;
+      S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 };
+      S.g = { ...window.PB.DEFAULT_GUIDE };
+      S.g.h1 = window.PB.imgToCanvas(0, 250, S.p).y / S.dim.H;
+      S.refSide = "L";
+      window.PB.render();
+    }, LMK);
+    await p.click("#btnBalance");
+    const early = await p.evaluate(() => {
+      const S = window.PB.S;
+      const noteEl = document.getElementById("topNote");
+      const svg = document.getElementById("guides");
+      return { balOn: S.balOn, phase: S.balAnim ? S.balAnim.phase : null,
+               /* 기본 언어가 영어(회귀 144)라 텍스트를 언어에 못 박지 않는다 — 칩이 비어있지
+                  않은 채로 떠 있으면 충분하다(showNote(t("bal_checking")) 호출 확인용) */
+               checkingShown: !noteEl.hidden && noteEl.textContent.length > 0,
+               circles: svg.querySelectorAll("circle").length };
+    });
+    await p.waitForTimeout(400);      /* 1단계(650ms) 진행 중이어야 할 시점 */
+    const mid = await p.evaluate(() => {
+      const S = window.PB.S;
+      const svg = document.getElementById("guides");
+      return { phase: S.balAnim ? S.balAnim.phase : null, circles: svg.querySelectorAll("circle").length };
+    });
+    await p.waitForTimeout(1700);     /* 총 ~2100ms — 두 단계(1300ms)를 넉넉히 지나 끝나 있어야 함 */
+    const done1 = await p.evaluate(() => {
+      const S = window.PB.S;
+      const svg = document.getElementById("guides");
+      const redCount = Array.from(svg.querySelectorAll("circle")).filter((c) => c.getAttribute("fill") === "#FF3B4E").length;
+      return { animDone: S.balAnim === null, circles: svg.querySelectorAll("circle").length, redCount };
+    });
+    await p.waitForTimeout(200);
+    const done2 = await p.evaluate(() => document.getElementById("guides").querySelectorAll("circle").length);
+    await ctx.close();
+    check("185. 미러링 애니메이션 — 앞머리→꼬리 순차(2단계) · \"밸런스 체킹중\" 안내 · 끝나면 안정되고 어긋난 곳은 빨강 (원장님 지시 2026-09-02)",
+      errs.length === 0 && early.balOn === true && early.phase === "ref" && early.checkingShown === true
+        && mid.circles > early.circles && done1.animDone === true && done1.circles > mid.circles
+        && done1.circles === done2 && done1.redCount > 0,
+      `클릭직후 phase=${early.phase} 안내=${early.checkingShown} 점${early.circles} → 400ms 점${mid.circles}(phase=${mid.phase}) → `
+      + `2100ms 점${done1.circles}(끝=${done1.animDone}) → 2300ms 점${done2} · 빨간점=${done1.redCount}`);
+  }
+
   /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)
      몸통(x 170~340)은 진하고, 꼬리(x 145~172)는 피부와 겨우 14 차이라 **본 판독이 못 봅니다.**
      그래서 판독 열은 x≈172 에서 끊깁니다 — **거기가 꼬리 자리입니다.** 잔털을 따라가면 안 됩니다. */
@@ -3392,7 +3488,9 @@ if (RUN(5)) {
      · 「안내」 토글(가이드 버튼 옆)로 끄고 켤 수 있다 — 끄면 프롬프트만 사라지고 플로우는 그대로
      · 인사(초기화셋팅) 중에도 첫 스텝 안내가 미리 나온다 — 껐다 켠 직후 비어 보이지 않게
      · 플로우 밖 선(눈)을 골라도 안내가 유지된다
-     · AI 버튼은 「AI / 눈썹정렬」 두 줄 */
+     · AI 버튼은 「AI / 눈썹정렬」 두 줄
+     · v3.15.0 — 그린 선 다시 맞추기 **성공** 시엔 더 이상 안내를 띄우지 않는다(원장님 지시
+       2026-09-02). 그 자리는 이제 미러링 애니메이션의 "밸런스 체킹중" 전용이다. */
   if (RUN(26)) {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -3428,9 +3526,16 @@ if (RUN(5)) {
       document.getElementById("btnTip").click();
       PBx.updateGuideTip();
       const backOn = !tipEl.hidden;
-      /* ⑤ AI 알림 — showNote 가 중앙 위 칩으로 */
+      /* ⑤ v3.15.0 — 그린 선 다시 맞추기 **성공** 시엔 더 이상 안내를 띄우지 않는다
+         (원장님 지시 2026-09-02 「"그린 선에 맞춰 배치했습니다 …" 안내 삭제」).
+         그 자리(showNote/#topNote)는 이제 미러링 애니메이션의 "밸런스 체킹중" 전용 —
+         칩 자체(중앙 위·같은 컨테이너)는 여전히 살아있어야 하므로, 실패 안내로 그 자리가
+         여전히 같은 위치에 뜨는지만 확인한다(성공 안내가 사라졌다고 칩 자체가 없어진 게
+         아님을 보증). */
       S.guideOn = true; S.guideCur = "v2";
       document.getElementById("btnSnap").click();
+      const noteHiddenOnSuccess = noteEl.hidden === true;
+      PBx.showNote("(테스트) 실패 안내 자리 확인", 2200);
       const noteShown = !noteEl.hidden && noteEl.textContent.length > 0;
       const nr = noteEl.getBoundingClientRect();
       const noteTop = nr.top - stW.top < 90;
@@ -3440,15 +3545,16 @@ if (RUN(5)) {
         && /눈썹정렬|Align/.test(snap.textContent)      /* v1.92.0 — 영어는 "Align" (좁은 폰 폭) */
         && (snap.querySelector(".ailock") || {}).textContent === "🔒";
       return { centred, topArea, sameBox, duringIntro, keptOffFlow,
-               offHidden, flowAlive, notSaved, backOn, noteShown, noteTop, twoLine };
+               offHidden, flowAlive, notSaved, backOn, noteHiddenOnSuccess, noteShown, noteTop, twoLine };
     });
     await ctx.close();
-    check("143. 안내 — 중앙 위 · 토글로 끄고 켬 · 가이드 켜짐 중 유지 · AI/눈썹정렬 두 줄",
+    check("143. 안내 — 중앙 위 · 토글로 끄고 켬 · 가이드 켜짐 중 유지 · AI/눈썹정렬 두 줄 · 그린선 맞춤 성공 안내 삭제(v3.15.0)",
       r.centred && r.topArea && r.sameBox && r.duringIntro && r.keptOffFlow
         && r.offHidden && r.flowAlive && r.notSaved && r.backOn
-        && r.noteShown && r.noteTop && r.twoLine,
+        && r.noteHiddenOnSuccess && r.noteShown && r.noteTop && r.twoLine,
       `중앙위=${r.centred}/${r.topArea} 같은자리=${r.sameBox} · 인사중 ①=${r.duringIntro} · 플로우밖 유지=${r.keptOffFlow} · `
-      + `토글 끔=${r.offHidden}(플로우 유지 ${r.flowAlive}, 세션한정 ${r.notSaved}) 켬=${r.backOn} · AI알림 위=${r.noteShown}/${r.noteTop} · 두 줄=${r.twoLine}`);
+      + `토글 끔=${r.offHidden}(플로우 유지 ${r.flowAlive}, 세션한정 ${r.notSaved}) 켬=${r.backOn} · `
+      + `그린선맞춤 성공시 안내 없음=${r.noteHiddenOnSuccess} · 그 자리 살아있음(직접호출)=${r.noteShown}/${r.noteTop} · 두 줄=${r.twoLine}`);
   }
 
   /* 144. ⭐ v1.92.0 — **기본 언어 영어 · 링크 미리보기 영어** (원장님 지시 2026-08-28

@@ -166,6 +166,7 @@ const I18N = {
     bal_diff: "곳이 기준과 다릅니다",
     bal_skip: "곳은 선을 못 읽어 건너뜀",
     bal_off: "미러링 표시 끔",
+    bal_checking: "밸런스 체킹중",   /* v3.15.0 — 미러링 켜지는 동안 위 안내(showNote) 자리에 */
     bal_no_photo: "사진을 먼저 불러오세요",
     /* 라인 이름 (v1.19.0) — 왼쪽 레일 버튼 · 캔버스 라벨 · 조절자 이름이 모두 이걸 쓴다 */
     line_eye: "눈",
@@ -334,6 +335,7 @@ const I18N = {
     bal_diff: " differ from the reference",
     bal_skip: " skipped (line not readable)",
     bal_off: "Mirror view off",
+    bal_checking: "Checking balance…",
     bal_no_photo: "Load a photo first",
     line_eye: "Eye",
     line_front: "Front",
@@ -376,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.14.0";
+const APP_VERSION = "v3.15.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -781,6 +783,7 @@ const S = {
      가이드가 켜져 있는 동안 안내가 사라지지 않게 붙잡아 둔다 (원장님 지시 2026-08-28) */
   tipKey: null,
   balance: null,         // { off: {key: 차이px}, skipped: [key] }
+  balAnim: null,         // v3.15.0 — 미러링 켜질 때 앞머리→꼬리 순차 애니메이션 { phase:'ref'|'mirror', t0 }
   multi: false,          // 여러라인 모드 (v1.18.0)
   selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
   photoMode: "zoom",
@@ -1679,6 +1682,7 @@ function commitEdit() {
   S.redo = [];
   S.balance = null;                                   // 선을 건드리면 측정값이 낡는다 (v1.26.0)                                        // 새 작업을 하면 다시 실행 갈래는 버린다
   S.balCurve = null;                                  // v3.13.0 — 커브 판정도 함께 낡는다
+  S.balAnim = null;                                   // v3.15.0 — 애니메이션도 함께 낡는다
   updateUndoBtn();
 }
 function clearHist() { S.hist = []; S.redo = []; editSnap = null; updateUndoBtn(); }
@@ -4483,21 +4487,23 @@ function autoFromDrawing() {
 /* ⭐ v3.3.1 — 진단: 앱이 읽은 눈썹 윗선을 점으로 8초간 표시.
    render() 와 무관한 별도 SVG 라 다음 render 에 지워지지 않고, 시간이 지나면 스스로 사라진다.
    저장본에는 안 찍힌다(exportImage 와 무관).
-     파랑(옅음) = 눈썹 몸통 판독 열(seq)의 윗선, raw
-     보라(옅음) = v3.4.1 — 꼬리 쪽으로 **이어 붙인 열**(tailAdd)의 윗선, raw
-     청록(옅음) = v3.6.0 — 아랫선, raw
-     주황  = 산꼭대기(pk)   · 초록 = 아치선(v6)이 선 자리
-     분홍  = v3.4.1 — 꼬리선(v4)이 선 자리 (점들과 얼마나 맞는지 눈으로 보라고)
-     민트(큰,진함) = 앞머리 최종값 · 민트(작은,진함) = 앞두께 최종값
-     파랑(큰,진함) = 아치엣지 최종값 · 파랑(작은,진함) = 아치두께 최종값
-       — v3.11.0: 옅은 raw 점들은 **자기 열에서 혼자 고른 원본**(raw seq)이고,
-         진하고 큰 네 점은 frontDecide/archDecide 가 앞머리·이너 위치·해부학 순서(아치두께
-         ≤ 앞머리 ≤ 꼬리)까지 반영해 **최종 확정한 값**이다. 원장님이 지적하신
+     초록 = 아치선(v6)이 선 자리 · 분홍 = v3.4.1 — 꼬리선(v4)이 선 자리
+     흰점 = v3.6.0 — 두 모서리가 만난다고 본 자리(수렴점)
+     민트(큰) = 앞머리 최종값 · 민트(작은) = 앞두께 최종값
+       — v3.11.0: 이 진하고 큰 점들은 frontDecide/archDecide 가 앞머리·이너 위치·해부학
+         순서(아치두께 ≤ 앞머리 ≤ 꼬리)까지 반영해 **최종 확정한 값**이다. 원장님이 지적하신
          "점선이 쌍꺼풀에 찍힌다"는 사례는 이 최종값이 아니라 raw seq 쪽이었음을
          2026-09-01 실기기 확인으로 확정 — 원장님 확인: "정확히 드로잉 위에".
-       — v3.12.0: raw 점을 진한 최종값 점과 헷갈리지 않도록 옅게(반투명) 처리.
-         raw 데이터 자체는 지우지 않았다 — 진짜 판독 실패를 디버깅할 때 필요할 수 있어
-         남겨두되, 평소엔 최종값(진한 점)이 시선을 끌도록 했다. */
+       — v3.12.0: (이후 v3.15.0에서 삭제) raw 점을 옅게 처리했었다.
+       — ⭐ v3.15.0 — **기본 표시를 줄였다** (원장님 지시 2026-09-02: 「처음 들어가면 …
+         민트점 두개·아치선위 초록점·꼬리선 위 핑크·흰점 빼고 모든점은 숨기기 · 다른 점들은
+         시스템 내부에서만 작동하도록」). raw 열별 원본(seq) 점 · 아치엣지/아치두께(파랑)
+         최종값 · 산꼭대기(주황) 표시점은 **더 이상 그리지 않는다** — 그 값 자체(S.archDots·
+         S.archRead·h2·archThickness)는 그대로 계산되고 가이드 배치에 그대로 쓰인다, 화면에만
+         안 그릴 뿐이다("시스템 내부에서만 작동"). 이 진단점 다섯 개(민트 2·초록·분홍·흰)만
+         남기고, 나머지 전체(raw + 파랑 2 + 주황)는 **미러링 켤 때**(runBalanceCurve의
+         readSideCurve trace, renderBalCurve)에서 이미 모든 열을 점으로 다시 보여준다 —
+         원장님 지시: 「모든 점들은 미러링사용시 사용하고 싶음」. */
 let archDotsTimer = null;
 function showArchDots() {
   try {
@@ -4519,29 +4525,13 @@ function showArchDots() {
       c.setAttribute("fill", fill); c.setAttribute("stroke", "#14161B"); c.setAttribute("stroke-width", "0.6");
       svg.appendChild(c);
     };
-    /* ⭐ v3.12.0 — raw 열별 원본(seq) 점은 옅게. 원장님이 확인해주신 대로 최종 확정값(민트·파랑
-       큰 점)은 실제 드로잉 위에 정확히 있었고, 쌍꺼풀 쪽으로 튀는 건 이 raw 원본 점들뿐이었다
-       (2026-09-01 실기기 확인 — "정확히 드로잉 위에"). raw 점을 없애지는 않는다 — 진짜 판독
-       실패를 디버깅할 때는 여전히 필요한 자료다. 다만 눈에 덜 띄게 옅게 찍어서, 크고 진한
-       최종값 점과 착각하지 않게 한다. */
-    const rdot = (x, y, r, fill) => {
-      const c = document.createElementNS(NS, "circle");
-      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", r);
-      c.setAttribute("fill", fill); c.setAttribute("fill-opacity", "0.35");
-      c.setAttribute("stroke", "none");
-      svg.appendChild(c);
-    };
-    for (const p of S.archDots) rdot(p.x, p.top, 2.0, p.tail ? "#A855F7" : "#4C8DFF");
-    /* v3.6.0 — 아랫선도 찍는다(청록, raw). v3.12.0부터 옅게. */
-    for (const p of S.archDots) if (p.bot !== undefined) rdot(p.x, p.bot, 1.6, p.tail ? "#26C6DA" : "#00E5FF");
+    /* v3.15.0 — top0(기준 높이)는 초록·분홍 점 위치 계산에 여전히 필요하다 —
+       raw 점 자체를 그리지 않아도 S.archDots 값으로 계산은 그대로 한다. */
     const top0 = S.archDots.reduce((m, p) => Math.min(m, p.top), 1e9) - 6;
     const a = S.archRead;
-    if (a) {
-      dot(a.pkX, top0, 4, "#FFA500");
-      dot(S.g.v6 * W, top0, 4, "#00C853");
-    }
     /* v3.4.1 — 꼬리선이 선 자리. 점들의 끝과 견줘 보라고 같이 찍는다 */
     if (S.g.v4 !== undefined) dot(S.g.v4 * W, top0, 4, "#FF4D94");
+    if (a) dot(S.g.v6 * W, top0, 4, "#00C853");
     /* v3.6.0 — 두 모서리가 만난다고 본 자리(수렴점) — 흰 점 */
     if (S.tailRead && S.tailRead.tipY !== null) dot(S.tailRead.tipX, S.tailRead.tipY, 3.2, "#FFFFFF");
     /* ⭐ v3.11.0 — **최종 확정값**도 함께 찍는다 (원장님 지시 2026-09-01: 점선이 쌍꺼풀
@@ -4557,9 +4547,8 @@ function showArchDots() {
         ix = clamp(S.g.v1 - ir.anchor * (1 - ir.fRaw), 0.02, 0.98) * W;
       dot(ix, S.g.front * H, 5, "#5EEAD4");
       dot(ix, S.g.frontThickness * H, 3.4, "#5EEAD4");
-      const pkX = a ? a.pkX : S.g.v6 * W;
-      dot(pkX, S.g.h2 * H, 5, "#2E8BFF");
-      dot(pkX, S.g.archThickness * H, 3.4, "#2E8BFF");
+      /* v3.15.0 — 아치엣지(h2)·아치두께 파랑 점은 기본 표시에서 뺐다(위 설명). 계산은 그대로:
+         const pkX = a ? a.pkX : S.g.v6 * W; h2Y = S.g.h2*H; archThicknessY = S.g.archThickness*H; */
     }
     stage.appendChild(svg);
     archDotsTimer = setTimeout(() => { const el = document.getElementById("archDotsOverlay"); if (el) el.remove(); }, 8000);
@@ -4719,7 +4708,7 @@ function loadPhoto(file) {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
-    S.balOn = false; S.balance = null; S.balCurve = null;
+    S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null;
     S.locked = false;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
@@ -5300,7 +5289,7 @@ $("btnReset").onclick = () => {
     S.g = { ...DEFAULT_GUIDE };
     if (!keepPhoto) S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
-    S.balOn = false; S.balance = null; S.balCurve = null;
+    S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
@@ -5682,6 +5671,11 @@ function runBalanceCurve() {
    좌우가 실제로 균형 잡혀 있으면 이 미러링 점들이 반대쪽 실제 드로잉과 자연스럽게 겹쳐
    보이고, 어긋난 구간(앞머리·아치·꼬리 판정)만 빨갛게 되어 원장님이 "내 드로잉과 미러링이
    다르다"를 점을 눈으로 훑으며 자연스럽게 보게 된다. */
+/* v3.15.0 — 한 단계(기준쪽 실제 점 · 반대쪽 미러링 점) 애니메이션 길이(ms).
+   원장님 지시 2026-09-02: 「왼쪽 점들이 먼저 앞머리부터 순차적으로 점이 꼬리까지 찍힌다 ·
+   그리고 오른쪽 미러링도 앞머리부터 꼬리까지 순차적으로 생긴다」 — 두 단계라 전체는 이 값의 2배. */
+const BAL_ANIM_MS = 650;
+
 function renderBalCurve(frag) {
   const bc = S.balCurve;
   if (!bc || !bc.L || !bc.R) return;
@@ -5691,7 +5685,30 @@ function renderBalCurve(frag) {
   const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
   const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  for (const p of refC.trace) {
+  const n = refC.trace.length;
+
+  /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
+     1단계: 기준쪽(refC, 실제 위치) 점이 순서대로 채워진다. 2단계: 그 다음 반대쪽 미러링
+     점이 순서대로 채워진다. 애니메이션이 끝나면(S.balAnim=null) 둘 다 항상 전체가 보인다 —
+     기준쪽 실제 점도 계속 남겨 둔다(원장님이 자기 드로잉과 미러링을 나란히 비교하도록).
+     ⛔ 판정(devFront/devArch/devTail, runBalanceCurve)에는 전혀 관여하지 않는 순수 표시 연출. */
+  let refCount = n, mirCount = n;
+  if (S.balAnim) {
+    const frac = clamp((performance.now() - S.balAnim.t0) / BAL_ANIM_MS, 0, 1);
+    if (S.balAnim.phase === "ref") { refCount = Math.round(n * frac); mirCount = 0; }
+    else { refCount = n; mirCount = Math.round(n * frac); }
+  }
+
+  for (let i = 0; i < refCount; i++) {
+    const p = refC.trace[i];
+    const bad = badZone(p.zone);
+    frag.appendChild(mk("circle", { cx: p.x, cy: p.top, r: 1.5,
+      fill: bad ? BAL_RED : "#5EEAD4", "fill-opacity": bad ? 0.75 : 0.4 }));
+    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: p.x, cy: p.bot, r: 1.2,
+      fill: bad ? BAL_RED : "#2E8BFF", "fill-opacity": bad ? 0.75 : 0.4 }));
+  }
+  for (let i = 0; i < mirCount; i++) {
+    const p = refC.trace[i];
     const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
     const bad = badZone(p.zone);
     frag.appendChild(mk("circle", bad
@@ -5703,6 +5720,29 @@ function renderBalCurve(frag) {
         : { cx: mx, cy: p.bot, r: 1.4, fill: "#2E8BFF", "fill-opacity": 0.55 }));
     }
   }
+}
+
+/* ⭐ v3.15.0 — 미러링을 켤 때 앞머리→꼬리 순차 애니메이션으로 시작한다 (원장님 지시
+   2026-09-02, 실기기 스크린샷 확인 후: 「미러링 클릭시 - 왼쪽 점들이 먼저 앞머리부터
+   순차적으로 점이 꼬리까지 찍힌다(애니메이션 처럼) · 그리고 오른쪽 미러링도 앞머리부터
+   꼬리까지 순차적으로 생긴다 · 이때 위 안내에 (밸런스체킹중)」).
+   "위 안내"는 showNote()의 그 자리 — v3.14.0에서 「그린 선에 맞춰 배치했습니다」 안내를
+   지운 바로 그 자리를 재활용한다. render() 를 매 프레임 다시 불러 renderBalCurve() 가
+   S.balAnim 의 진행률만큼만 점을 그리게 한다 — 판정 로직은 전혀 건드리지 않는다. */
+function startBalAnim() {
+  S.balAnim = { phase: "ref", t0: performance.now() };
+  showNote(t("bal_checking"), BAL_ANIM_MS * 2 + 400);
+  const step = () => {
+    if (!S.balAnim || !S.balOn) { render(); return; }
+    const frac = (performance.now() - S.balAnim.t0) / BAL_ANIM_MS;
+    if (frac >= 1) {
+      if (S.balAnim.phase === "ref") { S.balAnim = { phase: "mirror", t0: performance.now() }; }
+      else { S.balAnim = null; render(); return; }
+    }
+    render();
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 /* 밸런스 검사 — 기준 쪽과 반대쪽의 드로잉 높이를 비교한다.
@@ -5739,11 +5779,11 @@ function visibleLineKeys() {
 /* 전체라인 — 화면의 모든 선을 한 번에 선택해서 통째로 옮긴다. 다시 누르면 전체 해제. */
 /* 밸런스 — 기준 쪽 드로잉과 반대쪽이 같은 높이인지 검사하고, 다른 곳만 빨갛게 (v1.26.0) */
 $("btnBalance").onclick = () => {
-  if (S.balOn) { S.balOn = false; S.balance = null; S.balCurve = null; render(); showHud(t("bal_off"), 1400); return; }
+  if (S.balOn) { S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; render(); showHud(t("bal_off"), 1400); return; }
   if (!runBalance()) return;
   runBalanceCurve();   /* ⭐ v3.13.0 — Phase 3: 좌우 독립 커브 판정도 함께 (실패해도 조용히 null) */
   S.balOn = true;
-  render();
+  startBalAnim();      /* ⭐ v3.15.0 — 앞머리→꼬리 순차 애니메이션으로 켠다 (아래) */
   const n = Object.keys(S.balance.off).length, sk = S.balance.skipped.length;
   showHud(n === 0 ? t("bal_ok") : `${n}${t("bal_diff")}` + (sk ? `<br>${sk}${t("bal_skip")}` : ""), 3000);
 };
@@ -5781,8 +5821,12 @@ $("btnSnap").onclick = () => {
      드로잉 맞춤이 놓는 것은 앞두께·아치 둘뿐이므로, 나머지를 손으로 놓는 순서가 곧 다음 할 일입니다. */
   if (ok && S.guideOn) { S.intro = false; clearTimeout(introTimer); S.guideCur = GUIDE_FLOW[0]; noteSel(GUIDE_FLOW[0]); }
   render(); updateButtons();
-  showNote(ok ? t("ai_drawn") : t("ai_redraw_fail"), 2600);   /* v1.90.0 — 중앙 위, 가이드 안내와 같은 자리 */
-  if (ok) showArchDots();         /* v3.3.1 — 수동 눈썹정렬에도 점선 진단 표시 */
+  /* ⭐ v3.15.0 — 성공 안내("그린 선에 맞춰 배치했습니다 …")는 **삭제** (원장님 지시
+     2026-09-02: 「"그린 선에 맞춰 배치했습니다 …" 안내 삭제」). 이 자리(showNote, 위 안내)는
+     이제 미러링 애니메이션 중 "밸런스 체킹중" 표시가 쓴다(startBalAnim() 참고). 실패 안내는
+     v3.3.0에서 「조용히 넘기지 않는다」고 지시하신 안전판이라 그대로 둔다. */
+  if (!ok) showNote(t("ai_redraw_fail"), 2600);
+  if (ok) showArchDots();         /* v3.3.1 — 수동 눈썹정렬에도 점선 진단 표시(이제 5개 점만) */
 };
 /* 가이드 켜고 끄기 — 끄면 플로우 즉시 종료. 켠 직후엔 아무 선도 켜지 않는다:
    **처음 움직이는 선**이 플로우의 시작이다 (원장님 지시 2026-08-21) */
@@ -6122,6 +6166,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   /* v1.94.0 — 고유색이 LOOK_DEF 를 따라가도록 참조로 연결 (기본값이 바뀌어도 안 어긋나게) */
   LINE_COLORS: { eye: "#3A3F4A", arch: LOOK_DEF.arch, tail: LOOK_DEF.tail, inner: LOOK_DEF.inner, innerDim: "#C9D1D6", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
+  showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve,
