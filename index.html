@@ -203,6 +203,15 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
    ⛔ 밝은 쪽(0%·100%)은 여기서도 1 이어야 합니다 — 저장본은 애니메이션 없이 그 값으로 찍힙니다. */
 @keyframes pbBlink1{0%{stroke-opacity:1}45%{stroke-opacity:.38}100%{stroke-opacity:1}}
 #guides line.blink1{animation:pbBlink1 1.4s ease-in-out 1}
+/* ⭐ v3.25.0 — 미러링 점선의 **틀린 구간**: 빨강 → 민트, 깜빡임 (원장님 지시 2026-09-02:
+   「틀린 부분 민트색으로 변경할 것 그리고 블링킹 효과 넣을 것」).
+   ⛔ 밝은 쪽(0%·100%)은 1 — 저장본은 애니메이션 없이 이 값으로 찍힙니다(위 지시등과 같은 규칙).
+   render() 가 점을 매번 새로 만들어도 위상이 이어지도록 app.js 가 animation-delay 를 음수로 줍니다. */
+@keyframes pbBalBlink{0%{fill-opacity:1}50%{fill-opacity:.18}100%{fill-opacity:1}}
+#guides circle.balbad{animation:pbBalBlink 1.1s ease-in-out infinite}
+@keyframes pbBalBlinkLine{0%{stroke-opacity:1}50%{stroke-opacity:.18}100%{stroke-opacity:1}}
+#guides line.balbad{animation:pbBalBlinkLine 1.1s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){#guides circle.balbad, #guides line.balbad{animation:none}}
 @media (prefers-reduced-motion:reduce){#guides line.blink1{animation:none}}
 @media (prefers-reduced-motion:reduce){#guides line.blink{animation:none}}
 #touch{position:absolute;inset:0;touch-action:none;z-index:3}
@@ -390,12 +399,49 @@ body.land.compact .cdock{transform:translateX(-50%)}
    유지보수 대상은 아니지만 **버튼이 서로 가려 눌리지 않으면 안 되므로** 한 줄 위로 올립니다. */
 body:not(.land) .cdock{bottom:calc(var(--safe-b) + 112px)}
 /* v3.7.1 — 밝기 도크는 `.cdock` 과 같은 left:50% 기준을 공유합니다.
-   alignCenterDock() 이 매 프레임 잠금 도크의 x 이동값에서 자기 폭+8px 를 더 빼서
-   두 도크를 같은 좌표계로 이동시키므로, 여기 transform 값은 JS 로드 전 잠깐 보일
-   초기값일 뿐입니다(대충 왼쪽에 두면 충분). */
-.bright-dock{position:absolute;left:50%;bottom:calc(var(--safe-b) + 8px);z-index:30;
-  transform:translateX(-170%)}
-body:not(.land) .bright-dock{bottom:calc(var(--safe-b) + 112px)}
+   alignCenterDock() 이 매 프레임 잠금 도크의 x 이동값을 기준으로 옮기므로, 여기 transform 값은
+   JS 로드 전 잠깐 보일 초기값일 뿐입니다.
+   ⭐ v3.25.0 — 아래 두 행 배치 (원장님 지시 2026-09-02):
+     위 행 `.toprow-dock` = [밝기(길고 얇은 바)][왼쪽][오른쪽]  — 잠금 바로 위, 잠금 왼쪽 끝에 맞춤
+     아래 행               = [사진잠금(.cdock)][미러링(.mirror-dock)] — 잠금 오른쪽 10px
+   밝기 버튼이 잠금 왼쪽에서 위 행으로 올라가며 비운 자리 덕에 아래 행에 미러링이 들어갑니다.
+   ⛔ `.cdock` 안에 넣지 마세요 — 잠금 홀로(lockAlone, 회귀 83·106). */
+.toprow-dock{position:absolute;left:50%;bottom:calc(var(--safe-b) + 8px + 50px + 6px);z-index:30;
+  display:flex;align-items:flex-end;gap:6px;transform:translateX(-50%)}
+body.land.compact #editor .toprow-dock{bottom:calc(var(--safe-b) + 6px + 46px + 6px)}
+body:not(.land) .toprow-dock{bottom:calc(var(--safe-b) + 112px + 56px)}
+.bright-dock{position:relative;z-index:30}
+.mirror-dock{position:absolute;left:50%;bottom:calc(var(--safe-b) + 8px);z-index:30;
+  display:flex;align-items:flex-end;transform:translateX(60%)}
+body.land.compact #editor .mirror-dock{bottom:calc(var(--safe-b) + 6px)}
+body:not(.land) .mirror-dock{bottom:calc(var(--safe-b) + 112px)}
+/* 밝기 = **길고 얇은 바** (원장님 지시 「조금 더 길게 얇게」). 높이는 위 행의 왼쪽/오른쪽 칩과 맞춥니다.
+   ⚠️ `.menurow button`(50×68) 보다 뒤에 와야 이깁니다 — 특이도도 한 단계 위. */
+.bright-dock #btnBrightness{height:28px;min-width:92px;width:92px;border-radius:10px;
+  flex-direction:row;gap:5px;padding:0 8px;font-size:9.5px}
+.bright-dock #btnBrightness span{font-size:12px;line-height:1}
+.bright-dock #btnBrightness.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);font-weight:800;
+  box-shadow:0 0 14px var(--glow)}
+body.land.compact #editor .bright-dock #btnBrightness{height:26px;min-width:84px;width:84px;font-size:9px}
+body.dock-tight .bright-dock #btnBrightness{min-width:72px;width:72px}
+body.dock-min .bright-dock #btnBrightness{min-width:56px;width:56px}
+body.dock-min .bright-dock #btnBrightness em{display:none}
+/* 미러링 칩 — 잠금과 같은 높이·같은 둥글기로 「한 행」임을 드러냅니다 */
+.mirror-dock .balbox{margin-left:0;padding:0;background:transparent;border:none}
+.mirror-dock #btnBalance{height:50px;min-width:56px;border-radius:13px;font-size:9.5px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;padding:0 8px}
+body.land.compact #editor .mirror-dock #btnBalance{height:46px;min-width:52px;font-size:9px}
+body.dock-tight .mirror-dock #btnBalance{min-width:46px;padding:0 5px;font-size:8.5px}
+/* dock-min(좁은 폰) — 잠금+미러링이 아래 행에 못 들어가므로 미러링을 **위 행 오른쪽 끝**으로 올린다 (alignCenterDock).
+   위 행 칩 높이(28px)에 맞춘다. 넓은 폰에서는 이 규칙이 적용되지 않는다. */
+body.dock-min .mirror-dock{bottom:calc(var(--safe-b) + 8px + 50px + 6px)}
+body.land.compact.dock-min #editor .mirror-dock{bottom:calc(var(--safe-b) + 6px + 46px + 6px)}
+body.dock-min .mirror-dock #btnBalance{height:28px;min-width:44px;padding:0 6px;font-size:9px;border-radius:10px}
+body.land.compact.dock-min #editor .mirror-dock #btnBalance{height:26px;min-width:44px}
+body:not(.land).dock-min .mirror-dock{bottom:calc(var(--safe-b) + 112px + 56px)}   /* 세로 폴백(테스트 전용)도 위 행 */
+/* 위 행의 왼쪽/오른쪽 칩은 밝기 바와 같은 높이 */
+.toprow-dock .chip.ref{height:28px;display:flex;align-items:center;padding:0 9px}
+body.land.compact #editor .toprow-dock .chip.ref{height:26px;font-size:9.5px}
 /* 드래그바 = 태양 버튼 "위"에 뜨는 팝업. 평소엔 hidden 으로 완전히 숨습니다. */
 #brightnessCtrl{position:absolute;left:50%;bottom:calc(100% + 8px);width:max(46vw,220px);
   transform:translateX(-50%)}
@@ -852,17 +898,9 @@ body:not(.land) #railLang{display:none}
       <button class="chip" id="btnMulti" data-i18n="editor_multi">여러라인</button>
       <!-- 여러라인의 후속 버튼 (v1.19.0) — 여러라인이 꺼져 있으면 hidden -->
       <button class="chip" id="btnAllSel" data-i18n="editor_all_lines" hidden>전체라인</button>
-      <!-- ⭐ v1.96.0 — 밸런스·왼쪽·오른쪽은 **여러라인 오른쪽, 간격 두고 배경 있는 칸** 하나에
-           (원장님 지시 2026-08-29: 「배경이 조금 있는 칸을 넣어 하나 박스에 넣고
-             여러라인 오른쪽에 간격을 조금 두고 배치」). v1.89.0 의 오른쪽 끝 정렬을 대체합니다 —
-           오른쪽 위는 이제 초기화·다시실행·되돌리기 자리입니다. -->
-      <span class="balbox" id="balBox">
-        <button class="chip" id="btnBalance" data-i18n="editor_balance_check">미러링</button>
-        <span class="refwrap" id="refWrap" hidden>
-          <button class="chip ref" id="btnRefL" data-i18n="bal_left">왼쪽</button>
-          <button class="chip ref" id="btnRefR" data-i18n="bal_right">오른쪽</button>
-        </span>
-      </span>
+      <!-- v1.96.0~v3.24.0 — 밸런스(미러링)·왼쪽·오른쪽 칸이 여기(여러라인 오른쪽)에 있었습니다.
+           ⭐ v3.25.0 — **아래 잠금 옆 `#mirrorDock`** 으로 이동 (원장님 지시 2026-09-02:
+           「미러링 버튼은 사진잠금과 AI눈썹정렬 사이에 넣기 · 왼쪽 오른쪽은 미러링 버튼 위 행에」). -->
     </div>
 
     <div class="linebar linebar-left" id="hButtons"></div>
@@ -948,15 +986,35 @@ body:not(.land) #railLang{display:none}
         <button id="btnLock"><i id="lockIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/><circle cx="12" cy="15.4" r="1.15" fill="currentColor" stroke="none"/></svg></i><em id="lockLabel" data-i18n="editor_photo_lock">사진잠금</em></button>
       </div>
     </div>
-    <!-- 밝기 도크 (v3.7.1) — 사진잠금 왼쪽에 붙는다. 드래그바(#brightnessCtrl)는 태양 버튼
-         "위"에 절대배치로 뜨는 팝업이라 평소엔 자리를 차지하지 않는다(항상 숨김 · 누르면 생성 ·
-         다시 누르면 숨김 — toggleBrightnessMode()). -->
-    <div class="menurow bright-dock" id="brightnessDock">
-      <div id="brightnessCtrl" class="posctl axis-h" hidden>
-        <span class="pbtn" role="img" aria-label="Brightness">☀</span>
-        <input type="range" id="exposureBrightnessSlider" min="-100" max="100" value="0" style="flex:1;">
+    <!-- 밝기 도크 (v3.7.1) — 드래그바(#brightnessCtrl)는 태양 버튼 "위"에 절대배치로 뜨는
+         팝업이라 평소엔 자리를 차지하지 않는다(항상 숨김 · 누르면 생성 · 다시 누르면 숨김 —
+         toggleBrightnessMode()).
+         ⭐ v3.25.0 — 잠금 **왼쪽**이 아니라 잠금 **위 행**, 길고 얇은 바 모양 (원장님 지시 2026-09-02:
+         「밝기 버튼 조금 더 길게 얇게 조정해서 공간을 만들 것」). 그렇게 비운 아래 행의 자리에
+         미러링 버튼이 들어갑니다. 위 행 = [밝기 ───][왼쪽][오른쪽] · 아래 행 = [사진잠금][미러링].
+         두 행은 모두 alignCenterDock() 이 잠금과 같은 x 좌표계로 옮깁니다. -->
+    <div class="toprow-dock" id="topRowDock">
+      <div class="menurow bright-dock" id="brightnessDock">
+        <div id="brightnessCtrl" class="posctl axis-h" hidden>
+          <span class="pbtn" role="img" aria-label="Brightness">☀</span>
+          <input type="range" id="exposureBrightnessSlider" min="-100" max="100" value="0" style="flex:1;">
+        </div>
+        <button id="btnBrightness" title="Brightness"><span>☀</span><em data-i18n="editor_brightness">밝기</em></button>
       </div>
-      <button id="btnBrightness" title="Brightness" data-i18n="editor_brightness"><span>☀</span></button>
+      <!-- 기준 쪽 (v1.29.0) — 왼쪽/오른쪽 두 버튼. ⚠️ v1.29.0 의 「밸런스를 켜야 나온다」는
+           `.refwrap{display:flex}` 가 hidden 을 이겨 실제로는 한 번도 숨은 적이 없었고, 원장님은
+           늘 보이는 상태로 써 오셨습니다 → v3.25.0 부터 **항상 표시**로 못 박습니다(기준 쪽은
+           미러링을 켜기 전에 고르는 것이 자연스럽습니다). -->
+      <span class="refwrap" id="refWrap">
+        <button class="chip ref" id="btnRefL" data-i18n="bal_left">왼쪽</button>
+        <button class="chip ref" id="btnRefR" data-i18n="bal_right">오른쪽</button>
+      </span>
+    </div>
+    <!-- ⭐ v3.25.0 — 미러링 도크: 사진잠금 오른쪽(잠금 ↔ AI 눈썹정렬 사이). 잠금과 같은 행. -->
+    <div class="mirror-dock" id="mirrorDock">
+      <span class="balbox" id="balBox">
+        <button class="chip" id="btnBalance" data-i18n="editor_balance_check">미러링</button>
+      </span>
     </div>
 
     <div class="hud" id="hud"></div>
