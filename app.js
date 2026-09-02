@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.25.0";
+const APP_VERSION = "v3.26.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -787,7 +787,7 @@ const S = {
   multi: false,          // 여러라인 모드 (v1.18.0)
   selSet: [],            // 여러라인 모드에서 선택된 키들 — 함께 움직인다
   photoMode: "zoom",
-  locked: false,
+  locked: true,    /* ⭐ v3.26.0 — 앱은 **잠금 상태로 시작** (원장님 지시 2026-09-02). 사진을 넣을 때도 loadPhoto 가 true 로 */
   guideOn: false, guideCur: null,   // 가이드 플로우 (v1.42.0)
   dragOn: false,         // 선을 잡고 움직이는 중 (v1.55.0 — 짙은 회색 + 살구색 테두리)
   /* ⭐ v1.81.0 — **한 번이라도 움직인 선** (원장님 지시 2026-08-27 · 가이드 꺼진 상태 모드)
@@ -1112,11 +1112,7 @@ function renderGuides() {
           if (t1 - t0 > 1) drawLine(frag, t0, y, t1, y, HALF_GREY, HALF_W, HALF_OP);
         }
         /* ⚠️ v1.55.0 — 세 상태 (위 상수 주석 참고). 자를 색/회색으로 쪼개지 않는다 */
-        if (bad) {   /* v3.25.0 — 민트 + 깜빡임 (line 용 pbBalBlinkLine) */
-          const a = { x1: xa, y1: y, x2: xb, y2: y, stroke: BAL_BAD, "stroke-width": sp.w + 2.2,
-            "stroke-opacity": 1, "stroke-linecap": "round", class: "balbad", style: balBlinkDelay() };
-          frag.appendChild(mk("line", a)); return;
-        }
+        if (bad) { drawLine(frag, xa, y, xb, y, BAL_BAD, sp.w + 2.2, 1); return; }   /* v3.26.0 — 5포인트 틀린 토막 = 민트(정지) */
         if (grabbed(sp)) { drawGrab(frag, xa, y, xb, y, sp.w + 1.8); return; }
         if (settled(sp)) { drawDone(frag, xa, y, xb, y, sp.w + 1.8); return; }   /* v1.95.0 놓은 선 */
         if (sel) { drawLive(frag, xa, y, xb, y, liveColor(sp), (sp.w + 1.8) * S.look.weight, blinkOf(sp), boost(sp)); return; }
@@ -4714,7 +4710,11 @@ function loadPhoto(file) {
     S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
     S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null;
-    S.locked = false;
+    /* ⭐ v3.26.0 — 새 사진도 **잠금 상태로 시작** (원장님 지시 2026-09-02: 「사진 잠금은 앱이 시작되면 잠금 상태로
+       시작하고 사용자가 끄면 색상 조금 더 꺼진 느낌으로」). 시술 중 사진이 손에 밀리지 않는 것이 기본.
+       사진을 옮기려면 잠금을 풀어야 한다. 첫 자동 정렬(runFaceAI→autoAlign)은 잠금과 무관하게 사진을 놓는다.
+       ⚠️ 초기화·AI 눈썹정렬은 잠금 중엔 사진 위치를 유지하고 선만 다시 잰다(v3.9.1) — 그 규칙 그대로. */
+    S.locked = true;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
@@ -5418,14 +5418,14 @@ $("btnMulti").onclick = () => {
       · 좌우 조명이 다를 때 (그림자를 선으로 오인)
       · 얼굴이 옆으로 돌아가 한쪽이 짧게 찍혔을 때
    그래서 못 읽은 선은 **빨간 표시를 하지 않고 조용히 건너뜁니다.** */
-const BAL_RED = "#FF3B4E";  // (v1.26.0~v3.24.0) 밸런스가 다른 곳 표시색 — v3.25.0 부터 아래 BAL_BAD 로 대체
-/* ⭐ v3.25.0 — 틀린 구간은 **민트 + 깜빡임** (원장님 지시 2026-09-02: 「틀린 부분 민트색으로 변경할 것
-   그리고 블링킹 효과 넣을 것」). 정상 점(#5EEAD4 틸 40~55%)과 헷갈리지 않도록 더 밝은 민트를 **불투명하게**
-   찍고, CSS 애니메이션(index.html pbBalBlink · class "balbad")으로 깜빡인다. 판정 로직은 그대로.
-   balBlinkDelay(): render() 가 점을 매 프레임 새로 만들어도 깜빡임 위상이 이어지도록 음수 지연을 준다. */
+const BAL_RED = "#FF3B4E";  // 미러링 점선 색 (v3.26.0 부터 **전체 점선**이 이 빨강)
+/* ⭐ v3.26.0 — 원장님 지시 2026-09-02 (실기기 확인 후): 「미러링 전체 선 색상은 빨간색으로 변경 · 블링킹 효과 빼 ·
+   틀린 부분 표기 5포인트만 민트로 표기하여 틀린 부분만 눈에 띄도록」.
+   → 점선(기준쪽 실측 + 반대쪽 미러링)은 구간 판정(devFront/devArch/devTail)과 무관하게 **전부 BAL_RED**.
+   → 틀린 곳 표시는 **5포인트 자 토막**(runBalance 가 재는 앞머리·앞두께·아치엣지·아치두께·꼬리 가로 자의 기준
+     반대쪽 토막)만 **민트 BAL_BAD, 정지**(깜빡임 없음). v3.25.0 의 민트 점선+깜빡임은 폐기.
+   판정 로직(runBalance·runBalanceCurve)은 그대로 — devFront 등은 내부 값으로만 남는다. */
 const BAL_BAD = "#3DFFC9";
-const BAL_BLINK_MS = 1100;
-const balBlinkDelay = () => `animation-delay:-${Math.round(performance.now() % BAL_BLINK_MS)}ms`;
 const BAL_BAND = 0.045;    // ⚠️ v3.10.0 이후 balBandPx() 의 안전 폴백값으로만 쓰인다 (아래 참고)
 const BAL_SAMPLES = 21;    // 한 토막에서 뽑는 x 표본 수
 const BAL_CONTRAST = 14;   // 이만큼도 안 어두우면 "선을 못 찾음"으로 본다
@@ -5818,31 +5818,20 @@ function renderBalCurve(frag) {
     else { refCount = n; mirCount = Math.round(n * frac); }
   }
 
-  /* ⭐ v3.25.0 — 틀린 구간(bad) = 민트(BAL_BAD) 불투명 + class "balbad" 깜빡임. 같은 프레임에 만든
-     점은 같은 animation-delay 를 받아 한 덩어리로 깜빡인다. 정상 점은 v3.15.0 그대로. */
-  const dly = balBlinkDelay();
+  /* ⭐ v3.26.0 — 점선은 **전부 빨강(BAL_RED)**, 구간 판정으로 색을 바꾸지 않는다 (원장님 지시 2026-09-02
+     「미러링 전체 선 색상은 빨간색으로 · 블링킹 빼 · 틀린 부분은 5포인트만 민트」). 기준쪽 실측 점은 옅게,
+     반대쪽 미러링 점은 진하게 — 어느 쪽이 거울상인지 구분만 남긴다. badZone 은 내부 값으로만 유지. */
+  void badZone;
   for (let i = 0; i < refCount; i++) {
     const p = trace[i];
-    const bad = badZone(p.zone);
-    frag.appendChild(mk("circle", bad
-      ? { cx: p.x, cy: p.top, r: 1.5, fill: BAL_BAD, "fill-opacity": 0.85, class: "balbad", style: dly }
-      : { cx: p.x, cy: p.top, r: 1.5, fill: "#5EEAD4", "fill-opacity": 0.4 }));
-    if (p.bot !== undefined) frag.appendChild(mk("circle", bad
-      ? { cx: p.x, cy: p.bot, r: 1.2, fill: BAL_BAD, "fill-opacity": 0.85, class: "balbad", style: dly }
-      : { cx: p.x, cy: p.bot, r: 1.2, fill: "#2E8BFF", "fill-opacity": 0.4 }));
+    frag.appendChild(mk("circle", { cx: p.x, cy: p.top, r: 1.5, fill: BAL_RED, "fill-opacity": 0.5 }));
+    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: p.x, cy: p.bot, r: 1.2, fill: BAL_RED, "fill-opacity": 0.5 }));
   }
   for (let i = 0; i < mirCount; i++) {
     const p = trace[i];
     const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
-    const bad = badZone(p.zone);
-    frag.appendChild(mk("circle", bad
-      ? { cx: mx, cy: p.top, r: 2.2, fill: BAL_BAD, "fill-opacity": 1, class: "balbad", style: dly }
-      : { cx: mx, cy: p.top, r: 1.7, fill: "#5EEAD4", "fill-opacity": 0.55 }));
-    if (p.bot !== undefined) {
-      frag.appendChild(mk("circle", bad
-        ? { cx: mx, cy: p.bot, r: 1.9, fill: BAL_BAD, "fill-opacity": 1, class: "balbad", style: dly }
-        : { cx: mx, cy: p.bot, r: 1.4, fill: "#2E8BFF", "fill-opacity": 0.55 }));
-    }
+    frag.appendChild(mk("circle", { cx: mx, cy: p.top, r: 2.0, fill: BAL_RED, "fill-opacity": 0.9 }));
+    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: mx, cy: p.bot, r: 1.7, fill: BAL_RED, "fill-opacity": 0.9 }));
   }
 }
 
@@ -6160,7 +6149,7 @@ function alignCenterDock() {
      ⚠️ dock-min(667·740 같은 좁은 폰)에서는 잠금+미러링이 왼쪽 도크와 AI 사이에 못 들어간다 —
      그때만 미러링을 **위 행 오른쪽 끝**([밝기][왼쪽][오른쪽][미러링])으로 올린다 (index.html CSS 도 함께). */
   const mirrorUp = document.body.classList.contains("dock-min");
-  const mdEl = $("mirrorDock");
+  const mdEl = $("mirrorDock"), brD = $("brightnessDock");
   const mdW = (!mirrorUp && mdEl && mdEl.offsetWidth) ? mdEl.offsetWidth + 10 : 0;
   const hiLimit = rightEdge - 10 - cd.offsetWidth - mdW;
   x = clamp(x, Math.min(loLimit, Math.max(hiLimit, 0)), Math.max(hiLimit, 0));
@@ -6173,21 +6162,29 @@ function alignCenterDock() {
        · 아래 행 `#mirrorDock` = [미러링] — 잠금 **오른쪽 10px** (잠금 ↔ AI 눈썹정렬 사이)
      ⚠️ 위 행이 AI 버튼(snapLeft) 쪽으로 넘치면 왼쪽으로 물러선다 — 겹치는 것보다 밀리는 게 낫다.
      아래 행(미러링)은 alignCenterDock 의 hiLimit 계산에 자기 폭이 포함되어 있어(아래) 넘치지 않는다. */
+  /* ⭐ v3.26.0 배치 (원장님 지시 2026-09-02, 두 번째 조정):
+       아래 행 = [밝기 (잠금 왼쪽 8px)][잠금][미러링 (잠금 오른쪽 10px)]
+       위 행   = [왼쪽][오른쪽] — 미러링 바로 위, 미러링 왼쪽 끝에 맞춤
+     dock-min(좁은 폰) 만 예외: 위 행 = [밝기][왼쪽][오른쪽][미러링] / 아래 행 = [잠금].
+     위 행은 아래 행 버튼들 위에 떠 있으므로 왼쪽 도크와 겹치지 않는다 — 오른쪽의 줌~밸런스 행만 피한다. */
   const tr = $("topRowDock");
-  let tx = x, trW = 0;
-  if (tr && tr.offsetWidth) {
-    /* 위 행은 아래 행 버튼들 위에 떠 있으므로 왼쪽 도크와 겹치지 않는다 — 오른쪽의 줌~밸런스 행만 피한다 */
-    trW = tr.offsetWidth + (mirrorUp && mdEl ? mdEl.offsetWidth + 6 : 0);
-    const trLo = ld ? ld.offsetLeft : 0, trHi = (bd ? bd.offsetLeft : S.dim.W) - 10 - trW;
-    tx = clamp(x, Math.min(trLo, Math.max(trHi, 0)), Math.max(trHi, 0));
-    tr.style.left = "0px";
-    tr.style.transform = `translateX(${Math.round(tx)}px)`;
-  }
-  if (mdEl && mdEl.offsetWidth) {
-    mdEl.style.left = "0px";
-    mdEl.style.transform = mirrorUp
-      ? `translateX(${Math.round(tx + tr.offsetWidth + 6)}px)`      /* 좁은 폰: 위 행 오른쪽 끝 */
-      : `translateX(${Math.round(x + cd.offsetWidth + 10)}px)`;      /* 기본: 잠금 오른쪽 */
+  const brW = brD && brD.offsetWidth ? brD.offsetWidth : 0;
+  const trW0 = tr && tr.offsetWidth ? tr.offsetWidth : 0;
+  const mdW0 = mdEl && mdEl.offsetWidth ? mdEl.offsetWidth : 0;
+  const place = (el, px) => { if (!el) return; el.style.left = "0px"; el.style.transform = `translateX(${Math.round(px)}px)`; };
+  if (mirrorUp) {
+    const rowW = brW + 6 + trW0 + 6 + mdW0;
+    const trLo = ld ? ld.offsetLeft : 0, trHi = (bd ? bd.offsetLeft : S.dim.W) - 10 - rowW;
+    const tx = clamp(x, Math.min(trLo, Math.max(trHi, 0)), Math.max(trHi, 0));
+    place(brD, tx); place(tr, tx + brW + 6); place(mdEl, tx + brW + 6 + trW0 + 6);
+  } else {
+    if (brD && brW) place(brD, Math.max(x - brW - 8, loLimit));   /* 밝기: 잠금 왼쪽 (좁으면 잠금과 벌어짐 — v3.7.1 원칙) */
+    const mx = x + cd.offsetWidth + 10;
+    place(mdEl, mx);
+    if (tr && trW0) {
+      const trHi = (bd ? bd.offsetLeft : S.dim.W) - 10 - trW0;
+      place(tr, clamp(mx, Math.min(mx, Math.max(trHi, 0)), Math.max(trHi, 0)));
+    }
   }
 }
 
@@ -6197,7 +6194,7 @@ function alignCenterDock() {
 function fitDocks() {
   const b = document.body;
   const ld = $("leftDock"), bd = $("bottomDock"), snap = $("btnSnap"), lk = $("btnLock");
-  const tr = $("topRowDock"), md = $("mirrorDock");
+  const tr = $("topRowDock"), md = $("mirrorDock"), brD = $("brightnessDock");
   if (!ld || !bd || !snap || !lk || !ld.offsetWidth) return;
   /* v3.7.1 — 밝기 버튼 몫까지 여유 계산에 넣어야 좁은 화면에서 dock-tight/dock-min 으로 제때 줄어든다.
      ⭐ v3.25.0 — 두 행: 아래 행 = 잠금 + 8 + 미러링 · 위 행 = 밝기 + 왼쪽 + 오른쪽. 둘 중 넓은 쪽이 기준. */
@@ -6206,13 +6203,14 @@ function fitDocks() {
     if (cls) b.classList.add(cls);
     const snapLeft = bd.offsetLeft + snap.offsetLeft;
     const ldRight = ld.offsetLeft + ld.offsetWidth;
-    const up = cls === "dock-min";                                   /* dock-min 이면 미러링은 위 행 (alignCenterDock) */
+    const up = cls === "dock-min";                                   /* dock-min 이면 밝기·미러링은 위 행 (alignCenterDock) */
     const mdWidth = md && md.offsetWidth && !up ? md.offsetWidth + 10 : 0;
-    const trWidth = (tr && tr.offsetWidth ? tr.offsetWidth : 0) + (up && md ? md.offsetWidth + 6 : 0);
+    const brWidth = brD && brD.offsetWidth && !up ? brD.offsetWidth + 8 : 0;
+    const trWidth = (tr && tr.offsetWidth ? tr.offsetWidth : 0) + (up ? (md ? md.offsetWidth + 6 : 0) + (brD ? brD.offsetWidth + 6 : 0) : 0);
     /* 아래 행: 잠금+미러링이 왼쪽 도크와 AI 버튼 사이에 여유 있게 들어가는가.
        위 행: 왼쪽 도크(아래 행 버튼들)보다 **위**에 떠 있어 왼쪽은 화면 끝(ld.offsetLeft)까지 자유롭고,
        오른쪽은 줌~밸런스 행(bd.offsetLeft)만 피하면 된다 — 위 행 때문에 dock-min 으로 떨어지면 안 된다. */
-    if (snapLeft - ldRight >= lk.offsetWidth + mdWidth + 24
+    if (snapLeft - ldRight >= brWidth + lk.offsetWidth + mdWidth + 24
         && bd.offsetLeft - ld.offsetLeft >= trWidth + 20) break;
   }
   alignCenterDock();
