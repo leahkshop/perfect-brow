@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.31.0";
+const APP_VERSION = "v3.32.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3219,6 +3219,8 @@ const TAIL_TRACE_CORE = 0.4;   // 몸통 심 대비의 이 비율 이상이어�
 const TAIL_TRACE_MAX = 0.35;   // 판독 구간(밴드 폭)의 이 비율까지만 걷는다
 const TAIL_TRACE_UP = 5, TAIL_TRACE_DN = 8;   // 직전 심 높이 기준 탐색 창 (위/아래 px)
 const TAIL_TRACE_GAP = 3;      // 연속 이 열이 모자라면 끝
+const TAIL_TRACE_Y_SLACK = 8;  // 심 끝이 수렴점보다 이만큼(px)까지 짧아도 **높이**는 심 아랫끝을 쓴다 (v3.32.0)
+const TAIL_TRACE_SLOPE_MAX = 1.3; // 심 아랫끝이 밴드 끝 아랫선에서 열마다 이보다 가파르게(px/열) 내려가면 꼬리가 아니라 눈꺼풀 그늘로 미끄러진 것 (v3.32.0)
 const TAIL_TRACE_RUN_MIN = 30, TAIL_TRACE_RUN_FRAC = 2.0;  // 심 주변 어두운 줄이 max(30px, 밴드 끝 두께×2) 보다 길면 덩어리 (v3.30.0 — 밴드가 멈춘 직후 열은 아직 눈썹 두께 그대로라 0.8 은 첫 열에서 끊겼다, 케이스 1)
 function tailTrace(img, seqT, tailIdx) {
   const { W, H } = S.dim;
@@ -3284,8 +3286,13 @@ function tailTrace(img, seqT, tailIdx) {
   /* 끝 열의 심 아랫끝 — 대비의 절반 아래로 떨어지는 마지막 줄 */
   const half = lastGood.skin - lastGood.contrast * 0.5;
   let yb = lastGood.y;
-  for (let y = lastGood.y + 1; y <= Math.min(H - 1, lastGood.y + 6); y++) { if (px(lastGood.x, y) < half) yb = y; else break; }
-  return { x: lastGood.x, y: yb, coreY: lastGood.y, bodyCore: +bodyCore.toFixed(1), endContrast: +lastGood.contrast.toFixed(1),
+  /* v3.32.0 — 끝 열이 굵으면(뭉툭한 끝·꽉 찬 드로잉) 최암부가 그 열의 맨 위 줄에 잡힐 수 있어, 아랫끝 탐색은 밴드 끝 두께+4 까지 */
+  for (let y = lastGood.y + 1; y <= Math.min(H - 1, lastGood.y + Math.max(6, lastThick + 4)); y++) { if (px(lastGood.x, y) < half) yb = y; else break; }
+  /* v3.32.0 — 심의 기울기(px/열): 밴드 끝 심 높이에서 끝 열 심 높이까지. 눈꺼풀 그늘로 미끄러지면 2.5~3 (케이스 1·3),
+     진짜 꼬리 심은 1 안팎(케이스 2: 0.6 · 회귀 190: 0.8) */
+  const slope = +((lastGood.y - c0.y) / Math.max(1, Math.abs(lastGood.x - last.x))).toFixed(2);
+  const slopeBot = +((yb - last.bot) / Math.max(1, Math.abs(lastGood.x - last.x))).toFixed(2);
+  return { x: lastGood.x, y: yb, coreY: lastGood.y, startY: c0.y, slope, slopeBot, lastBot: last.bot, lastTop: last.top, bodyCore: +bodyCore.toFixed(1), endContrast: +lastGood.contrast.toFixed(1),
            cols: Math.abs(lastGood.x - last.x), stop, maxRun: +maxRun.toFixed(1) };
 }
 const GROW_STEP = 0.55;    // 중심이 두께의 이 비율 넘게 어긋나면 이어진 것이 아니다
@@ -3717,6 +3724,8 @@ const ARCH_FROM_AT = 5;       // 아치엣지 = 아치두께에서 위로 이 �
    ⛔ **해부학 순서 위반(아치두께가 앞머리보다 아래)은 여기에 넣지 마세요.** 그건 덩어리
       자체가 눈썹이 아닐 수 있다는 신호라 윗끝도 못 믿습니다 — 회귀 162ⓒ 가 잡습니다. */
 const AT_FROM_ARCH = 5;       // 아치두께 = 아치엣지에서 아래로 이 눈금 (대체값)
+const AT_SHADOW_TOL = 0.5;    // 픽셀 판독 아랫끝이 밴드 아랫선보다 이 눈금 넘게 아래면 그늘 → 밴드 아랫선 (v3.32.0 · 케이스 2: 15px = 1.9칸)
+const AT_SHADOW_MIN_PX = 4;   // …단 최소 이 px (두 판독의 정상 오차)
 /* ⭐⭐⭐ v2.8.0 — **아치엣지의 맥시멈** (원장님 지시 2026-08-29:
      「아치 엣지가 잡히지 않거나, 위에 머리카락으로 혼동이 있을 경우 **맥시멈 위치 추가** —
        앞두께 위로 5칸 이상 넘어가는 곳을 임의로 잡지 않는다」)
@@ -4447,7 +4456,21 @@ function autoFromDrawing() {
        그대로입니다 — 회귀 121 이 그 경우를 지킵니다.
        ⛔ 「끝 구간 아랫선의 70% 분위」로 되돌리지 마세요. 그것은 판독이 멈춘 자리의
           아랫선이지 **꼬리 끝**이 아닙니다. */
-    if (traced) setY("h3", tt.y);          /* v3.28.0 — 추적한 심의 아랫끝 (x·y 둘 다) */
+    /* ⭐⭐ v3.32.0 — **꼬리 높이 = 심의 아랫끝, 심이 옆으로 더 못 나갔어도** (원장님 확인 2026-09-02, 케이스 2 검은 머리:
+       「세번째 사진이 맞다. 세로줄 맞고, 가로 높낮이만 잘 맞추면 된다」 — 노란 십자를 앱의 꼬리 자보다 아래에 찍어 주심).
+       케이스 2 실측: 밴드 끝 x165 → 수렴점 (152, 177) · 심 추적은 x149 까지 16열을 따라 내려가 아랫끝 y189 에 닿았는데,
+       수렴점보다 옆으로 3px 밖에 더 못 나가 **채택 조건(4px)에 걸려 버려졌다**. 픽셀을 보면 (146~150, 178~192) 에
+       피부보다 25~35 어두운 심이 이어져 있다 — 원장님 십자 자리. 수렴점의 높이는 가운데선(m)의 직선 연장이라
+       **가늘어지며 내려가는 꼬리에서는 늘 심 아랫끝보다 위**에 선다 (v3.6.1 실기기 17px 위 · 여기 12px 위).
+       → 세로선(x)은 그대로 두고(원장님 「세로줄 맞다」), 심의 끝이 수렴점보다 TAIL_TRACE_Y_SLACK(8px) 넘게 짧지 않고
+         **심 아랫끝의 기울기(slopeBot = (심 아랫끝 − 밴드 끝 아랫선)/열 수)가 TAIL_TRACE_SLOPE_MAX(1.3px/열) 이하**면
+         높이는 심의 아랫끝(tt.y)을 쓴다.
+       ⚠️ 기울기가 잣대다 — 실측 slopeBot: 케이스 1 = 1.67(6열, 194→204) · 케이스 3 = 3.2(5열, 189→205) — 둘 다 눈꺼풀 주름
+          그늘로 미끄러진 것 · 케이스 2 = 0.81(16열, 176→189) — 진짜 꼬리 심 (회귀 190 의 검은 심 ≈0.8). 여유가 0.4 안팎으로
+          얇다 — 사진이 더 모이면 다시 잰다. ⛔ SLOPE_MAX 를 1.6 이상으로 키우지 마세요 — 케이스 1 이 그늘 높이(204)로 내려갑니다. 회귀 193. */
+    const traceY = !!(tt && (tt.x - tipX) * dirT >= -TAIL_TRACE_Y_SLACK && tt.slopeBot <= TAIL_TRACE_SLOPE_MAX);
+    if (tt) Object.assign(S.tailRead.trace, { usedY: traceY, slope: tt.slope, slopeBot: tt.slopeBot, coreY: tt.coreY, startY: tt.startY, lastBot: tt.lastBot, lastTop: tt.lastTop });
+    if (traceY) setY("h3", tt.y);          /* v3.28.0 — 추적한 심의 아랫끝 (v3.32.0: x 채택과 무관하게 높이) */
     else if (tc) setY("h3", tc.y);
   }
   /* ⭐ v3.0.0 — **아치선(v6)은 아치엣지(h2)가 확정된 뒤에 잡습니다** — 아래에서
@@ -4476,7 +4499,21 @@ function autoFromDrawing() {
   {
     const info = { seen: 0 };
     const ad = archDecide(img, seq[pk].x, info);
-    if (ad) { setY("h2", ad.edge); setY("archThickness", ad.thick); }
+    /* ⭐⭐ v3.32.0 — **아치두께 그늘 방어: 픽셀 판독의 아랫끝이 밴드 아랫선보다 1칸 넘게 아래면 그늘** (케이스 2 검은 머리
+       실사진 2026-09-02). 눈이 깊어 눈썹 아래가 그늘진 얼굴에서 darkBlobsUp 은 그 열의 피부 기준이 어두워(≈130) 문턱이
+       내려가, 눈썹 아랫선(y≈172, 밴드 bot 173)을 지나 그늘 끝 y188 까지를 「두꺼운 검은 것」으로 읽었다. 그동안은 잘못된
+       꼬리 높이(177)의 마지노선(꼬리−3px = 174)이 우연히 그 값을 눈썹 아랫선 근처로 눌러 두어 드러나지 않았고, v3.32.0 의
+       꼬리 높이 교정(→189)으로 드러났다. 케이스 1·3 은 두 판독이 정확히 같다(174 = 174). 그늘은 판독을 **아래로만**
+       끌어내리므로(원장님 2026-08-27 「꼬리보다 낮은 곳의 쉐도우를 아치두께로 인식할 수 없다」), 둘이 max(4px, 0.5칸) 넘게 다르면
+       **위쪽(밴드 아랫선)** 을 쓴다 (케이스 1·3: 차이 0 · 케이스 2: 15px). `S.archThickRead = {decide, band, used}` 기록. ⛔ 밴드가 아래로 못박히는 문제(v1.75/76)는
+       coreBot 이 이미 막고 있다 — 이 규칙은 그 반대 방향(픽셀 판독이 더 아래)만 다룬다. 회귀 194. */
+    if (ad) {
+      const bandBot = at(pa, pb, "bot"), tkAT = frontTickPx();
+      let thick = ad.thick, from = "decide";
+      if (bandBot !== null && thick - bandBot > Math.max(AT_SHADOW_MIN_PX, tkAT ? AT_SHADOW_TOL * tkAT : 0)) { thick = bandBot; from = "band"; }
+      S.archThickRead = { decide: +ad.thick.toFixed(1), band: bandBot === null ? null : +bandBot.toFixed(1), used: from };
+      setY("h2", ad.edge); setY("archThickness", thick);
+    }
     else if (info.seen > 0) {
       /* ⭐ v2.6.0 — 판독 실패 → **표준값** (위 AT_FROM_FRONT 주석의 원장님 지시).
          ⚠️ `info.seen > 0` 조건을 지우지 마세요 — **왜 실패했는지**로 갈립니다:
