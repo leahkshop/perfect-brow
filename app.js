@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.30.0";
+const APP_VERSION = "v3.31.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3020,6 +3020,11 @@ const TRIM_OUT = 0.14;        // 랜드마크 눈썹 폭의 이 비율까지만 
 const TRIM_MIN_SPAN = 0.5;    // 다듬고 남은 폭이 랜드마크 눈썹의 이 비율 미만이면 실패
 const TRIM_GAP = 2.5;         // 열 간격의 이 배를 넘게 벌어지면 다른 덩어리로 본다
 const TRIM_PIECE = 0.25;      // 전체 열의 이 비율 미만인 바깥 덩어리는 눈썹이 아니다
+const TRIM_JUMP_GAP = 6;      // 꼬리 쪽 열이 이웃 열과 세로로 이만큼(px) 넘게 안 겹치면 다른 물체 (v3.31.0 · ⓕ)
+const TRIM_JUMP_FRAC = 0.35;  // …또는 얇은 쪽 두께의 이 비율 (둘 중 큰 값이 허용치 — 회귀 179 의 5px 단차는 이어진 것)
+/* 두 열이 「이어졌다」고 볼 세로 허용치 (v3.31.0 · trimOutside ⓕ · growEnd 바깥) */
+const jumpTol = (p, q) => Math.max(TRIM_JUMP_GAP, TRIM_JUMP_FRAC * Math.min(p.bot - p.top, q.bot - q.top));
+const TRIM_JUMP_ZONE = 0.40;  // 그 검사를 하는 바깥(꼬리) 구간 — 열 개수의 이 비율 (v3.31.0 · ⓕ)
 function trimOutside(band, b) {
   if (!band || !band.length) return null;
   /* ⓐ 랜드마크 범위 밖 열 버리기 — 머리카락은 언제나 눈썹 바깥에 있다 */
@@ -3065,6 +3070,42 @@ function trimOutside(band, b) {
       while (cl.length > 1 && cl[0].length < TRIM_PIECE * band.length) cl.shift();
       while (cl.length > 1 && cl[cl.length - 1].length < TRIM_PIECE * band.length) cl.pop();
       band = cl.flat();
+      if (band.length < DRAW_MIN_HITS) return null;
+    }
+  }
+  /* ⓕ ⭐⭐⭐ v3.31.0 — **꼬리 쪽은 이웃 열과 세로로 겹쳐야 한다** (케이스 1·3 실사진 · 원장님 지시
+     2026-09-02 「아치두께 꼬리 다시 확인해볼래」 · 랜드마크 경로를 컨테이너에서 처음 재현)
+     ───────────────────────────────────────────────────────────────────────────
+     실측(케이스 3): 눈썹 꼬리 마지막 열 x148 의 덩어리는 y176~189 인데, 바로 다음 열 x137 은 y140~154 —
+     **한 픽셀도 겹치지 않고 35px 위**에 있었습니다. 관자놀이의 회색 머리카락입니다. 그런데
+     ⓐ 랜드마크 범위(pad 34px 안), ⓑ 잉크, ⓒ 천장, ⓓ 간격(1.9 스텝), keepBand(중심 ±1.6두께)
+     **전부 통과**했습니다 — 머리카락이 눈썹 높이 근처에 눈썹 두께로 있었기 때문입니다.
+     케이스 1 은 머리카락이 **두 열**(x134·139, y119~133)이라 끝 열끼리는 서로 겹쳤습니다 — 그래서
+     끝 열 하나만 보지 않고, **안쪽에서 바깥으로 걸어가다 처음 끊기는 자리부터 바깥을 전부** 버립니다.
+     결과(고치기 전): 꼬리가 42px 바깥·43px 위(머리카락)에 섰고, 그 잘못된 꼬리 높이가 applyArchThickFloor
+     (아치두께 ≤ min(꼬리, 앞머리) − 3px)를 통해 **아치두께까지 눈썹 윗선 바로 아래로** 끌어올렸습니다.
+     원장님 화면의 「아치세로선 맞음 · 아치두께 안맞음 · 꼬리 안맞음」이 정확히 이 연쇄입니다.
+     원장님 원칙(v3.6.0): 「털이나 쉐도우 때문에 포인트가 옆으로 갈 수 없다 · 아치엣지에서 부드럽게
+     내려온 선을 따라 같은 방향으로 내려와야 한다」 — 눈썹은 한 붓으로 이어진 모양이라 이웃 열의
+     덩어리는 반드시 세로로 겹칩니다(top/bot 은 이미 이웃 3열 중앙값). 겹치지 않는 열은 **다른 물체**입니다.
+     ⚠️ 바깥 `TRIM_JUMP_ZONE`(꼬리 쪽 40%) 안에서만 봅니다 — 몸통 한가운데의 우연한 끊김으로 꼬리 절반을
+        잃지 않으려는 것. 안쪽(앞머리) 끝은 건드리지 않습니다 — 이너·앞머리는 innerDecide/frontDecide 가
+        따로 정하고, 미간 쪽에는 머리카락이 없습니다. growEnd(바깥)도 같은 잣대를 씁니다.
+     허용치 = max(6px, 얇은 쪽 두께의 35%) — 실제 머리카락은 22px(케이스 3)·51px(케이스 1) 벌어졌고, 이어진 꼬리의
+     단차(회귀 179 의 3px)는 그 안입니다.
+     ⛔ 이 단계를 빼거나 허용치를 두께 절반 이상으로 넓히지 마세요 — 케이스 1·3 이 그대로 재발합니다. 회귀 192. */
+  if (band.length > 2) {
+    const cx0 = S.g.v1 * S.dim.W;
+    const outerIsLow = Math.abs(band[0].x - cx0) > Math.abs(band[band.length - 1].x - cx0);
+    const seqIO = outerIsLow ? [...band].reverse() : band;          // 안쪽 → 바깥 순
+    const from = Math.max(1, Math.floor(seqIO.length * (1 - TRIM_JUMP_ZONE)));
+    let cutAt = -1;
+    for (let i = from; i < seqIO.length; i++) {
+      if (Math.max(seqIO[i - 1].top, seqIO[i].top) - Math.min(seqIO[i - 1].bot, seqIO[i].bot) > jumpTol(seqIO[i - 1], seqIO[i])) { cutAt = i; break; }
+    }
+    if (cutAt > 0) {
+      const keepIO = seqIO.slice(0, cutAt);
+      band = outerIsLow ? keepIO.reverse() : keepIO;
       if (band.length < DRAW_MIN_HITS) return null;
     }
   }
@@ -3281,6 +3322,8 @@ function growEnd(band, kept, toInner) {
     if (p.bot - p.top > th * 1.6) break;                          // 갑자기 두꺼워지면 다른 것
     const c0 = (prev.top + prev.bot) / 2, c1 = (p.top + p.bot) / 2;
     if (Math.abs(c1 - c0) > Math.max(GROW_STEP * th, 6)) break;
+    /* v3.31.0 — 바깥은 세로로 **겹쳐야** 이어진 것 (trimOutside ⓕ 와 같은 잣대 · 머리카락 방어) */
+    if (!toInner && Math.max(prev.top, p.top) - Math.min(prev.bot, p.bot) > jumpTol(prev, p)) break;
     add.push(p); prev = p;
   }
   return add;
