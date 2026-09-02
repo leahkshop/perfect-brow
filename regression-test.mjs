@@ -2403,6 +2403,51 @@ if (RUN(5)) {
       + ` · 꼬리곡선 변경 ${r.tail.toFixed(2)} · 아치 변경 ${r.arch.toFixed(2)}px(기대 0) · 원본 그대로=${r.bump12.untouchedInput}`);
   }
 
+  /* 187. ⭐ v3.24.0 — **미러링 점선 "무시 규칙" 목록** (원장님 지시 2026-09-02 「이너라인의 앞부분은 눈썹
+     드로잉이라고 볼수없는 자리로 무시해 / 무시하는 점에 대한 룰을 설립하라 — 이너라인 앞쪽 · 앞머리 밑쪽」).
+     `balIgnoreZones(trace, side)` 는 가이드 값(S.g)만 보는 순수 함수라 합성 궤적으로 검사:
+     ① innerFront — 이너 선(v2)보다 센터(v1) 쪽으로 들어간 열은 통째로 제거
+     ② belowFront — 앞머리 선(front)보다 아래 점은 가운데면 양옆 보간, 끝이면 열 제거
+     ③ 규칙 목록에 두 규칙이 이름으로 등록돼 있고, 정상 궤적은 한 점도 안 바뀐다. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 400, height: 300 } });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r = await p.evaluate(() => {
+      const S = window.PB.S;
+      S.dim = { W: 844, H: 390 };          // 사진 없는 첫 화면은 dim 이 1×1 이라 캔버스 크기를 직접 준다
+      const W = S.dim.W, H = S.dim.H;
+      S.g = { ...window.PB.DEFAULT_GUIDE, v1: 0.5, v2: 0.36, front: 160 / H };   // 이너 x=304 · 앞머리 y=160
+      // 왼쪽 눈썹: 앞(센터 쪽, x 큰 쪽) → 꼬리(x 작은 쪽). x 320·312 열은 이너(304)보다 센터 쪽 = 미간 그늘
+      const mk = () => Array.from({ length: 30 }, (_, i) => { const x = 320 - i * 7; const top = 110 + 0.4 * i, bot = 145 + 0.4 * i; return { x, top, bot, zone: i < 15 ? 0 : 1 }; });
+      const names = window.PB.BAL_IGNORE_RULES.map((r) => r.name);
+      // ① 이너 앞쪽 열 제거
+      const innerX = S.g.v2 * W, expectKeep = mk().filter((q) => q.x <= innerX + 2).length;   // 이너(303.8)+2 안쪽 열만 남는다
+      const a = window.PB.balIgnoreZones(mk(), "L");
+      const innerCut = a.every((q) => q.x <= innerX + 2) && a.length === expectKeep && expectKeep < 30;
+      // ② 앞머리 밑쪽: 가운데 3열의 아래선을 앞머리 선 아래(175)로 → 양옆 보간
+      const tr2 = mk(); for (let i = 10; i <= 12; i++) tr2[i].bot = 175;
+      const b = window.PB.balIgnoreZones(tr2, "L");
+      const bi = (i) => b.find((q) => Math.abs(q.x - tr2[i].x) < 1e-6);
+      const midFixed = [10, 11, 12].every((i) => bi(i) && Math.abs(bi(i).bot - (145 + 0.4 * i)) < 0.6);
+      // ②' 끝(꼬리) 2열의 아래선이 앞머리 선 아래 → 그 열 제거
+      const tr3 = mk(); tr3[28].bot = 180; tr3[29].bot = 182;
+      const c = window.PB.balIgnoreZones(tr3, "L");
+      const endDropped = c.length === expectKeep - 2 && !c.some((q) => q.x <= tr3[28].x);
+      // ③ 정상 궤적은 그대로
+      const clean = mk().filter((q) => q.x <= 304); const d = window.PB.balIgnoreZones(clean, "L");
+      const untouched = d.length === clean.length && d.every((q, i) => q.top === clean[i].top && q.bot === clean[i].bot);
+      return { names, innerCut, aLen: a.length, midFixed, endDropped, cLen: c.length, untouched };
+    });
+    await ctx.close();
+    check("187. 미러링 점선 무시 규칙 — 이너 앞쪽 열 제거 · 앞머리 밑쪽 점은 양옆 보간(끝이면 열 제거) · 규칙 목록 등록 · 정상 궤적 불변 (원장님 지시 2026-09-02)",
+      errs.length === 0 && r.names.includes("innerFront") && r.names.includes("belowFront") && r.innerCut && r.midFixed && r.endDropped && r.untouched,
+      `규칙 [${r.names.join(", ")}] · 이너 앞 열 제거=${r.innerCut}(${r.aLen}열 남음) · 앞머리 밑 가운데 3열 보간=${r.midFixed} · 끝 2열 제거=${r.endDropped}(${r.cLen}열) · 정상 불변=${r.untouched}`);
+  }
+
   /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)
      몸통(x 170~340)은 진하고, 꼬리(x 145~172)는 피부와 겨우 14 차이라 **본 판독이 못 봅니다.**
      그래서 판독 열은 x≈172 에서 끊깁니다 — **거기가 꼬리 자리입니다.** 잔털을 따라가면 안 됩니다. */

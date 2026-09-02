@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.23.0";
+const APP_VERSION = "v3.24.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5730,6 +5730,56 @@ function balBridgeOnce(trace) {
   }
   return out;
 }
+/* ⭐⭐ v3.24.0 — **미러링 점선 "무시 규칙" 목록** (원장님 지시 2026-09-02: 「이너라인의 앞부분은 눈썹
+   드로잉이라고 볼수없는 자리로 무시해 / 이제 이런 무시해야 하는 자리를 케이스를 모아 점점 더 고도화하자 /
+   무시하는 점에 대한 룰을 설립하라 — 이너라인 앞쪽(이미 AI가 이너라인을 잘 선택하고 있으므로) · 앞머리
+   밑쪽도 무시에 넣어라」).
+   원칙: **표시 전용**(판정·자 배치 무관) · 기준은 픽셀 추측이 아니라 **가이드 값(원장님이 옮긴 자리)** ·
+   규칙은 아래 BAL_IGNORE_RULES 에 한 줄씩 추가한다(이름·이유·판정 함수). 무시된 점은 가운데면 양옆 정상
+   점을 직선으로 이어 채우고, 궤적의 끝(앞/꼬리)이면 그 열을 버린다. 그 뒤 v3.23.0 의 파란점↔파란점 잇기가
+   이어진다.
+   ─ 규칙 목록 ─
+   ① innerFront  이너 앞쪽: 이너 선(v2/v3)보다 센터 쪽으로 2px 넘게 들어간 열 — 미간·코 그늘이지 눈썹 드로잉이 아니다
+   ② belowFront  앞머리 밑쪽: 앞머리 선(front)보다 2px 넘게 아래(눈 쪽)에 찍힌 점 — 눈꺼풀·그늘. (눈썹 디자인
+                 원칙상 꼬리도 앞머리보다 낮지 않으므로 전 구간에 적용) */
+const BAL_IGNORE_RULES = [
+  { name: "innerFront", whole: true,
+    hit: (p, ctx) => (p.x - ctx.innerX) * ctx.toCenter > 2 },
+  { name: "belowFront", whole: false,
+    hit: (p, ctx, key) => p[key] > ctx.frontY + 2 },
+];
+function balIgnoreZones(trace, side) {
+  try {
+    const g = S.g, { W, H } = S.dim;
+    const innerX = (side === "L" ? g.v2 : g.v3) * W, cx = g.v1 * W;
+    if (![innerX, cx, g.front].every((v) => isFinite(v))) return trace;
+    const ctx = { innerX, toCenter: Math.sign(cx - innerX) || 1, frontY: g.front * H };
+    // ① 열 통째로 버리는 규칙
+    let t = trace.filter((p) => !BAL_IGNORE_RULES.some((r) => r.whole && r.hit(p, ctx)));
+    if (t.length < 4) return trace;
+    // ② 점 단위 규칙: 가운데는 양옆 보간, 끝은 열 제거
+    const out = t.map((p) => ({ ...p }));
+    const drop = new Array(out.length).fill(false);
+    for (const key of ["top", "bot"]) {
+      const ys = t.map((p) => p[key]);
+      if (ys.some((v) => v === undefined || !isFinite(v))) continue;
+      const bad = t.map((p) => BAL_IGNORE_RULES.some((r) => !r.whole && r.hit(p, ctx, key)));
+      let i = 0;
+      while (i < out.length) {
+        if (!bad[i]) { i++; continue; }
+        let j = i; while (j < out.length && bad[j]) j++;
+        const a = i - 1, b = j;
+        if (a >= 0 && b < out.length) {
+          for (let q = i; q < j; q++) { const s = (t[q].x - t[a].x) / ((t[b].x - t[a].x) || 1); out[q][key] = ys[a] + (ys[b] - ys[a]) * s; }
+        } else { for (let q = i; q < j; q++) drop[q] = true; }
+        i = j;
+      }
+    }
+    const kept = out.filter((_, i) => !drop[i]);
+    return kept.length >= 4 ? kept : trace;
+  } catch (e) { return trace; }
+}
+
 const BAL_BRIDGE_MODE = true;   // v3.23.0 — 표시용 trace 에 양옆 잇기 적용 (false 로 두면 v3.15.0 그대로)
 
 function renderBalCurve(frag) {
@@ -5741,7 +5791,7 @@ function renderBalCurve(frag) {
   const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
   const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  const trace = BAL_BRIDGE_MODE ? balBridgeOutliers(refC.trace) : refC.trace;
+  const trace = BAL_BRIDGE_MODE ? balBridgeOutliers(balIgnoreZones(refC.trace, ref)) : refC.trace;   // v3.24.0: 무시 규칙 → 파란점↔파란점 잇기
   const n = trace.length;
 
   /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
@@ -6226,7 +6276,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  runBalanceCurve, readSideCurve, balBridgeOutliers,
+  runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
