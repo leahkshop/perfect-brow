@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.17.0";
+const APP_VERSION = "v3.18.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5829,11 +5829,38 @@ function balDisplayCurve(refC) {
     const a = Math.floor(fi), b = Math.min(lastI, a + 1), f = fi - a;
     return arr[a] + (arr[b] - arr[a]) * f;
   };
-  const endX = xs[lastI], endTop = tops[lastI], endBot = bots[lastI];
+  /* ⑤-2 ⭐ v3.18.0 — **아치 뒤 눈썹 규칙** (원장님이 v3.17.0 검증 그림 위에 빨간 선으로
+     직접 그려 주심, 2026-09-02 「너의 궤적이 달라」): 드로잉을 따라가더라도 아래 세 가지를
+     어기는 부분은 잘라낸다 — 이걸 어기면 눈썹이 아니다.
+       (a) 윗선은 아치→꼬리를 잇는 직선보다 **안쪽(아래)으로 패이지 않는다** — 산꼭대기 뒤로
+           오래 높게 가는 것(직선 위쪽)은 드로잉대로 살리고, 직선 아래로 처졌다 올라오는 건 지운다.
+       (b) 꼬리 쪽으로만 내려간다 — **되돌아 오르지 않는다**(단조).
+       (c) 아치 뒤로 두께는 **가늘어지기만** 한다 — 다시 굵어지지 않는다(아래선은 윗선 + 두께).
+     ⛔ 표시 전용. 판정에는 관여하지 않는다. */
+  const endX = xs[lastI];
+  const raw = [];
   for (let j = 0; j <= stepsB; j++) {
+    const fi = pk + (j / stepsB) * (lastI - pk);
+    raw.push({ x: at(xs, fi), top: at(tops, fi), bot: at(bots, fi) });
+  }
+  const dir = tailY >= archTop ? 1 : -1;                  // 꼬리가 아치보다 아래(보통) → y 증가 방향
+  const xspan = endX - archX;
+  let runTop = archTop, runThick = Math.max(0, archBot - archTop);
+  for (let j = 0; j < raw.length; j++) {
+    const q = raw[j];
+    const s = Math.abs(xspan) > 1e-6 ? clamp((q.x - archX) / xspan, 0, 1) : j / stepsB;
+    const chord = archTop + (tailY - archTop) * s;        // 아치→꼬리 직선의 윗선 y
+    let top = dir > 0 ? Math.min(q.top, chord) : Math.max(q.top, chord);   // (a) 직선 안쪽으로 패이지 않음
+    top = dir > 0 ? Math.max(top, runTop) : Math.min(top, runTop);          // (b) 되돌아 오르지 않음
+    runTop = top;
+    const thick = Math.max(0, q.bot - q.top);
+    runThick = Math.min(runThick, thick);                                     // (c) 가늘어지기만
+    q.top = top; q.bot = top + runThick;
+  }
+  const endTop = raw[raw.length - 1].top, endBot = raw[raw.length - 1].bot;
+  for (let j = 0; j < raw.length; j++) {
     const u = j / stepsB;
-    const fi = pk + u * (lastI - pk);
-    let x = at(xs, fi), top = at(tops, fi), bot = at(bots, fi);
+    let { x, top, bot } = raw[j];
     if (u > 1 - BAL_TAIL_BLEND) {
       const s = (u - (1 - BAL_TAIL_BLEND)) / BAL_TAIL_BLEND;
       const w = s * s * (3 - 2 * s);
