@@ -2493,32 +2493,32 @@ if (RUN(5)) {
       + ` · C(입력이 직선 아래로 ${r186.inDipMax.toFixed(0)}px 패임): 안패임=${r186.noDip} 안되돌아오름=${r186.noRise} 안굵어짐=${r186.noThicken} (${r186.zC}점)`);
   }
 
-  /* 187. ⭐ v3.20.0 — **표시용 윗선은 연한 가장자리까지** (원장님 지시 2026-09-02, 실기기 스크린샷에
-     노란 점선으로 윗선 자리를 그려 주심 「현재 모습, 아래 라인은 좋아보인다」). 위쪽 가장자리가
-     흐리게 번지는 눈썹(문신·연한 드로잉)은 1차 패스(대비 18)가 진한 심만 잡아 윗선이 안쪽으로
-     들어온다 — `readSideCurve().trace` 의 top 만 연한 패스(대비 9)로 바깥으로 넓힌다(1차 두께의
-     40% 한도). ⛔ 판정에 쓰는 top/bot 3점은 1차 그대로여야 한다.
-     픽스처: 회귀 183 의 같은 눈썹(fSame) 위에 왼쪽 눈썹 윗 가장자리에만 피부보다 ≈14 어두운
-     띠(대비 9~18 사이)를 8px 덧붙인다 — 1차엔 안 보이고 연한 패스에만 보인다. */
+  /* 187. ⭐ v3.20.0→v3.20.1 — **표시용 윗선은 흐린 잉크까지, 그늘은 아님** (원장님 지시 2026-09-02:
+     실기기 노란 점선 「아래 라인은 좋아보인다」→ 윗선이 흐린 가장자리보다 안쪽 / 그 뒤 v3.20.0 에서
+     「사용자의 드로잉을 무시한 아주 터무니없는 자리로 점선을 이으면 안된다」→ 윗선이 눈썹 위 그늘까지
+     튀어나감). 규칙: 연한 패스의 윗끝이 그 열 1차 두께의 SOFT_TOP_MAX 안이면 흐린 잉크(얇은 띠)로 보고
+     그만큼 넓히고, 그보다 멀면 그늘(넓게 이어짐)로 보고 그 열은 넓히지 않는다. ⛔ 판정 3점은 그대로.
+     픽스처 셋 — 회귀 183 의 눈썹(fSame) 위 왼쪽 윗 가장자리에 피부보다 ≈14 어두운 띠를:
+       (a) 없음 · (b) 5px(얇은 띠 = 흐린 잉크) · (c) 45px(넓은 띠 = 그늘). */
   {
-    const fBand = (() => {
-      const f = path.join(ROOT, ".draw-curve-softband.svg");
-      const side = (mirror, shift, dy) => {
+    const mkBand = (tag, bandPx) => {
+      const f = path.join(ROOT, `.draw-curve-${tag}.svg`);
+      const side = (mirror, dy) => {
         const up = [], dn = [];
         for (let x = 120; x <= 340; x += 2) {
           const px = mirror ? 782 - x : x;
-          up.push(`${px},${(cvEdgeAt(CV_CP, x, 1) + shift + dy).toFixed(1)}`);
-          dn.push(`${px},${(cvEdgeAt(CV_CP, x, 2) + shift).toFixed(1)}`);
+          up.push(`${px},${(cvEdgeAt(CV_CP, x, 1) + dy).toFixed(1)}`);
+          dn.push(`${px},${(cvEdgeAt(CV_CP, x, 2)).toFixed(1)}`);
         }
         return up.concat(dn.reverse()).join(" ");
       };
       fs.writeFileSync(f, `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
         + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
-        + `<polygon points="${side(false, 0, -8)}" fill="#dbc9b6"/>`      /* 왼쪽 위 가장자리 연한 띠(8px) — 루마 ≈ 피부-14 */
-        + `<polygon points="${side(false, 0, 0)}" fill="#2a1c14"/>`
-        + `<polygon points="${side(true, 0, 0)}" fill="#2a1c14"/></svg>`);
+        + (bandPx ? `<polygon points="${side(false, -bandPx)}" fill="#dbc9b6"/>` : "")   /* 루마 ≈ 피부-14 */
+        + `<polygon points="${side(false, 0)}" fill="#2a1c14"/>`
+        + `<polygon points="${side(true, 0)}" fill="#2a1c14"/></svg>`);
       return f;
-    })();
+    };
     const readOne = async (file) => {
       const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
       const p = await ctx.newPage();
@@ -2538,23 +2538,28 @@ if (RUN(5)) {
         const c = window.PB.readSideCurve(img, "L");
         const hard = window.PB.readDrawing(img, 18, "L");
         const hx = new Map(); for (const q of hard || []) hx.set(Math.round(q.x), [q.top, q.bot]);
-        const diffs = [];   // 궤적 top 이 1차 top 보다 얼마나 바깥(작은 y)인가 · 그 열의 1차 두께
+        const diffs = [];   // [1차 top − 궤적 top(바깥이면 +), 1차 두께]
         for (const q of c ? c.trace : []) { const h = hx.get(Math.round(q.x)); if (h) diffs.push([h[0] - q.top, h[1] - h[0]]); }
         return { ok: !!c, top: c && c.top.map((k) => k.y), bot: c && c.bot.map((k) => k.y), diffs, softMax: window.PB.SOFT_TOP_MAX };
       }, LMK);
       await ctx.close();
       return { ...out, errs };
     };
-    const plain = await readOne(fSame), band = await readOne(fBand);
+    const plain = await readOne(mkBand("softband0", 0)), thin = await readOne(mkBand("softband5", 5)), wide = await readOne(mkBand("softband45", 45));
     const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
-    const dPlain = med(plain.diffs.map((d) => d[0])), dBand = med(band.diffs.map((d) => d[0]));
-    const bounded = band.diffs.every((d) => d[0] >= -1e-6 && d[0] <= band.softMax * d[1] + 1);
-    const judgeSame = plain.ok && band.ok && plain.top.every((v, i) => Math.abs(v - band.top[i]) <= 1) && plain.bot.every((v, i) => Math.abs(v - band.bot[i]) <= 1);
-    check("187. 표시용 윗선 — 위 가장자리가 흐린 눈썹은 연한 패스로 바깥까지 넓힘(1차 두께의 40% 한도) · 판정 3점은 1차 그대로 (원장님 지시 2026-09-02)",
-      plain.errs.length === 0 && band.errs.length === 0 && plain.ok && band.ok
-        && dBand >= 4 && dBand > dPlain + 3 && bounded && judgeSame,
-      `띠 없음: 궤적 top 이 1차보다 바깥 ${dPlain.toFixed(1)}px(중앙값) → 8px 연한 띠: ${dBand.toFixed(1)}px · 한도 안=${bounded} · 판정 3점 동일=${judgeSame}`
-      + ` (앞두께/아치엣지/꼬리 y: ${plain.top && plain.top.map((v) => v.toFixed(0)).join("/")} vs ${band.top && band.top.map((v) => v.toFixed(0)).join("/")})`);
+    const dPlain = med(plain.diffs.map((d) => d[0])), dThin = med(thin.diffs.map((d) => d[0])), dWide = med(wide.diffs.map((d) => d[0]));
+    const maxWide = Math.max(0, ...wide.diffs.map((d) => d[0]));
+    const bounded = thin.diffs.every((d) => d[0] >= -1e-6 && d[0] <= thin.softMax * d[1] + 1);
+    const same3 = (a, b) => a.ok && b.ok && a.top.every((v, i) => Math.abs(v - b.top[i]) <= 1) && a.bot.every((v, i) => Math.abs(v - b.bot[i]) <= 1);
+    const judgeSame = same3(plain, thin) && same3(plain, wide);
+    check("187. 표시용 윗선 — 흐린 잉크(얇은 띠)는 바깥까지 넓히고 · 넓은 그늘은 무시(눈썹 밖으로 안 나감) · 판정 3점은 그대로 (원장님 지시 2026-09-02 ×2)",
+      plain.errs.length === 0 && thin.errs.length === 0 && wide.errs.length === 0 && plain.ok && thin.ok && wide.ok
+        && dThin >= 3 && dThin > dPlain + 2 && bounded
+        && dWide <= 1 && maxWide <= 3
+        && judgeSame,
+      `띠 없음 ${dPlain.toFixed(1)}px → 얇은 띠 5px: 궤적 top 이 1차보다 바깥 ${dThin.toFixed(1)}px(한도 안=${bounded})`
+      + ` · 넓은 띠 45px(그늘): ${dWide.toFixed(1)}px(최대 ${maxWide.toFixed(1)}) · 판정 3점 동일=${judgeSame}`
+      + ` (앞두께/아치엣지/꼬리 y: ${plain.top && plain.top.map((v) => v.toFixed(0)).join("/")} · ${thin.top && thin.top.map((v) => v.toFixed(0)).join("/")} · ${wide.top && wide.top.map((v) => v.toFixed(0)).join("/")})`);
   }
 
   /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)

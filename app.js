@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.20.0";
+const APP_VERSION = "v3.20.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5533,7 +5533,8 @@ function measureSegY(img, seg, y0, band) {
    그 정확한 동작(가이드 기준 토막 비교)에 물려 있습니다. 이 함수는 완전히 별도의 새
    판정을 **추가**하는 것이지 교체가 아닙니다 — 화면에는 기존 토막 빨강 표시 + 이 커브
    표시가 함께 나옵니다. */
-const SOFT_TOP_MAX = 0.40;         // v3.20.0 — 표시용 윗선을 연한 패스로 넓힐 때 1차 두께의 이 비율까지만
+const SOFT_TOP_MAX = 0.35;         // v3.20.0 — 표시용 윗선을 연한 패스로 넓힐 때 1차 두께의 이 비율 안일 때만(넘으면 그늘로 보고 무시 · v3.20.1)
+const DISPLAY_SOFT_CONTRAST = 12;  // v3.20.1 — 표시용 연한 패스 대비(판정 폴백의 DRAW_CONTRAST_SOFT=9 보다 덜 너그럽게 — 그늘을 덜 줍는다)
 const CURVE_FRONT_END = 0.18;      // autoFromDrawing의 앞부분 구간(0~18%)과 같은 잣대
 const CURVE_ARCHPK_NUM_MAX = 40;   // autoFromDrawing의 ARCHPK_NUM_MAX(내안각)와 같은 값
 const CURVE_TAIL_END = 0.08;       // autoFromDrawing의 END(끝점 구간)와 같은 잣대
@@ -5657,12 +5658,18 @@ function readSideCurve(img, side) {
       const byX = new Map();
       const put = (arr) => { for (const p of arr || []) { const k = Math.round(p.x); const v = p.rawTop; if (!isFinite(v)) continue; const cur = byX.get(k); byX.set(k, cur === undefined ? v : Math.min(cur, v)); } };
       put(seqT);
-      if (usedContrast === DRAW_CONTRAST) put(readDrawing(img, DRAW_CONTRAST_SOFT, side));
+      if (usedContrast === DRAW_CONTRAST) put(readDrawing(img, DISPLAY_SOFT_CONTRAST, side));
+      /* ⛔ v3.20.1 — "한도까지 넓힘"이 아니라 **"한도를 넘으면 무시"** (원장님 실기기 2026-09-02:
+         「사용자의 드로잉을 무시한 아주 터무니없는 자리로 점선을 이으면 안된다」 — v3.20.0 은
+         연한 패스가 눈썹 위 피부 그늘과 붙어 40% 한도까지 꽉 채워 윗선이 눈썹 밖으로 튀어나갔다).
+         흐린 잉크는 심 위의 **얇은 띠**고, 그늘은 **넓게** 이어진다 — 연한 윗끝이 그 열 두께의
+         SOFT_TOP_MAX 안이면 흐린 잉크로 보고 그만큼 넓히고, 그보다 멀면 그늘로 보고 그 열은
+         1차 윗끝 그대로 둔다. 그래도 남는 한 열짜리 튐은 표시 쪽 중앙값·PAV 가 흡수한다. */
       for (const p of trace) {
         const st = byX.get(Math.round(p.x));
         if (st === undefined) continue;
-        const lim = p.top - SOFT_TOP_MAX * Math.max(0, p.bot - p.top);
-        if (st < p.top) p.top = Math.max(st, lim);
+        const extra = p.top - st;                          // >0 = 연한 윗끝이 더 바깥
+        if (extra > 0 && extra <= SOFT_TOP_MAX * Math.max(0, p.bot - p.top)) p.top = st;
       }
     } catch (e) { /* 표시 보조일 뿐 — 실패하면 1차 궤적 그대로 */ }
 
