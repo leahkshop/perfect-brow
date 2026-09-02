@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.29.0";
+const APP_VERSION = "v3.29.1";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2485,12 +2485,14 @@ function autoAlign(lm) {
 
 const BROW_FRAC = 0.80;          // 양쪽 눈썹 꼬리 끝 간격 / 작업 영역 폭 (v3.29.0)
 /* 지금 배율에서 눈썹이 작업 영역을 얼마나 채우는가 — 1 이면 딱 BROW_FRAC.
-   fitBrowsInFrame 과 같은 자로 잰다: 랜드마크 꼬리(70·300)와 아우터 연장선 끝 중 먼 쪽. */
+   ⚠️ v3.29.1 — **랜드마크 꼬리(70·300)만** 잰다 (원장님 실기기 확인 2026-09-02 「아직도 사진이 줌이 너무 작아」).
+   v3.29.0 은 fitBrowsInFrame 과 같은 자(아우터 연장선 끝까지)로 쟀는데, 연장선은 랜드마크 반폭의 최대 1.5배까지
+   늘어나므로 눈에 보이는 눈썹은 80% 가 아니라 60% 안팎만 채웠다. 보이는 눈썹 = 랜드마크 꼬리. 연장선 끝이
+   화면 밖으로 나가는 것은 아래 fitBrowsInFrame(안전판)이 따로 막는다. */
 function browFillNeed(lm) {
   const { W } = S.dim, g = S.g;
   const lmXs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
-  const half = browTailHalf(lm, S.p, g.v1);
-  const lo = Math.min(...lmXs, g.v1 - half), hi = Math.max(...lmXs, g.v1 + half);
+  const lo = Math.min(...lmXs), hi = Math.max(...lmXs);
   const span = workRight() - workLeft();
   const c = g.v1;
   const extent = Math.max(c - lo, hi - c);            // 센터에서 먼 쪽 꼬리까지
@@ -2524,9 +2526,12 @@ function fitBrowsInFrame(lm) {
      측정 자체가 화면 끝에서 잘려, 한 번의 축소로는 부족합니다 (실제로 겪음). */
   for (let pass = 0; pass < 4; pass++) {
     const g = S.g;
+    /* ⚠️ v3.29.1 — 여기도 **랜드마크 꼬리만** 본다. v1.40.0 의 「아우터 연장선 끝까지」는 배율의 자가 눈썹(80%)이 된 뒤로는
+       fitBrowsToFrame 과 싸워 배율을 도로 줄였다(합성 얼굴에서 채움 0.73~0.90 으로 후퇴 — 회귀 153). 연장선은
+       랜드마크 반폭의 최대 1.5배라 어차피 80% 채움에서는 88% 여백을 늘 넘는다. 연장선 끝은 이제 화면 밖일 수 있고,
+       꼬리는 어차피 autoFromDrawing 의 픽셀 판독(tailTrace)이 다시 정한다. */
     const lmXs = [70, 300].map((i) => imgToCanvas(lm[i].x * S.iw, lm[i].y * S.ih, S.p).x / W);
-    const half = browTailHalf(lm, S.p, g.v1);
-    const lo = Math.min(...lmXs, g.v1 - half), hi = Math.max(...lmXs, g.v1 + half);
+    const lo = Math.min(...lmXs), hi = Math.max(...lmXs);
     /* v1.95.0 — 작업 영역이 [workLeft ~ workRight] 라 여백도 그 폭 기준으로 잰다 */
     const WLn = workLeft(), span = WRn - WLn;
     const left = WLn + FRAME_PAD * span, right = WRn - FRAME_PAD * span;

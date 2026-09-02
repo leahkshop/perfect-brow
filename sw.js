@@ -2,7 +2,7 @@
    앱 셸은 즉시 캐시, MediaPipe CDN 자산은 처음 사용할 때 캐시(런타임 캐시).
    → 한 번 열어두면 인터넷 없이도 동작합니다. */
 
-const VERSION = "pb-v168"; /* v3.29.0 — 자동 정렬 배율의 자 = 눈썹 (원장님 확정 2026-09-02): 양쪽 꼬리 끝 간격이 작업 영역 폭의 80%(BROW_FRAC) 가 되게 배율을 맞춘다(fitBrowsToFrame). 눈금 자·40~53 룰은 사진 기준이라 그대로. pb-v167 = v3.28.0. */
+const VERSION = "pb-v169"; /* v3.29.1 — 눈썹 채움 자를 랜드마크 꼬리(70·300)만으로 (원장님 실기기 확인 「아직도 줌이 너무 작아」: 연장선까지 재서 보이는 눈썹이 60% 만 채웠음). pb-v168 = v3.29.0. */
 const SHELL = "shell-" + VERSION;
 const RUNTIME = "runtime-" + VERSION;
 
