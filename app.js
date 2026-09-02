@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.22.0";
+const APP_VERSION = "v3.23.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5676,6 +5676,62 @@ function runBalanceCurve() {
    그리고 오른쪽 미러링도 앞머리부터 꼬리까지 순차적으로 생긴다」 — 두 단계라 전체는 이 값의 2배. */
 const BAL_ANIM_MS = 650;
 
+/* ⭐ v3.23.0 — **튄 구간은 무시하고 양옆(파란점↔파란점)을 이어 채운다** (원장님 지시 2026-09-02,
+   v3.15.0 표시 결과 위에 노란 원(아래선이 몇 열 동안 눈썹 안쪽으로 튄 곳)과 초록 점선(양옆을 이어 채울
+   자리)을 그려 주심: 「노란색 부위는 좀 무시하고 아래 양옆을 유추하여 이음선 제작 안되니?」).
+   v3.15.0 의 "읽은 점 그대로"는 유지한다. 다만 열마다 읽은 y 가 **이웃들의 흐름**(창 11 중앙값)에서
+   국소 두께의 25%(최소 3px) 넘게 벗어나면 그 열은 튄 것으로 보고 버리고, 양옆의 정상 열 두 개를 직선으로
+   이어 그 자리를 채운다. 위선·아래선 각각 따로. 전체를 다시 그리거나 매끈하게 만드는 규칙은 없다 —
+   v3.16~3.20 처럼 사진 전체를 추정 규칙으로 덮는 것이 아니라, 이웃과 동떨어진 열만 이웃으로 채운다. */
+const BR_FRAC = 0.2, BR_MIN = 3, BR_SHARP = 3, BR_MAX_RUN = 0.45, BR_PASSES = 2;
+/* 튐 = **급격한 단차**: 이웃 열과의 y 차이가 그 자리 두께의 20%(최소 3px)를 넘고, 직전 5열의 평소
+   열간 변화량의 3배도 넘을 때(부드러운 곡선은 열마다 조금씩 변하므로 걸리지 않는다 — 꼬리·아치 보호).
+   단차가 나면 그 직전 열(a, 원장님의 첫 "파란점")의 기울기(직전 5열 중앙값)로 선을 뻗어, 점이 그 선
+   근처(두께의 20% 안)로 **돌아오는 첫 열**(둘째 "파란점")을 찾아 a~그 열을 직선으로 잇는다. 궤적 길이의
+   45% 안에서 못 돌아오면(진짜 곡선일 수 있으므로) 아무것도 바꾸지 않는다. 위선·아래선 각각. */
+function balBridgeOutliers(trace) {
+  let cur = trace;
+  for (let pass = 0; pass < BR_PASSES; pass++) cur = balBridgeOnce(cur);
+  return cur;
+}
+function balBridgeOnce(trace) {
+  const n = trace.length;
+  if (n < 6) return trace;
+  const out = trace.map((p) => ({ ...p }));
+  const xs = trace.map((p) => p.x);
+  const thick = trace.map((p) => Math.abs((p.bot ?? p.top) - p.top));
+  const med = (arr) => { const s = arr.slice().sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+  const maxRun = Math.max(3, Math.round(BR_MAX_RUN * n));
+  for (const key of ["top", "bot"]) {
+    const ys = trace.map((p) => p[key]);
+    if (ys.some((v) => v === undefined || !isFinite(v))) continue;
+    const lim = (i) => Math.max(BR_MIN, BR_FRAC * (thick[i] || 0));
+    let i = 1;
+    while (i < n) {
+      const d = ys[i] - ys[i - 1];
+      const prevDiffs = []; for (let k = Math.max(1, i - 5); k < i; k++) prevDiffs.push(Math.abs(ys[k] - ys[k - 1]));
+      const usual = prevDiffs.length >= 2 ? med(prevDiffs) : 1;
+      if (Math.abs(d) > lim(i) && Math.abs(d) > BR_SHARP * Math.max(usual, 0.5)) {
+        const a = i - 1;
+        const slopes = []; for (let k = Math.max(1, a - 4); k <= a; k++) { const dx = xs[k] - xs[k - 1]; if (Math.abs(dx) > 1e-6) slopes.push((ys[k] - ys[k - 1]) / dx); }
+        const slope = slopes.length ? med(slopes) : 0;
+        let found = -1;
+        for (let k = i + 1; k < n && k - a <= maxRun; k++) {
+          const pred = ys[a] + slope * (xs[k] - xs[a]);
+          if (Math.abs(ys[k] - pred) <= lim(k)) { found = k; break; }
+        }
+        if (found > 0) {
+          for (let q = a + 1; q < found; q++) { const t = (xs[q] - xs[a]) / ((xs[found] - xs[a]) || 1); out[q][key] = ys[a] + (ys[found] - ys[a]) * t; }
+          i = found + 1; continue;
+        }
+      }
+      i++;
+    }
+  }
+  return out;
+}
+const BAL_BRIDGE_MODE = true;   // v3.23.0 — 표시용 trace 에 양옆 잇기 적용 (false 로 두면 v3.15.0 그대로)
+
 function renderBalCurve(frag) {
   const bc = S.balCurve;
   if (!bc || !bc.L || !bc.R) return;
@@ -5685,7 +5741,8 @@ function renderBalCurve(frag) {
   const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
   const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  const n = refC.trace.length;
+  const trace = BAL_BRIDGE_MODE ? balBridgeOutliers(refC.trace) : refC.trace;
+  const n = trace.length;
 
   /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
      1단계: 기준쪽(refC, 실제 위치) 점이 순서대로 채워진다. 2단계: 그 다음 반대쪽 미러링
@@ -5700,7 +5757,7 @@ function renderBalCurve(frag) {
   }
 
   for (let i = 0; i < refCount; i++) {
-    const p = refC.trace[i];
+    const p = trace[i];
     const bad = badZone(p.zone);
     frag.appendChild(mk("circle", { cx: p.x, cy: p.top, r: 1.5,
       fill: bad ? BAL_RED : "#5EEAD4", "fill-opacity": bad ? 0.75 : 0.4 }));
@@ -5708,7 +5765,7 @@ function renderBalCurve(frag) {
       fill: bad ? BAL_RED : "#2E8BFF", "fill-opacity": bad ? 0.75 : 0.4 }));
   }
   for (let i = 0; i < mirCount; i++) {
-    const p = refC.trace[i];
+    const p = trace[i];
     const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
     const bad = badZone(p.zone);
     frag.appendChild(mk("circle", bad
@@ -6169,7 +6226,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  runBalanceCurve, readSideCurve,
+  runBalanceCurve, readSideCurve, balBridgeOutliers,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang,
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,

@@ -2364,6 +2364,45 @@ if (RUN(5)) {
       + `2100ms 점${done1.circles}(끝=${done1.animDone}) → 2300ms 점${done2} · 빨간점=${done1.redCount}`);
   }
 
+  /* 186. ⭐ v3.23.0 — **미러링 점선: 튄 구간은 무시하고 파란점↔파란점을 잇는다** (원장님 지시 2026-09-02,
+     v3.15.0 표시 결과에 노란 원(아래선이 눈썹 안쪽으로 튄 구간)·파란 점(튀기 직전/돌아온 열)·초록 점선(이을
+     자리)을 그려 주심: 「노란색 부위는 무시하고 … 빨간 점이 끝나는 점(파란점)과 다시 돌아와 이어지는 시작점
+     (파란점)으로 연결하는걸 유추하여 자연스럽게 점을 이어주면 안되니?」).
+     `balBridgeOutliers()`는 순수 함수라 합성 궤적으로 바로 검사: (a) 4·12·16열짜리 튐(두께의 30~50%)이 양끝
+     정상 열끼리 직선으로 이어지는가 (b) 한 열 튐도 (c) 가파른 꼬리 곡선·아치(올랐다 내려옴)는 손대지 않는가
+     (d) 판정(S.balCurve.trace 원본)은 그대로인가 — 표시 전용. */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 400, height: 300 } });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+    await p.waitForTimeout(300);
+    const r = await p.evaluate(() => {
+      const mkLine = (n, f, g) => Array.from({ length: n }, (_, i) => ({ x: 300 - i * 7, top: f(i), bot: g(i), zone: i < n / 2 ? 0 : 1 }));
+      const maxDev = (out, ref, key) => Math.max(...out.map((q, i) => Math.abs(q[key] - ref[i][key])));
+      const res = {};
+      for (const [len, depth] of [[4, 8], [12, 15], [16, 12], [1, 9]]) {
+        const clean = mkLine(40, (i) => 100 + 0.3 * i, (i) => 130 + 0.3 * i);
+        const tr = clean.map((q) => ({ ...q })); for (let i = 14; i < 14 + len; i++) tr[i].bot -= depth;
+        const before = JSON.stringify(tr);
+        const out = window.PB.balBridgeOutliers(tr);
+        res[`bump${len}`] = { dev: maxDev(out, clean, "bot"), untouchedInput: JSON.stringify(tr) === before };
+      }
+      const tail = mkLine(40, (i) => 100 + 60 * Math.pow(i / 39, 2.5), (i) => 100 + 60 * Math.pow(i / 39, 2.5) + 30 * (1 - (i / 39) * 0.8));
+      res.tail = Math.max(maxDev(window.PB.balBridgeOutliers(tail), tail, "top"), maxDev(window.PB.balBridgeOutliers(tail), tail, "bot"));
+      const arch = mkLine(40, (i) => 140 - 40 * Math.sin(Math.PI * i / 39), (i) => 170 - 40 * Math.sin(Math.PI * i / 39));
+      res.arch = Math.max(maxDev(window.PB.balBridgeOutliers(arch), arch, "top"), maxDev(window.PB.balBridgeOutliers(arch), arch, "bot"));
+      return res;
+    });
+    await ctx.close();
+    const ok = errs.length === 0 && r.bump4.dev < 0.5 && r.bump12.dev < 0.5 && r.bump16.dev < 0.5 && r.bump1.dev < 0.5
+      && r.bump12.untouchedInput && r.tail < 1e-6 && r.arch < 1e-6;
+    check("186. 미러링 점선 — 튄 구간(1·4·12·16열)은 파란점↔파란점 직선으로 이어지고, 가파른 꼬리·아치 곡선은 그대로, 원본 궤적은 안 바뀜 (원장님 지시 2026-09-02)",
+      ok, `튐 4열 ${r.bump4.dev.toFixed(2)} · 12열 ${r.bump12.dev.toFixed(2)} · 16열 ${r.bump16.dev.toFixed(2)} · 1열 ${r.bump1.dev.toFixed(2)}px(기대 0)`
+      + ` · 꼬리곡선 변경 ${r.tail.toFixed(2)} · 아치 변경 ${r.arch.toFixed(2)}px(기대 0) · 원본 그대로=${r.bump12.untouchedInput}`);
+  }
+
   /* ⚠️ v1.71.0 — **꼬리가 연하게 사라지는 눈썹** (원장님 지시 2026-08-25 「얇은털 따라가는것 금지」)
      몸통(x 170~340)은 진하고, 꼬리(x 145~172)는 피부와 겨우 14 차이라 **본 판독이 못 봅니다.**
      그래서 판독 열은 x≈172 에서 끊깁니다 — **거기가 꼬리 자리입니다.** 잔털을 따라가면 안 됩니다. */
