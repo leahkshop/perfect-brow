@@ -75,10 +75,12 @@ const I18N = {
     ai_arch_fail: "사진에서 눈썹을 못 읽었습니다 — 선은 기본정렬 그대로입니다",
     line_step_keep: "지금 차례라 숨기지 않습니다",
     set_all: "모두 이 색", set_edge: "테두리", set_weight: "선 굵기", set_hlen: "가로 길이",
+    /* v3.39.0 — 세로 길이 · 서브 라인 길이 · 미리보기 피부 톤 (원장님 지시 2026-09-03) */
+    set_vlen: "세로 길이", set_sublen: "서브 길이", set_skin: "피부 톤",
     set_edge_hd: "테두리 — 없어도 되는 덤",
     set_alpha: "투명도", set_reset: "기본으로", set_done: "완료",
     set_vlines: "세로선",
-    set_prev_note: "왼쪽 = 밝은 피부 · 오른쪽 = 어두운 피부. 선 이름이 그 선이 눈썹에서 놓이는 자리에 붙어 있습니다.",
+    set_prev_note: "가는 연결선 = 서브 라인(가로 자에서 이너선까지). 선 이름이 그 선이 눈썹에서 놓이는 자리에 붙어 있습니다. 피부 톤은 아래 바를 끌어 바꿉니다.",
     set_order: "가이드 순서", set_order_note: "▲▼ 로 순서를 바꾸고, 이름을 눌러 그 단계를 켜고 끕니다.",
     set_none: "없음", set_auto: "자동", set_light: "흰색", set_black: "검정", set_dark: "먹색",
     set_thin: "얇게", set_mid: "중간", set_thick: "두껍게",
@@ -244,10 +246,11 @@ const I18N = {
     ai_arch_fail: "Could not read the brow from the photo — lines left at default layout",
     line_step_keep: "kept — this is the current step",
     set_all: "All this color", set_edge: "Outline", set_weight: "Width", set_hlen: "Ruler length",
+    set_vlen: "Vertical length", set_sublen: "Sub length", set_skin: "Skin tone",
     set_edge_hd: "Outline — optional extra",
     set_alpha: "Opacity", set_reset: "Defaults", set_done: "Done",
     set_vlines: "Verticals",
-    set_prev_note: "Left = light skin · Right = dark skin. Each name sits where that line lands on the brow.",
+    set_prev_note: "The thin connector is the sub line (ruler → inner line). Each name sits where that line lands on the brow. Drag the bar below to change skin tone.",
     set_order: "Guide order", set_order_note: "Reorder with ▲▼; tap a name to turn that step on or off.",
     set_none: "None", set_auto: "Auto", set_light: "White", set_black: "Black", set_dark: "Ink",
     set_thin: "Thin", set_mid: "Medium", set_thick: "Thick",
@@ -380,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.38.0";
+const APP_VERSION = "v3.39.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -692,11 +695,17 @@ const LOOK_KEY = "pb_look_v1";
    · doneC/doneW/doneOp = **놓은 선**(체크 끝낸 선 · S.doneSet) 전용 — 잡은 선과 값 분리
    · subW/subOp = 가로 자에서 이너선까지 잇는 **서브 라인**(옅은 연결선)
    기본값은 기존 화면과 똑같이 보이도록 잡은 선 값(흰색·85%·65%)과 연결선 값(1px·16%)을 그대로. */
+/* ⭐ v3.39.0 — 원장님 지시 2026-09-03 「가로길이만있음 세로길이 설정 추가해줘 - 드래그로 /
+     세로길이 짧게 할경우 아치엣지에서 아래로 내려감」 + 「서브라인 길이 변경 추가」
+   · vlen   = 세로선 길이 (1 = 지금까지의 길이 · 줄이면 **아래끝은 그대로, 윗끝이 아래로**)
+   · subLen = 서브 라인 길이 (1 = 자 끝에서 이너선까지 전부 · 줄이면 자 쪽만 남는다)
+   ⛔ 기본값 1 = 예전 화면과 완전히 같은 그림입니다. 다른 값으로 바꾸지 마세요. */
 const LOOK_DEF = { inner: "#A3E635", arch: "#5EEAD4", tail: "#2E8BFF",
                    vInner: "#5EEAD4", vArch: "#14161B", vTail: "#14161B",
                    edge: 0, edgeC: "none", weight: 0.75, hlen: 0.04, alpha: 0.55,
                    dragCore: "#FFFFFF", dragEdge: "none", dragW: 0.85, dragOp: 0.65,
-                   doneC: "#FFFFFF", doneW: 0.85, doneOp: 0.65, subW: 1, subOp: 0.16 };
+                   doneC: "#FFFFFF", doneW: 0.85, doneOp: 0.65, subW: 1, subOp: 0.16,
+                   vlen: 1, subLen: 1 };
 /* 맨 위 3개 조합 — 첫 칸은 늘 「현재 세트」(지금 값), 나머지 둘은 상황별 추천 */
 const LOOK_COMBOS = [
   { id: "now",    name: "set_c_now",    desc: "set_c_now_d" },
@@ -998,11 +1007,19 @@ function segPx(sp) {
 /* tight=true → **눈썹 가로선만** 감싼다 (눈 기준선 제외). 아치선·아우터가 씁니다.
    원장님 지시(2026-08-20): 「세로 라인은 이너라인 빼고 더 얇게 짧게 · 아래 눈 위치까지
    내려오지 않아도 된다」. 이너만 눈까지 길게 — 내안각과 맞춰 보는 기준선이라서. */
+/* ⭐ v3.39.0 — 세로선 길이(S.look.vlen)는 **아래끝을 그대로 두고 윗끝을 아래로** 당깁니다
+   (원장님 지시 2026-09-03 「세로길이 짧게 할경우 아치엣지에서 아래로 내려감」).
+   맨 위 자가 아치엣지(h2)라 vlen 을 줄이면 세로선의 머리가 아치엣지 밑으로 내려옵니다.
+   ⚠️ 잡는 범위(hitTest)는 이 밴드를 쓰지 않습니다 — 짧게 해도 선은 그대로 잡힙니다. */
+const VLEN_MIN = 0.3, VLEN_MAX = 1;
+const SUBLEN_MIN = 0, SUBLEN_MAX = 1;   /* v3.39.0 — 0 이면 연결선 없음(자만) */
 function browBandY(tight) {
   const g = S.g;
   const ys = H_SPECS.filter((sp) => !tight || sp.anchor).map((sp) => g[sp.key]);
   const pad = tight ? VPAD_TIGHT : VPAD;
-  return { y0: clamp(Math.min(...ys) - pad, 0, 1), y1: clamp(Math.max(...ys) + pad, 0, 1) };
+  const y0 = clamp(Math.min(...ys) - pad, 0, 1), y1 = clamp(Math.max(...ys) + pad, 0, 1);
+  const vlen = clamp(S.look && S.look.vlen != null ? S.look.vlen : 1, VLEN_MIN, VLEN_MAX);
+  return { y0: y1 - (y1 - y0) * vlen, y1 };
 }
 
 function renderGuides() {
@@ -1091,7 +1108,17 @@ function renderGuides() {
       if (sp.key !== "h1" && sp.key !== "h3") {
         const xi = g.v2 * W, xi2 = (2 * g.v1 - g.v2) * W;
         for (const [seg, tgt] of [[segs[0], xi], [segs[1], xi2]]) {
-          const xa = Math.min(seg[0], seg[1], tgt), xb = Math.max(seg[0], seg[1], tgt);
+          /* ⭐ v3.39.0 — 서브 라인 길이(subLen · 원장님 지시 2026-09-03 「서브라인 길이 변경 추가」).
+             **이너선 쪽으로 뻗는 구간만** subLen 비율로 줄인다 — 자 토막을 덮는 부분은 그대로 둔다
+             (v1.23.0부터 자 밑에도 이 옅은 선이 깔려 있었습니다 · 회귀 73 이 앞머리에서 그것을
+             확인합니다). subLen 1 = 예전과 완전히 같은 선 · 0 = 자 밑에만 남아 연결선이 사라진다.
+             ⛔ 자 토막 부분을 함께 잘라내지 마세요 — 앞머리 자는 이미 이너선에 붙어 있어
+                연결선 길이가 0이 되고, 회귀 73 의 「앞머리 얇은 실선」이 사라집니다. */
+          const nearEnd = Math.abs(seg[0] - tgt) < Math.abs(seg[1] - tgt) ? seg[0] : seg[1];
+          const farEnd = nearEnd === seg[0] ? seg[1] : seg[0];
+          const sLen = clamp(S.look && S.look.subLen != null ? S.look.subLen : 1, SUBLEN_MIN, SUBLEN_MAX);
+          const to = nearEnd + (tgt - nearEnd) * sLen;
+          const xa = Math.min(farEnd, to), xb = Math.max(farEnd, to);
           if (xb - xa < 2) continue;
           /* v1.95.0 — 서브 라인 굵기·투명도는 설정(subW/subOp)을 따른다 (원장님 지시 2026-08-29) */
           frag.appendChild(mk("line", {
@@ -5030,7 +5057,13 @@ const closeMask = (id) => $(id).classList.remove("on");
    값은 **누르는 즉시** 적용되고 저장됩니다 — 확인 버튼을 찾을 필요가 없게 (시술 중 손을 아끼려고).
    ⛔ 미리보기(`lookPreview`)는 실제 `S.look` 을 그대로 쓰는 그림입니다. 별도 색을 하드코딩하면
       「선택 시 어떤 색상이 화면에 보일지」가 거짓말이 됩니다. */
-const SKIN_PREV = "#D7AA8C";      /* 미리보기 왼쪽 = 밝은 피부 */
+const SKIN_PREV = "#D7AA8C";      /* 미리보기 기준 피부색 (밝은 쪽) */
+/* ⭐ v3.39.0 — 미리보기 피부 톤 (0 밝음 ~ 1 어두움). **S.look 이 아니라 따로** 저장합니다 —
+   「기본으로」로 선 설정을 되돌려도 지금 보고 있던 피부 톤은 그대로여야 하기 때문입니다.
+   선 모양이 아니라 「무엇 위에서 보고 있는가」라서 회귀 112(LOOK_DEF 잠금)와도 무관합니다. */
+let PV_SKIN = (() => { const v = parseFloat(localStorage.getItem("pb_pvskin")); return isFinite(v) && v >= 0 && v <= 1 ? v : 0; })();
+const pvSkin = () => PV_SKIN;
+const setPvSkin = (v) => { PV_SKIN = clamp(v, 0, 1); try { localStorage.setItem("pb_pvskin", String(PV_SKIN)); } catch (e) {} };
 const BROW_PREV = "#37281F";      /* 미리보기 오른쪽 = 짙은 눈썹/어두운 화면 */
 
 function segBtn(label, on, fn) {
@@ -5144,6 +5177,19 @@ function buildLookUI() {
     $("rngSubOp").value = Math.round((L.subOp != null ? L.subOp : 0.16) * 100);
     $("subOpVal").textContent = Math.round((L.subOp != null ? L.subOp : 0.16) * 100) + "%";
   }
+  /* ⭐ v3.39.0 — 세로 길이 · 서브 라인 길이 · 미리보기 피부 톤 (원장님 지시 2026-09-03) */
+  if ($("rngVLen")) {
+    $("rngVLen").value = Math.round((L.vlen != null ? L.vlen : 1) * 100);
+    $("vlenVal").textContent = Math.round((L.vlen != null ? L.vlen : 1) * 100) + "%";
+  }
+  if ($("rngSubLen")) {
+    $("rngSubLen").value = Math.round((L.subLen != null ? L.subLen : 1) * 100);
+    $("subLenVal").textContent = Math.round((L.subLen != null ? L.subLen : 1) * 100) + "%";
+  }
+  if ($("rngSkin")) {
+    $("rngSkin").value = Math.round(pvSkin() * 100);
+    $("skinVal").textContent = Math.round(pvSkin() * 100) + "%";
+  }
   lookPreview();
 }
 const HLEN_MIN = 0.04, HLEN_MAX = 0.30;
@@ -5195,11 +5241,22 @@ function pvText(f, x, y, txt, color, anchor, size) {
   t.textContent = txt;
   f.appendChild(t);
 }
+/* ⭐ v3.39.0 — 피부 톤은 **슬라이더 하나로 밝음↔어두움**을 오갑니다 (원장님 지시 2026-09-03:
+   「위 표기 어두운 피부 밝은피부 둘중 선택해서 하나만 보도록 … 밝은 피부에서 드래그로
+     어두운 피부로 변경하면 될듯 … 눈과 눈썹은 하나로만」).
+   tone 0 = 밝은 피부(예전 왼쪽 칸) · 1 = 어두운 피부(예전 오른쪽 칸) · 사이는 섞은 색.
+   ⛔ 두 칸으로 되돌리지 마세요 — 한 칸이라 눈썹이 두 배 커져 선 자리가 훨씬 잘 보입니다. */
+const pvMix = (a, b, t) => {
+  const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
+  const ch = (sh) => Math.round(((A >> sh) & 255) + (((B >> sh) & 255) - ((A >> sh) & 255)) * t);
+  return "#" + [16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, "0")).join("").toUpperCase();
+};
 /* 한 칸 — 피부 + 눈썹 드로잉 + 눈 */
-function pvBrowArt(f, x0, dark) {
-  const skin = dark ? "#6E4C38" : "#EAC6A6";
-  const shade = dark ? "#4E3327" : "#D6AC86";
-  const ink = dark ? "#1E1310" : "#3A2A20";
+function pvBrowArt(f, x0, tone) {
+  const dark = tone >= 0.5;                     /* 털결·눈동자처럼 두 값만 쓰는 곳의 기준 */
+  const skin = pvMix("#EAC6A6", "#6E4C38", tone);
+  const shade = pvMix("#D6AC86", "#4E3327", tone);
+  const ink = pvMix("#3A2A20", "#1E1310", tone);
   f.appendChild(mk("rect", { x: x0, y: 0, width: PV_W, height: PV_H, fill: skin }));
   /* 평평한 색판으로 보이지 않게 — 관자놀이·눈두덩 그늘 */
   f.appendChild(mk("ellipse", { cx: x0 + PV_W * .55, cy: PV_H * 1.3, rx: PV_W * .8, ry: PV_H * .68,
@@ -5260,20 +5317,25 @@ function lookPreview() {
     f.appendChild(mk("line", { x1, y1, x2, y2, stroke: hex, "stroke-width": w,
       "stroke-opacity": L.alpha, "stroke-linecap": "round", class: "pv-ruler" }));
   };
-  [0, 1].forEach((side) => {
-    const x0 = side * PV_W, dark = side === 1;
-    pvBrowArt(f, x0, dark);
+  /* ⭐ v3.39.0 — **한 칸**만 그린다 (예전엔 밝은 피부·어두운 피부 두 칸). 피부 톤은 슬라이더. */
+  {
+    const x0 = 0, tone = pvSkin();
+    const dark = tone >= 0.5;
+    pvBrowArt(f, x0, tone);
     const b = pvBox(x0);
     const vx = (k) => b.x + PV_X[k] * b.w;
     const hy = (k) => b.y + PV_Y[k] * b.h;
     const half = clamp(L.hlen, HLEN_MIN, HLEN_MAX) * (vx("v2") - vx("v4"));
     const wOf = (k) => (specOf(k).w + 1.8) * L.weight * 1.45;
-    /* 세로선 — 이너는 눈까지 길게, 아치선·아우터는 눈썹 구간만 (앱과 같은 규칙) */
+    /* 세로선 — 이너는 눈까지 길게, 아치선·아우터는 눈썹 구간만 (앱과 같은 규칙)
+       v3.39.0 — 세로 길이(vlen)는 앱과 같이 **아래끝 고정 · 윗끝만 아래로**. 라벨까지 잇는
+       옅은 선은 앱에서도 길이와 무관하게 남으므로 여기서도 그대로 둔다. */
+    const vlen = clamp(L.vlen != null ? L.vlen : 1, VLEN_MIN, VLEN_MAX);
     [["v2", 268], ["v6", 214], ["v4", 214]].forEach(([k, y1]) => {
       const x = vx(k), c = groupColor(k) || specOf(k).color;
       f.appendChild(mk("line", { x1: x, y1: 42, x2: x, y2: y1, stroke: c,
         "stroke-width": 1, "stroke-opacity": .18 }));       /* 이름표까지 잇는 옅은 선 */
-      put(x, 46, x, y1, c, wOf(k), grabTab && k === "v6");
+      put(x, y1 - (y1 - 46) * vlen, x, y1, c, wOf(k), grabTab && k === "v6");
     });
     /* 가로 자 — 자는 세로선에서 **눈썹 쪽으로만** 뻗는다 (BASELINE 1-38) */
     const seg = {
@@ -5283,6 +5345,25 @@ function lookPreview() {
       archThickness: [vx("v6") - half, vx("v6") + half],
       h3: [vx("v4"), vx("v4") + half],                      /* 꼬리 자는 길이 반 (halfK 0.5) */
     };
+    /* ⭐ v3.39.0 — **서브 라인**(자 → 이너선 연결선)도 미리보기에 그린다 (원장님 지시 2026-09-03
+       「서브라인이 위에 예시 표기에 안나옴 그래서 서브라인이 뭘뜻하는지 모름 — 추가해주고」).
+       앱과 같은 규칙: 꼬리 자(h3)에는 없다 · 자 끝에서 이너선 쪽으로 subLen 만큼.
+       ⚠️ 투명도만 예외로 최소 0.35 — 미리보기는 축소판이라 실제값(기본 16%) 그대로면
+          화면에서 아예 안 보여 「이게 서브 라인이구나」를 알 수 없습니다 (자·세로선을 1.45배
+          굵게 그리는 것과 같은 성격의 보정입니다). 굵기·길이는 설정값 그대로입니다. */
+    {
+      const sLen = clamp(L.subLen != null ? L.subLen : 1, SUBLEN_MIN, SUBLEN_MAX);
+      const sOp = Math.max(L.subOp != null ? L.subOp : 0.16, 0.35);
+      const sW = (L.subW || 1) * 1.45;
+      const tgt = vx("v2");
+      ["h2", "archThickness", "front", "frontThickness"].forEach((k) => {
+        const from = Math.abs(seg[k][0] - tgt) < Math.abs(seg[k][1] - tgt) ? seg[k][0] : seg[k][1];
+        const to = from + (tgt - from) * sLen;
+        if (Math.abs(to - from) < 1) return;                /* 자가 이미 이너선에 닿아 있으면 없음 */
+        f.appendChild(mk("line", { x1: from, y1: hy(k), x2: to, y2: hy(k), stroke: "#14161B",
+          "stroke-width": sW, "stroke-opacity": sOp, class: "pv-sub" }));
+      });
+    }
     Object.keys(seg).forEach((k) => {
       const y = hy(k), c = groupColor(k) || specOf(k).color;
       /* 잡은 선 탭 — 아치는 잡은 모습, 아치두께는 **놓은 선** 모습 (v1.95.0: 한 화면에서 둘 다 확인) */
@@ -5302,8 +5383,8 @@ function lookPreview() {
       .forEach(([k, an, lx]) => pvText(f, lx, 38, labelOf(k), groupColor(k) || specOf(k).color, an, 12));
     pvText(f, x0 + 10, 17, dark ? (LANG === "ko" ? "어두운 피부" : "Dark skin")
                                : (LANG === "ko" ? "밝은 피부" : "Light skin"), "#FFFFFF", "start", 11);
-  });
-  svgP.setAttribute("viewBox", `0 0 ${PV_W * 2} ${PV_H}`);
+  }
+  svgP.setAttribute("viewBox", `0 0 ${PV_W} ${PV_H}`);
   svgP.replaceChildren(f);
 }
 $("btnLook").onclick = () => { S.lookSnap = { ...S.look }; lookTab("base"); buildLookUI(); $("mLook").classList.add("on"); };
@@ -5358,6 +5439,28 @@ $("rngLen").addEventListener("input", (e) => {
   lookPreview(); render();
 });
 $("rngLen").addEventListener("change", () => { saveLook(); buildLookUI(); });
+/* ⭐ v3.39.0 — 세로 길이(vlen) · 서브 라인 길이(subLen) · 미리보기 피부 톤 (원장님 지시 2026-09-03
+     「가로길이만있음 세로길이 설정 추가해줘 - 드래그로」·「서브라인 길이 변경 추가」·
+      「밝은 피부에서 드래그로 어두운 피부로 변경하면 될듯」).
+   끄는 동안 미리보기가 바로 따라오도록 input 에서 lookPreview(), 손을 떼면 저장합니다. */
+$("rngVLen").addEventListener("input", (e) => {
+  S.look.vlen = clamp(+e.target.value / 100, VLEN_MIN, VLEN_MAX);
+  $("vlenVal").textContent = e.target.value + "%";
+  lookPreview(); render();
+});
+$("rngVLen").addEventListener("change", () => { saveLook(); buildLookUI(); });
+$("rngSubLen").addEventListener("input", (e) => {
+  S.look.subLen = clamp(+e.target.value / 100, SUBLEN_MIN, SUBLEN_MAX);
+  $("subLenVal").textContent = e.target.value + "%";
+  lookPreview(); render();
+});
+$("rngSubLen").addEventListener("change", () => { saveLook(); buildLookUI(); });
+/* 피부 톤은 **미리보기 전용** — 사진 위 선에는 아무 영향이 없으므로 render() 를 부르지 않습니다 */
+$("rngSkin").addEventListener("input", (e) => {
+  setPvSkin(+e.target.value / 100);
+  $("skinVal").textContent = e.target.value + "%";
+  lookPreview();
+});
 /* v1.81.0 — 선 굵기 · 테두리 굵기 슬라이더 (원장님 지시 2026-08-27).
    끄는 동안 미리보기와 실제 화면이 함께 변합니다 — 가로 길이와 같은 규칙입니다. */
 $("rngW").addEventListener("input", (e) => {
@@ -6694,7 +6797,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
-  PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
+  PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
   updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
@@ -6706,4 +6809,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY,   /* v1.97.0 — 예비 동공 정렬 검사용 */
-  I18N };   /* v3.38.0 — 회귀 199 (설정 시트 세로 회전 해제 · 도크 버튼 재배치 확인용) */
+  I18N,
+  pvSkin, setPvSkin, VLEN_MIN, VLEN_MAX, SUBLEN_MIN, SUBLEN_MAX, browBandY };   /* v3.39.0 — 세로 길이·서브 길이·미리보기 피부 톤 검사용 */

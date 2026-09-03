@@ -6055,6 +6055,9 @@ if (RUN(5)) {
       /* v1.95.0 — 놓은 선(체크 마친 선)·서브 라인 기본값 (원장님 지시 2026-08-29).
          기본값은 기존 화면과 동일하게 보이도록 잡은 선·연결선 값과 같습니다. */
       doneC: "#FFFFFF", doneW: 0.85, doneOp: 0.65, subW: 1, subOp: 0.16,
+      /* v3.39.0 — 세로선 길이·서브 라인 길이 (원장님 지시 2026-09-03). 기본 1 = 예전 화면 그대로:
+         세로선은 지금까지의 길이, 연결선은 이너선까지 전부. 다른 값으로 바꾸지 마세요. */
+      vlen: 1, subLen: 1,
     };
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -6544,6 +6547,135 @@ if (RUN(5)) {
   }
 
   for (const f of [f1, f0, fN, f6]) fs.unlinkSync(f);
+}
+
+/* ═══ 200~202 · v3.39.0 — 설정 시트: 세로 길이 · 서브 라인 · 미리보기 한 칸 ═══════════
+   원장님 지시 2026-09-03 (스크린샷 첨부):
+     「서브라인이 위에 예시 표기에 안나옴 그래서 서브라인이 뭘뜻하는지 모름 / 추가해주고
+       - 서브라인 길이 변경 추가 / 가로길이만있음 세로길이 설정 추가해줘 - 드래그로
+       / 세로길이 짧게 할경우 아치엣지에서 아래로 내려감 / 위 표기 어두운 피부 밝은피부
+       둘중 선택해서 하나만 보도록 … 밝은 피부에서 드래그로 어두운 피부로 변경하면 될듯
+       … 그러니 눈과 눈썹은 하나로만」 */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  const p = await ctx.newPage();
+  await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+  await p.waitForTimeout(300);
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1500);
+
+  /* 200. 세로 길이 — 아래끝은 그대로, 윗끝만 아치엣지 밑으로 내려온다 */
+  const v200 = await p.evaluate(() => {
+    const PBx = window.PB, S = PBx.S;
+    /* 조용한 세로선(회색 한 줄)만 본다 — 라벨 연결선(y1=0·투명도 0.16)은 길이와 무관하다 */
+    const vlines = () => [...document.getElementById("guides").querySelectorAll("line")]
+      .filter((l) => Math.abs(+l.getAttribute("x1") - +l.getAttribute("x2")) < 0.5
+                  && Math.abs(+l.getAttribute("stroke-opacity") - 0.16) > 1e-6
+                  && +l.getAttribute("y1") > 0.5)
+      .map((l) => ({ x: +l.getAttribute("x1"), y0: +l.getAttribute("y1"), y1: +l.getAttribute("y2") }));
+    const set = (v) => { S.look.vlen = v; PBx.render(); return vlines(); };
+    const full = set(1), half = set(0.5);
+    const pair = (a, b) => {
+      const A = a[0], B = b.find((q) => Math.abs(q.x - A.x) < 0.5);
+      return { botSame: Math.abs(A.y1 - B.y1) < 0.5, shorter: (B.y1 - B.y0) < (A.y1 - A.y0) * 0.6,
+               headDown: B.y0 > A.y0 + 10, ratio: +((B.y1 - B.y0) / (A.y1 - A.y0)).toFixed(2) };
+    };
+    const r = pair(full, half);
+    /* 아치엣지(h2)보다 머리가 아래로 내려왔는가 — 원장님 표현 그대로 */
+    const h2y = S.g.h2 * S.dim.H;
+    const belowArchEdge = half.every((q) => q.y0 > h2y);
+    const band = { full: PBx.browBandY(true), n: full.length };
+    S.look.vlen = 1; PBx.render();
+    /* 슬라이더가 실제로 값을 바꾸고 저장하는가 */
+    document.getElementById("btnLook").click();
+    const sl = document.getElementById("rngVLen");
+    sl.value = "60"; sl.dispatchEvent(new Event("input", { bubbles: true }));
+    sl.dispatchEvent(new Event("change", { bubbles: true }));
+    const after = { look: S.look.vlen, saved: JSON.parse(localStorage.getItem("pb_look_v1") || "{}").vlen };
+    S.look.vlen = 1; PBx.saveLook(); PBx.buildLookUI(); PBx.render();
+    document.getElementById("mLook").classList.remove("on");
+    return { ...r, belowArchEdge, isRange: !!sl && sl.type === "range", after, n: band.n };
+  });
+  check("200. 세로 길이 — 드래그로 조절 · 아래끝은 그대로 두고 윗끝이 아치엣지 밑으로 내려온다 · 저장됨 (원장님 지시 2026-09-03)",
+    v200.isRange && v200.n > 0 && v200.botSame && v200.shorter && v200.headDown && v200.belowArchEdge
+      && Math.abs(v200.after.look - 0.6) < 1e-6 && Math.abs(v200.after.saved - 0.6) < 1e-6,
+    `슬라이더=${v200.isRange} 세로선 ${v200.n}개 · 50%: 아래끝 그대로=${v200.botSame} 짧아짐=${v200.shorter}(길이비 ${v200.ratio}) `
+    + `윗끝 내려옴=${v200.headDown} 아치엣지 밑=${v200.belowArchEdge} · 60%로: S=${v200.after.look} 저장=${v200.after.saved}`);
+
+  /* 201. 서브 라인 — 미리보기에 보이고, 길이를 줄이면 연결선만 짧아진다 (자 밑 부분은 유지) */
+  const v201 = await p.evaluate(() => {
+    const PBx = window.PB, S = PBx.S;
+    document.getElementById("btnLook").click();
+    const prevSubs = (v) => {
+      S.look.subLen = v; PBx.lookPreview();
+      return [...document.querySelectorAll("#lookPrev line.pv-sub")]
+        .map((l) => Math.abs(+l.getAttribute("x2") - +l.getAttribute("x1")));
+    };
+    const pFull = prevSubs(1), pHalf = prevSubs(0.5);
+    /* 앱 화면 — 아치 자의 연결선(투명도 subOp)이 짧아지는가 · 앞머리 자 밑 옅은 선은 남는가 */
+    const appSubs = (v) => {
+      S.look.subLen = v; PBx.render();
+      const op = S.look.subOp;
+      const ls = [...document.getElementById("guides").querySelectorAll("line")]
+        .filter((l) => Math.abs(+l.getAttribute("stroke-opacity") - op) < 1e-6
+                    && Math.abs(+l.getAttribute("y1") - +l.getAttribute("y2")) < 0.5);
+      const near = (k) => ls.filter((l) => Math.abs(+l.getAttribute("y1") - S.g[k] * S.dim.H) < 1.5)
+                            .map((l) => +l.getAttribute("x2") - +l.getAttribute("x1"));
+      return { h2: near("h2"), front: near("front") };
+    };
+    const aFull = appSubs(1), aHalf = appSubs(0.5), aZero = appSubs(0);
+    S.look.subLen = 1; PBx.render(); PBx.lookPreview();
+    const sl = document.getElementById("rngSubLen");
+    sl.value = "40"; sl.dispatchEvent(new Event("input", { bubbles: true }));
+    sl.dispatchEvent(new Event("change", { bubbles: true }));
+    const after = { look: S.look.subLen, saved: JSON.parse(localStorage.getItem("pb_look_v1") || "{}").subLen };
+    S.look.subLen = 1; PBx.saveLook(); PBx.buildLookUI(); PBx.render();
+    document.getElementById("mLook").classList.remove("on");
+    return { pFull, pHalf, aFull, aHalf, aZero, after, isRange: !!sl && sl.type === "range" };
+  });
+  const shrank201 = v201.pFull.length >= 2 && v201.pHalf.length === v201.pFull.length
+    && v201.pHalf.every((w, i) => w < v201.pFull[i] * 0.6);
+  /* 아치 자: 연결선이 줄면 전체 길이가 줄고, 0 이면 자 토막만 남는다. 앞머리 자는 언제나 그대로(회귀 73) */
+  const app201 = v201.aFull.h2.length > 0 && v201.aHalf.h2.length > 0 && v201.aZero.h2.length > 0
+    && v201.aHalf.h2[0] < v201.aFull.h2[0] - 5 && v201.aZero.h2[0] < v201.aHalf.h2[0] - 5
+    && v201.aFull.front.length > 0 && v201.aZero.front.length > 0
+    && Math.abs(v201.aZero.front[0] - v201.aFull.front[0]) < 0.5;
+  check("201. 서브 라인 — 미리보기에 그려지고(뭔지 보인다) · 길이를 줄이면 연결선만 짧아진다(자 밑 옅은 선은 유지) · 저장됨 (원장님 지시 2026-09-03)",
+    v201.isRange && shrank201 && app201
+      && Math.abs(v201.after.look - 0.4) < 1e-6 && Math.abs(v201.after.saved - 0.4) < 1e-6,
+    `미리보기 서브선 ${v201.pFull.length}개 · 100%→50% 길이 [${v201.pFull.map((x) => Math.round(x))}]→[${v201.pHalf.map((x) => Math.round(x))}] · `
+    + `앱 아치 자 ${Math.round(v201.aFull.h2[0] || 0)}→${Math.round(v201.aHalf.h2[0] || 0)}→${Math.round(v201.aZero.h2[0] || 0)}(0%) · `
+    + `앞머리 자 밑 선 유지=${Math.abs((v201.aZero.front[0] || 0) - (v201.aFull.front[0] || 0)) < 0.5} · 40%로: S=${v201.after.look} 저장=${v201.after.saved}`);
+
+  /* 202. 미리보기 한 칸 + 피부 톤 드래그 */
+  const v202 = await p.evaluate(() => {
+    const PBx = window.PB;
+    document.getElementById("btnLook").click();
+    const prev = document.getElementById("lookPrev");
+    const vb = prev.getAttribute("viewBox");
+    const skinOf = () => prev.querySelector("rect").getAttribute("fill");
+    const rects = prev.querySelectorAll("rect").length;   /* 피부 판 = 칸마다 하나 */
+    const pupils = prev.querySelectorAll("circle").length; /* 눈동자 = 칸마다 둘 */
+    const sl = document.getElementById("rngSkin");
+    sl.value = "0"; sl.dispatchEvent(new Event("input", { bubbles: true }));
+    const light = skinOf();
+    sl.value = "100"; sl.dispatchEvent(new Event("input", { bubbles: true }));
+    const dark = skinOf(), saved = localStorage.getItem("pb_pvskin");
+    /* 「기본으로」를 눌러도 피부 톤은 그대로 (선 설정이 아니다) */
+    document.getElementById("lookReset") ? document.getElementById("lookReset").click() : PBx.setPvSkin(1);
+    const afterReset = PBx.pvSkin();
+    const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return ((n >> 16 & 255) + (n >> 8 & 255) + (n & 255)) / 3; };
+    PBx.setPvSkin(0); PBx.lookPreview();
+    document.getElementById("mLook").classList.remove("on");
+    return { vb, rects, pupils, light, dark, saved, afterReset, darker: lum(dark) < lum(light) - 40, isRange: !!sl && sl.type === "range" };
+  });
+  check("202. 미리보기 — 한 칸만(눈·눈썹 하나) · 피부 톤은 드래그로 밝음↔어두움 · 「기본으로」에 딸려 되돌아가지 않는다 (원장님 지시 2026-09-03)",
+    v202.vb === "0 0 360 320" && v202.rects === 1 && v202.pupils === 2
+      && v202.isRange && v202.darker && v202.saved === "1" && v202.afterReset === 1,
+    `viewBox="${v202.vb}" · 피부판 ${v202.rects}개(1이어야 함) 눈동자 ${v202.pupils}개(2) · `
+    + `밝음 ${v202.light} → 어두움 ${v202.dark}(더 어두움=${v202.darker}) 저장=${v202.saved} · 기본으로 뒤 톤=${v202.afterReset}`);
+
+  await ctx.close();
 }
 
 await browser.close();

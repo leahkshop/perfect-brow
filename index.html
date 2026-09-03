@@ -707,6 +707,15 @@ body:not(.land) #railExtra{display:none}
 #lookTabBase .pal button.sw{width:20px;height:20px}
 #lookTabBase .vpal .vgrp button.sw{width:18px;height:18px}
 #lookTabBase input[type=range].slim{height:18px}
+/* ⚠️ v3.39.0 — 좁은 **가로** 화면(아이폰 844×390)에서만 슬라이더를 한 치수 낮춥니다.
+   세로 길이·서브 길이 두 줄이 늘면서 시트가 한 화면을 넘쳤습니다 — 시술 중 스크롤 금지(회귀 136).
+   세로 모드(rot90)는 제외 — 거기서 글자·터치를 키운 것이 v3.38.0 의 핵심입니다. */
+body.compact:not(.rot90) #lookTabBase input[type=range].slim{height:13px}
+body.compact:not(.rot90) #lookTabBase .pal button.sw{width:18px;height:18px}
+body.compact:not(.rot90) #lookTabBase .vpal .vgrp button.sw{width:16px;height:16px}
+body.compact:not(.rot90) .setnote{font-size:8.5px;line-height:1.25}
+body.compact:not(.rot90) .tabbar button{height:22px}
+body.compact:not(.rot90) .setblock{padding:2px 6px 1px}
 .setrow>.lb{width:52px;flex:none;font-size:10px;font-weight:700;color:var(--faint)}
 .seg{display:flex;gap:3px}
 .seg button{height:24px;padding:0 8px;border-radius:8px;font-size:10px;font-weight:700;
@@ -730,7 +739,11 @@ body:not(.land) #railExtra{display:none}
 .sheet input[type=range]::-moz-range-thumb{width:18px;height:18px}
 /* v1.81.0 — 미리보기는 **눈썹 그림 위에 선이 올라간 그림**이라 세로가 필요합니다.
    height:auto + meet 이라 검은 여백 없이 칸을 채웁니다 (원장님: 「빈 공간을 가득 채우도록」) */
-#lookPrev{width:100%;height:auto;border-radius:10px;display:block;background:#000}
+/* ⚠️ v3.39.0 — 미리보기가 **한 칸**(360×320)이 되면서 세로 비율이 두 배가 됐습니다.
+   좁은 가로 화면(아이폰 844×390)에서는 그대로 두면 시트가 한 화면을 넘어 스크롤이 생깁니다
+   (시술 중 스크롤 금지 · 회귀 136). 그래서 높이에 상한을 둡니다 — 세로 모드(844px)에서는
+   상한에 닿지 않아 눈썹이 크게 보이고, 좁은 가로에서만 줄어듭니다. */
+#lookPrev{width:100%;height:auto;max-height:min(33vh,320px);border-radius:10px;display:block;background:#000}
 .setnote{font-size:9px;color:var(--faint);line-height:1.35;margin:2px 0 0}
 .combo{display:flex;gap:5px}
 .combo button{flex:1;min-height:32px;border-radius:10px;padding:5px 7px;text-align:left;
@@ -1147,11 +1160,18 @@ body:not(.land) #railLang{display:none}
     <div class="setcols">
       <!-- ② 왼쪽 — 미리보기 (위 3줄 = 기본 선 · 맨 아래 = 잡은 선) -->
       <div>
-        <svg id="lookPrev" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet"></svg>
+        <!-- v3.39.0 — 한 칸(360×320). ⛔ 720 (두 칸)으로 되돌리지 마세요 — 원장님 지시 2026-09-03
+             「어두운 피부 밝은피부 둘중 선택해서 하나만 보도록 … 눈과 눈썹은 하나로만」. -->
+        <svg id="lookPrev" viewBox="0 0 360 320" preserveAspectRatio="xMidYMid meet"></svg>
+        <!-- v3.39.0 — 피부 톤은 드래그로 (밝은 피부 ↔ 어두운 피부). 미리보기 전용 설정이라
+             「기본으로」에 딸려 되돌아가지 않고 따로(pb_pvskin) 저장됩니다. -->
+        <div class="setrow"><span class="lb" data-i18n="set_skin">피부 톤</span>
+          <input type="range" class="slim" id="rngSkin" min="0" max="100" step="5" value="0">
+          <span id="skinVal" class="rngval">0%</span></div>
         <!-- v1.83.0 — 조합 3개는 **미리보기 바로 밑**의 작은 카드 (원장님 지시 2026-08-27).
              ⛔ 시트 맨 위로 되돌리지 마세요 — 「무엇이 바뀌는지」가 미리보기 옆에 붙어 있어야 합니다. -->
         <div class="combo mini" id="lookCombo"></div>
-        <p class="setnote" data-i18n="set_prev_note">왼쪽 = 밝은 피부 · 오른쪽 = 어두운 피부. 선 이름이 그 선이 눈썹에서 놓이는 자리에 붙어 있습니다.</p>
+        <p class="setnote" data-i18n="set_prev_note">가는 연결선 = 서브 라인(가로 자에서 이너선까지). 선 이름이 그 선이 눈썹에서 놓이는 자리에 붙어 있습니다. 피부 톤은 아래 바를 끌어 바꿉니다.</p>
       </div>
       <!-- ③ 오른쪽 — 탭: 기본 선 / 잡은 선 -->
       <div>
@@ -1181,6 +1201,12 @@ body:not(.land) #railLang{display:none}
           <div class="setrow"><span class="lb" data-i18n="set_hlen">가로 길이</span>
             <input type="range" class="slim" id="rngLen" min="8" max="60" step="2" value="28">
             <span id="lenVal" class="rngval">28%</span></div>
+          <!-- v3.39.0 — 세로선 길이 (원장님 지시 2026-09-03 「가로길이만있음 세로길이 설정
+               추가해줘 - 드래그로 / 세로길이 짧게 할경우 아치엣지에서 아래로 내려감」).
+               아래끝(꼬리 쪽)은 그대로 두고 윗끝만 아치엣지 밑으로 내려옵니다. -->
+          <div class="setrow"><span class="lb" data-i18n="set_vlen">세로 길이</span>
+            <input type="range" class="slim" id="rngVLen" min="30" max="100" step="5" value="100">
+            <span id="vlenVal" class="rngval">100%</span></div>
           <!-- v1.95.0 — 서브 라인 = 자에서 이너선까지 잇는 옅은 연결선 (원장님 지시 2026-08-29).
                굵기·투명도만 — 색은 조용한 먹색 고정입니다 (시끄러우면 안 되는 선). -->
           <div class="setrow"><span class="lb" data-i18n="set_sub">서브 라인</span>
@@ -1189,6 +1215,12 @@ body:not(.land) #railLang{display:none}
             <span class="lb" style="width:auto;margin-left:6px" data-i18n="set_alpha">투명도</span>
             <input type="range" class="slim" id="rngSubOp" min="4" max="60" step="4" value="16">
             <span id="subOpVal" class="rngval">16%</span></div>
+          <!-- v3.39.0 — 서브 라인 길이 (원장님 지시 2026-09-03 「서브라인 길이 변경 추가」).
+               0% 면 연결선이 사라지고 자만 남습니다. ⛔ 굵기·투명도와 같은 줄에 합치지 마세요
+               — 손가락이 옆 슬라이더를 잡습니다 (v1.83.0 규칙). -->
+          <div class="setrow"><span class="lb" data-i18n="set_sublen">서브 길이</span>
+            <input type="range" class="slim" id="rngSubLen" min="0" max="100" step="5" value="100">
+            <span id="subLenVal" class="rngval">100%</span></div>
           <!-- v1.83.0 — 테두리는 **덤**입니다 (원장님: 「중요하지 않지만 있으면 좋음」).
                배경색 블록으로 감싸 위 세 줄과 확실히 갈라 놓습니다. ⛔ 블록을 풀지 마세요. -->
           <div class="setblock" id="edgeBlock">
