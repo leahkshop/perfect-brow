@@ -380,7 +380,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.37.0";
+const APP_VERSION = "v3.38.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6706,4 +6706,4 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY,   /* v1.97.0 — 예비 동공 정렬 검사용 */
-  I18N };   /* v3.37.0 — 회귀 199 (가이드 안내 문구에서 (위아래 바)/(좌우 바) 힌트 삭제 확인용) */
+  I18N };   /* v3.38.0 — 회귀 199 (설정 시트 세로 회전 해제 · 도크 버튼 재배치 확인용) */

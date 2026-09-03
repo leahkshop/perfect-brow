@@ -602,8 +602,10 @@ body.dock-min .modebtns button{padding:0 5px;font-size:8.5px}
   box-shadow:0 0 0 1px var(--a1) inset,0 6px 22px var(--glow)}
 /* v1.50.0 — 사진저장은 **보조(유리)**. v1.45.0 의 그라데이션 채움을 되살리지 마세요 */
 #btnExport{background:var(--glass);border-color:var(--hair);color:rgba(255,255,255,.80);font-weight:700}
-/* v1.92.0 — 사진저장·사진변경은 **폭을 맞춘다**. 나란히 붙어 있어 언어가 바뀌어(영어) 글자
-   길이가 달라져도 두 버튼이 어긋나 보이면 안 됩니다 (회귀 83 chgSameSize) */
+/* ⭐ v3.38.0 — 사진변경이 사진저장의 옛 자리(왼쪽 끝)를 물려받으며 테두리를 흰색으로
+   (원장님 지시 2026-09-03). 사진저장은 왼쪽 위(.ov-tl)로 옮겨 더는 나란히 있지 않지만,
+   폭 규칙(62px)은 각자 자리에서 손가락 폭이 일정하도록 그대로 둔다. */
+#btnChange{border-color:#fff}
 #btnExport, #btnChange{min-width:62px !important}
 #btnLock{min-width:62px !important}   /* v1.92.0 — 좁은 폰에서 잠금이 센터선 위에 남을 폭 */   /* compact 미디어쿼리(.menurow button 52px)까지 이겨야 두 버튼 폭이 같습니다 */
 /* 프리셋 적용 중 (v1.25.0) — 지금 화면의 선이 저장된 디자인이라는 표시 */
@@ -779,17 +781,63 @@ input[type=range].slim{flex:1;min-width:90px;accent-color:var(--a1)}
 .pal button.sw.none{background:rgba(255,255,255,.05);position:relative}
 .pal button.sw.none::after{content:"";position:absolute;left:2px;right:2px;top:50%;height:2px;
   background:rgba(255,120,130,.85);transform:rotate(-45deg)}
-/* ⚠️ v1.59.0 — **가짜 회전(rot90) 상태에서 시트도 함께 돈다** (원장님: 「설정창 가로모드로」).
-   시트는 body 직속 fixed 라 .screen 의 회전을 상속받지 못해 세로로 떴었다.
-   .screen.active 와 똑같은 변환을 준다. ⛔ 이 블록을 지우면 아이폰에서 설정이 다시 세로로 뜹니다. */
-body.rot90 .sheet{
-  top:0;left:0;
-  width:100vh;height:100vw;
-  width:100dvh;height:100dvw;
-  transform-origin:0 0;
-  transform:translateX(100vw) rotate(90deg);
-  transform:translateX(100dvw) rotate(90deg);
-}
+/* ⛔⚠️ v1.59.0 → **v3.38.0 에서 뒤집힘.** v1.59.0 은 가짜 회전(rot90) 상태에서 시트도 함께 돌려
+   가로 모양으로 맞췄었는데(「설정창 가로모드로」), 그 결과 세로 844px 를 회전된 폭(≈390px)으로
+   욱여넣게 되어 글자가 전부 작아졌다. 원장님 지시 2026-09-03 「설정 내부의 글자 크기가 매우작아
+   그러니 세로모드로 변경하여 … 더 크고 직관적으로 볼수있게 변경」— 반대로 **시트는 회전을 안 따라가고
+   기기의 실제 세로 화면 그대로** 뜨게 한다(에디터 자체는 계속 가로 고정, 시트만 예외).
+   .sheet 는 body 직속 fixed 라 원래도 회전을 상속받지 않으므로, 그냥 아무 것도 안 하면(transform 없음)
+   실제(세로) 뷰포트 그대로 뜬다 — 세로 844px 를 그대로 쓸 수 있어 아래 블록에서 글자·터치 크기를 키운다.
+   ⛔ 이 자리에 v1.59.0 의 rotate(90deg) 블록을 되살리지 마세요 — 다시 작아집니다. */
+body.rot90 .sheet-in{width:min(480px,94vw);max-height:92vh}
+/* v3.38.0 — 좁은 세로 화면에서는 미리보기·조합카드(왼쪽 칸)와 탭·슬라이더(오른쪽 칸)를
+   나란히 두면 각 칸이 200px 안팎으로 눌린다 — 세로로 쌓아 폭을 전부 쓴다. */
+/* ⚠️ minmax(0,1fr) 필수 — 그냥 1fr 이면 그리드 항목의 기본 min-width:auto 때문에
+   내용(스와치 줄·슬라이더 줄 등)이 안 줄어들고 트랙 자체가 내용 폭까지 부풀어(542px 등)
+   시트 오른쪽이 화면 밖으로 잘려 나갑니다 (CSS Grid 블로우아웃). */
+body.rot90 .setcols{grid-template-columns:minmax(0,1fr);gap:14px}
+/* v3.38.0 — 세로 모드는 세로 공간이 넉넉하므로(844px) 라벨·탭·스와치·슬라이더를 전반적으로
+   1.4~1.6배 키운다 — 「변경하고자 하는 선의 글자」가 커지는 것이 이번 지시의 핵심이다. */
+body.rot90 .sheet-hd h3{font-size:19px}
+body.rot90 .sheet-x{width:36px;height:36px;font-size:17px;border-radius:10px}
+body.rot90 .tabbar button{height:40px;font-size:15px;border-radius:11px}
+body.rot90 .setrow{gap:8px;margin:5px 0;flex-wrap:wrap;row-gap:6px}
+body.rot90 #lookTabBase .setrow{margin:4px 0}
+body.rot90 .setrow>.lb{width:78px;font-size:14px}
+body.rot90 .seg button{height:34px;padding:0 12px;font-size:13px;border-radius:10px}
+/* ⚠️ v3.38.0 — 잡은선/놓은선 탭의 「테두리」 줄은 스와치가 10개(일반 8색+흰 2번째+없음)라
+   한 줄 32px 스와치로는 시트 폭을 넘어간다(365px > 트랙 폭). 줄바꿈 허용. */
+body.rot90 .pal{flex-wrap:wrap;row-gap:8px}
+body.rot90 .pal button.sw{width:32px;height:32px}
+body.rot90 #lookTabBase .pal button.sw{width:30px;height:30px}
+/* ⚠️ v3.38.0 — 세로 모드 좁은 폭에서 이너·아치V 두 묶음이 한 줄에 다 안 들어가 화면 밖으로
+   잘려나갔다(swVAll 446px > 시트 폭). vpal 도 줄바꿈 허용. */
+body.rot90 .vpal{gap:13px;flex-wrap:wrap;row-gap:8px}
+body.rot90 .vpal .vgrp{gap:6px}
+body.rot90 .vpal .vgrp>b{font-size:12.5px}
+body.rot90 .vpal .vgrp button.sw{width:28px;height:28px}
+body.rot90 #lookTabBase .vpal .vgrp button.sw{width:27px;height:27px}
+body.rot90 .sheet input[type=range]{height:34px}
+body.rot90 #lookTabBase input[type=range].slim{height:28px}
+body.rot90 .sheet input[type=range]::-webkit-slider-thumb{width:28px;height:28px;margin-top:-11px}
+body.rot90 .sheet input[type=range]::-moz-range-thumb{width:26px;height:26px}
+body.rot90 .rngval{font-size:14px;width:46px}
+body.rot90 #lookAll{height:34px;padding:0 12px;font-size:13px;border-radius:10px}
+body.rot90 .setnote{font-size:12.5px;line-height:1.5}
+body.rot90 .setblock{padding:6px 10px 5px;border-radius:11px}
+body.rot90 .setblock-hd{font-size:12px}
+body.rot90 .combo b{font-size:14px}
+body.rot90 .combo i{display:block;font-size:11.5px}
+body.rot90 .combo button{min-height:46px;padding:6px 9px}
+body.rot90 .combo em s{width:11px;height:11px}
+body.rot90 .combo.mini button{min-height:0;padding:5px 8px}
+body.rot90 .combo.mini b{font-size:12.5px}
+body.rot90 .combo.mini i{display:none}
+body.rot90 .orow{height:34px;gap:6px}
+body.rot90 .orow>i{width:22px;font-size:14px}
+body.rot90 .orow>.onm{height:32px;font-size:14px;padding:0 11px}
+body.rot90 .orow>.omv{width:30px;height:30px;font-size:14px}
+body.rot90 .modal-row button{height:40px;font-size:15px}
 body:not(.land) #railLang{display:none}
 
 /* Modal */
@@ -926,6 +974,9 @@ body:not(.land) #railLang{display:none}
     <div id="touch"></div>
 
     <div class="ov ov-tl">
+      <!-- ⭐ v3.38.0 — 사진저장이 왼쪽 위로 이동, 모든라인숨김·여러라인보다 앞 (원장님 지시 2026-09-03
+           「사진 저장은 왼쪽위로 이동 / 사진저장 모든라인숨김. 여러라인 순으로」). -->
+      <button class="dockbtn" id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
       <button class="chip" id="btnAllLine" data-i18n="editor_all_hide">모든 라인 숨김</button>
       <button class="chip" id="btnMulti" data-i18n="editor_multi">여러라인</button>
       <!-- 여러라인의 후속 버튼 (v1.19.0) — 여러라인이 꺼져 있으면 hidden -->
@@ -997,7 +1048,9 @@ body:not(.land) #railLang{display:none}
     <div class="ldock" id="leftDock">
       <div class="menurow" id="menuRow">
         <button id="btnPresetLoad" hidden><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"/></svg></i><em data-i18n="editor_preset">프리셋</em></button>
-        <button class="dockbtn" id="btnExport"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M8 11l4 4 4-4"/><path d="M4 16.5v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2"/></svg></i><em data-i18n="editor_export">사진저장</em></button>
+        <!-- ⭐ v3.38.0 — 사진변경이 사진저장의 옛 자리(왼쪽 끝)를 물려받는다 · 테두리 흰색
+             (원장님 지시 2026-09-03 「사진 변경 버튼을 사진 저장 위치로(왼쪽끝)으로 이동하고
+             테두리는 흰색으로」). 사진저장은 위 .ov-tl(왼쪽 위)로 옮겨갔다. -->
         <button class="dockbtn" id="btnChange"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M3 16.5l4.8-4.2a2 2 0 0 1 2.7 0L21 20"/></svg></i><em data-i18n="editor_change_photo">사진변경</em></button>
         <span class="dgap"></span>
         <!-- 가이드 플로우 (v1.42.0) — 켜면 이너→앞두께→앞머리→아치두께→아치→꼬리 순서로
