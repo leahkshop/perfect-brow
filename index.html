@@ -349,8 +349,10 @@ body.land.compact #editor .guidetip .chip{font-size:9.5px;padding:5px 9px}
 .rdock{position:absolute;left:16px;top:0;bottom:var(--bdock,152px);height:33.6%;min-height:130px;
   margin:auto 0;z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px;
   transform:translateY(calc(22px + 21.43%))}
-/* v1.96.0 — 다시실행·되돌리기 행: 초기화 바로 밑, 오른쪽 끝 정렬 (되돌리기가 초기화 바로 아래) */
-.urow{position:absolute;top:48px;right:var(--redge);z-index:30;display:flex;gap:6px;justify-content:flex-end}
+/* v1.96.0 — 다시실행·되돌리기 행: 초기화 바로 밑, 오른쪽 끝 정렬 (되돌리기가 초기화 바로 아래)
+   v3.37.0 — 「다시실행 버튼은 되돌리기 밑으로 이동」(원장님 지시 2026-09-03): 가로 1행 → 세로 1열.
+   되돌리기(위) · 다시실행(아래), 오른쪽 끝은 그대로 초기화와 같은 열. */
+.urow{position:absolute;top:48px;right:var(--redge);z-index:30;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .urow .dockbtn{height:34px;min-width:56px;flex-direction:row;gap:4px;font-size:10px;border-radius:11px}
 .urow .dockbtn i{width:14px;height:14px}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
@@ -546,13 +548,26 @@ body.dock-min .modebtns button{padding:0 5px;font-size:8.5px}
 #btnReset{position:absolute;top:8px;right:var(--redge);z-index:30;
   flex-direction:row;gap:4px;font-size:10px}
 #btnReset i{width:14px;height:14px}
-/* v3.33.0 — 미러링 점 색 도크: 초기화와 같은 행, 그 왼쪽 (right 는 app.js 가 초기화 폭에 맞춰 놓는다) */
-.balcolor-dock{position:absolute;top:8px;right:80px;z-index:30;height:34px;display:flex;gap:8px;align-items:center;
-  padding:0 8px;border-radius:13px;background:var(--glass);border:1px solid var(--hair);
+/* v3.33.0 — 미러링 점 색 도크: 초기화와 같은 높이줄, 그 왼쪽 (right 는 app.js 가 초기화 폭에 맞춰 놓는다)
+   v3.37.0 — 색 3종 밑에 투명도 드래그바 한 줄을 더해서 세로 2줄이 됨 (원장님 지시 2026-09-03:
+   「미러링 색상 아래 드래그바 삽입으로 투명도 조절가능하도록」). 위쪽(top:8px)은 그대로 초기화와 맞추고,
+   높이는 내용에 맞춰 자란다 — 오른쪽(right)은 늘 초기화 왼쪽에 8px 띄워 놓으므로(app.js) 되돌리기·다시실행
+   열(오른쪽 끝 고정열)과는 항상 그만큼 떨어져 있어 세로로 자라도 겹치지 않는다. */
+.balcolor-dock{position:absolute;top:8px;right:80px;z-index:30;display:flex;flex-direction:column;gap:6px;
+  padding:6px 8px;border-radius:13px;background:var(--glass);border:1px solid var(--hair);
   backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2)}
+.balcolor-swrow{display:flex;gap:8px;align-items:center}
 .balcolor-dock button{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.35);padding:0;
   box-shadow:0 2px 8px rgba(0,0,0,.45);flex:0 0 auto}
 .balcolor-dock button.on{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.55),0 2px 8px rgba(0,0,0,.45);transform:scale(1.12)}
+/* ⚠️ 전역 `input[type=range]{height:40px}`·썸(26px,--a1) 규칙(위 620행 부근)이 클래스 선택자보다
+   특이도가 높아(태그+속성 vs 클래스뿐) 져 버립니다 — 반드시 **id 선택자**로 덮어써야 합니다. */
+#balOpacitySlider{-webkit-appearance:none;appearance:none;width:100%;height:18px;margin:0;background:transparent;flex:0 0 auto}
+#balOpacitySlider::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:rgba(255,255,255,.35)}
+#balOpacitySlider::-moz-range-track{height:4px;border-radius:2px;background:rgba(255,255,255,.35)}
+#balOpacitySlider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;margin-top:-6px;
+  border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+#balOpacitySlider::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
 #btnUndo:not(:disabled), #btnRedo:not(:disabled){background:var(--grad-deep);border-color:var(--a1);color:#fff}
 #btnUndo:not(:disabled):active, #btnRedo:not(:disabled):active{filter:brightness(1.2)}
 /* 되돌리기 — 자주 쓰는 버튼이라 한 단계 크게 */
@@ -930,12 +945,15 @@ body:not(.land) #railLang{display:none}
          나머지 도크(위아래 바·다시실행·되돌리기)는 왼쪽으로 갔습니다. -->
     <button class="dockbtn danger" id="btnReset"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5v5h5"/><path d="M4.2 10.5A8.2 8.2 0 1 1 4 14.6"/></svg></i><em data-i18n="editor_reset">초기화</em></button>
     <!-- ⭐ v1.96.0 — 다시실행·되돌리기는 **초기화 밑 1행** (원장님 지시 2026-08-29:
-         「초기화 밑에가 되돌리기, 되돌리기 왼쪽에 다시실행」). 왼쪽 도크에는 위아래 바만 남습니다. -->
-    <!-- ⭐ v3.33.0 — 미러링 점 색 3종 (초기화 왼쪽 · 미러링 켜졌을 때만 · app.js buildBalColorDock 이 채운다) -->
+         「초기화 밑에가 되돌리기, 되돌리기 왼쪽에 다시실행」). 왼쪽 도크에는 위아래 바만 남습니다.
+         ⭐ v3.37.0 — 「다시실행 버튼은 되돌리기 밑으로 이동」(원장님 지시 2026-09-03) — 1행이 아니라
+         세로 1열로: 되돌리기가 위, 다시실행이 아래(.urow 가 column 이 됨). 순서(DOM)도 맞춰 바꿨다. -->
+    <!-- ⭐ v3.33.0 — 미러링 점 색 3종 (초기화 왼쪽 · 미러링 켜졌을 때만 · app.js buildBalColorDock 이 채운다)
+         v3.37.0 — 색 3종 밑에 투명도 드래그바도 buildBalColorDock 이 함께 채운다. -->
     <div class="balcolor-dock" id="balColorDock" style="display:none"></div>
     <div class="urow" id="undoRow">
-      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
       <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
+      <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
     </div>
     <div class="rdock" id="rightDock">
       <!-- v1.96.0 — 왼쪽 도크에는 위아래 조절 바 하나만 (조금 더 왼쪽 · 조금 더 아래) -->

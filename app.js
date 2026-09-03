@@ -53,13 +53,15 @@ const I18N = {
        ⛔ 한 줄을 넘기지 마세요 — 시술 화면을 가립니다. */
     /* ⚠️ v1.81.0 — 번호(①②③…)는 **문구에 박지 않습니다.** 순서를 원장님이 바꾸실 수 있으므로
        updateGuideTip 이 지금 순서에서 매번 붙입니다. ⛔ 번호를 다시 문구에 넣지 마세요. */
-    tip_v2: "이너 — 드로잉 앞부분에 맞추세요 (좌우 바)",
-    tip_front: "앞머리 — 눈썹 앞부분 <b>아랫선</b>에 얹으세요 (위아래 바)",
-    tip_frontThickness: "앞두께 — 앞부분 <b>윗선</b>에 맞추세요 (위아래 바)",
-    tip_h2: "아치엣지 — 산꼭대기 <b>윗선</b>에 얹으세요 (위아래 바)",
-    tip_archThickness: "아치두께 — 산 <b>아랫선</b>에 얹으세요 (위아래 바)",
-    tip_v4: "꼬리 아우터 — <b>십자 안쪽 위 모서리</b>를 꼬리 끝에 맞추세요 (좌우 바)",
-    tip_h3: "꼬리 높이 — 꼬리 끝 <b>아랫선</b>에 얹으세요 (위아래 바)",
+    /* ⭐ v3.37.0 — 문구 끝의 「(위아래 바)」·「(좌우 바)」 힌트만 삭제 (원장님 지시 2026-09-03:
+       「가이드 설명에서 설명후 (위아래 바) (좌우 바)글만 삭제」). 설명 본문은 그대로 둔다. */
+    tip_v2: "이너 — 드로잉 앞부분에 맞추세요",
+    tip_front: "앞머리 — 눈썹 앞부분 <b>아랫선</b>에 얹으세요",
+    tip_frontThickness: "앞두께 — 앞부분 <b>윗선</b>에 맞추세요",
+    tip_h2: "아치엣지 — 산꼭대기 <b>윗선</b>에 얹으세요",
+    tip_archThickness: "아치두께 — 산 <b>아랫선</b>에 얹으세요",
+    tip_v4: "꼬리 아우터 — <b>십자 안쪽 위 모서리</b>를 꼬리 끝에 맞추세요",
+    tip_h3: "꼬리 높이 — 꼬리 끝 <b>아랫선</b>에 얹으세요",
     set_tab_base: "기본 선 · 차례", set_tab_grab: "잡은 선 · 놓은 선",
     set_grab_note: "잡은 선 = 선을 손가락이나 조절 바로 움직이는 동안의 모습입니다. 손을 떼면 기본 선으로 돌아갑니다.",
     /* v1.95.0 — 놓은 선 · 서브 라인 (원장님 지시 2026-08-29) */
@@ -228,7 +230,7 @@ const I18N = {
     tip_frontThickness: "Front thickness — put it on the <b>upper</b> edge of the front",
     tip_h2: "Arch edge — put it on the <b>upper</b> edge of the peak",
     tip_archThickness: "Arch thickness — put it on the <b>lower</b> edge of the arch",
-    tip_v4: "Tail outer — put the <b>inner-upper corner</b> on the tail tip (left/right bar)",
+    tip_v4: "Tail outer — put the <b>inner-upper corner</b> on the tail tip",
     tip_h3: "Tail height — put it on the <b>lower</b> edge of the tail tip",
     set_tab_base: "Base lines", set_tab_grab: "Grab · Done",
     set_grab_note: "The grabbed line is how a line looks while you are moving it. It returns to the base look when you let go.",
@@ -378,7 +380,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.36.0";
+const APP_VERSION = "v3.37.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -774,6 +776,7 @@ const S = {
   activePreset: null,    // 지금 적용 중인 프리셋 id (v1.25.0)
   balOn: false,          // 밸런스 표시 중 (v1.26.0)
   balColor: (localStorage.getItem("pb_balcolor") || "red"),   // v3.33.0 — 미러링 점 색 (red·yellow·blue)
+  balOpacity: (() => { const v = parseFloat(localStorage.getItem("pb_balopacity")); return isFinite(v) && v >= 0.15 && v <= 1 ? v : 0.5; })(),   // v3.37.0 — 미러링 점 투명도 (색 도크 아래 드래그바로 조절, 기본 0.5 = 예전 BAL_DOT.op)
   refSide: localStorage.getItem("pb_refside") === "R" ? "R" : "L",   // 기준 쪽 — 다음에도 유지
   /* v1.90.0 — 가이드 안내(중앙 위 프롬프트) 켜기/끄기.
      v1.90.1 (원장님 확정 2026-08-28) — **앱을 열 때는 언제나 켜진 채 시작**한다.
@@ -1891,6 +1894,9 @@ function updateButtons() {
     if (dk) {
       dk.style.display = S.balOn ? "flex" : "none";
       for (const b of dk.querySelectorAll("button")) b.classList.toggle("on", b.dataset.color === S.balColor);
+      /* v3.37.0 — 슬라이더를 손가락으로 끄는 중에는 값을 되쓰지 않는다 (끊김 방지) */
+      const sl = $("balOpacitySlider");
+      if (sl && document.activeElement !== sl) sl.value = String(S.balOpacity);
       const rs = $("btnReset");
       if (S.balOn && rs) dk.style.right = (parseFloat(getComputedStyle(rs).right) || 8) + rs.offsetWidth + 8 + "px";
     } }
@@ -6160,7 +6166,8 @@ function renderBalCurve(frag) {
      적용되는 것과 같게 변경」). v3.26.0 까지는 기준쪽 옅게(r1.5/1.2 · 0.5) · 거울쪽 진하게(r2.0/1.7 · 0.9)로 구분했는데,
      원장님이 기준쪽(왼쪽) 쪽의 가는·옅은 점을 고르셨다. 이제 어느 쪽이든 BAL_DOT 하나. 어느 쪽이 거울상인지는 왼쪽/오른쪽
      버튼이 말해 준다. 회귀 196. */
-  const dot = (x, y, r) => frag.appendChild(mk("circle", { cx: x, cy: y, r, fill: balColor(), "fill-opacity": BAL_DOT.op }));
+  /* v3.37.0 — 투명도는 이제 S.balOpacity(도크 드래그바로 조절, 기본값은 BAL_DOT.op 와 동일) */
+  const dot = (x, y, r) => frag.appendChild(mk("circle", { cx: x, cy: y, r, fill: balColor(), "fill-opacity": S.balOpacity }));
   for (let i = 0; i < refCount; i++) {
     const p = trace[i];
     dot(p.x, p.top, BAL_DOT.rTop);
@@ -6241,16 +6248,34 @@ $("btnBalance").onclick = () => {
   S.balOn = true;
   startBalAnim();      /* ⭐ v3.15.0 — 앞머리→꼬리 순차 애니메이션으로 켠다 (아래) */
 };
-/* v3.33.0 — 미러링 점 색 도크 (위 BAL_COLORS 주석) */
+/* v3.33.0 — 미러링 점 색 도크 (위 BAL_COLORS 주석)
+   v3.37.0 — 색 3종 아래에 **투명도 드래그바**를 더한다 (원장님 지시 2026-09-03:
+   「미러링 색상 아래 드래그바 삽입으로 투명도 조절가능하도록」). 색 버튼은 기존처럼
+   .balcolor-swrow 한 줄에 담고, 그 밑에 range 슬라이더 한 줄을 추가한다.
+   ⚠️ 버튼 개수(회귀 195: dk.querySelectorAll("button").length === 3)는 그대로 3 —
+   슬라이더는 button 이 아니라 input 이라 이 카운트에 안 걸린다. */
 function buildBalColorDock() {
   const dk = $("balColorDock"); if (!dk) return;
   dk.innerHTML = "";
+  const row = document.createElement("div");
+  row.className = "balcolor-swrow";
   for (const [id, c] of Object.entries(BAL_COLORS)) {
     const b = document.createElement("button");
     b.type = "button"; b.dataset.color = id; b.style.background = c; b.setAttribute("aria-label", id);
     b.onclick = () => { S.balColor = id; try { localStorage.setItem("pb_balcolor", id); } catch (e) {} updateButtons(); render(); };
-    dk.appendChild(b);
+    row.appendChild(b);
   }
+  dk.appendChild(row);
+  const sl = document.createElement("input");
+  sl.type = "range"; sl.id = "balOpacitySlider"; sl.className = "balcolor-slider";
+  sl.min = "0.15"; sl.max = "1"; sl.step = "0.05"; sl.value = String(S.balOpacity);
+  sl.setAttribute("aria-label", "balOpacity");
+  sl.oninput = () => {
+    S.balOpacity = parseFloat(sl.value);
+    try { localStorage.setItem("pb_balopacity", String(S.balOpacity)); } catch (e) {}
+    render();
+  };
+  dk.appendChild(sl);
 }
 buildBalColorDock();
 
@@ -6680,4 +6705,5 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   BROW_FRAC, browFillNeed, fitBrowsToFrame, BAL_COLORS, balColor, BAL_DOT,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
-  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY,   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  I18N };   /* v3.37.0 — 회귀 199 (가이드 안내 문구에서 (위아래 바)/(좌우 바) 힌트 삭제 확인용) */
