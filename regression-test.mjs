@@ -2619,6 +2619,34 @@ if (RUN(5)) {
     check("196. 미러링 점 — 양쪽 굵기·투명도가 같다 (기준쪽 값 r1.5/1.2 · 투명도 0.5 · 거울쪽도 동일) (원장님 지시 2026-09-02)",
       on195.sides.nL > 0 && on195.sides.nR > 0 && on195.sides.L === on195.sides.R && on195.sides.L === "1.2/0.5,1.5/0.5",
       `왼쪽 ${on195.sides.nL}점 [${on195.sides.L}] · 오른쪽 ${on195.sides.nR}점 [${on195.sides.R}] (기대 1.2/0.5,1.5/0.5)`);
+    /* 197. ⭐⭐⭐ v3.36.0 — **선은 부드럽다** (원장님 2026-09-02 「선이 삐뚤삐뚤하다는 개념을 이해할 수 있니? 부드러운 선이
+       와야 하는 지점에 삐뚤삐뚤 빠져나온 부분을 무시할 수 있니?(초록 부분 무시)」). 합성 궤적 45열: 윗선 = 아치 포물선,
+       아랫선 = 윗선+40 에 ①열마다 ±2px 잔떨림 ②30~36열에 완만한 불룩함(최대 +8px) ③한 열 단차(+12px). v3.23.0 잇기만으로는
+       ②가 남고(단차가 없으므로), 부드럽게 한 뒤에는 ①②③ 모두 진짜 곡선 2.5px 안 · 아치 봉우리는 1.5px 안 · 끝점 2px 안. */
+    const sm197 = await p.evaluate(() => {
+      const PB = window.PB, n = 45;
+      const trueTop = (i) => 120 + 0.05 * (i - 22) * (i - 22);      /* 아치 = 22열에서 가장 높음(작은 y) */
+      const tr = [];
+      for (let i = 0; i < n; i++) {
+        let bot = trueTop(i) + 40 + (i % 2 ? 2 : -2);                  /* ① 잔떨림 */
+        if (i >= 30 && i <= 36) bot += 8 * Math.sin(Math.PI * (i - 30) / 6);   /* ② 완만한 불룩 */
+        if (i === 12) bot += 12;                                         /* ③ 단차 */
+        tr.push({ x: 100 + i * 5, top: trueTop(i) + (i % 3 === 0 ? 1.5 : -1), bot });
+      }
+      const dev = (t, key, f) => Math.max(...t.map((q, i) => Math.abs(q[key] - f(i))));
+      const bridged = PB.balBridgeOutliers(tr);
+      const smooth = PB.balSmoothTrace(bridged);
+      const peakIdx = smooth.reduce((b, q, i) => (q.top < smooth[b].top ? i : b), 0);
+      const bulgeMax = Math.max(...smooth.slice(30, 37).map((q, k) => Math.abs(q.bot - (trueTop(30 + k) + 40))));
+      const bulgeBefore = Math.max(...bridged.slice(30, 37).map((q, k) => Math.abs(q.bot - (trueTop(30 + k) + 40))));
+      return { botDev: dev(smooth, "bot", (i) => trueTop(i) + 40), topDev: dev(smooth, "top", trueTop),
+               bulgeBefore, bulgeMax, peakIdx, peakErr: Math.abs(smooth[peakIdx].top - trueTop(22)),
+               endErr: Math.max(Math.abs(smooth[0].bot - (trueTop(0) + 40)), Math.abs(smooth[n - 1].bot - (trueTop(n - 1) + 40))), len: smooth.length };
+    });
+    check("197. 미러링 선은 부드럽다 — 잔떨림·완만한 불룩함·단차 모두 진짜 곡선 2.5px 안으로 정리 · 아치 봉우리·끝점은 보존 (원장님 2026-09-02 「삐뚤삐뚤 빠져나온 부분 무시」)",
+      sm197.len === 45 && sm197.bulgeBefore >= 6 && sm197.bulgeMax <= 2.5 && sm197.botDev <= 2.5 && sm197.topDev <= 2.5
+        && Math.abs(sm197.peakIdx - 22) <= 2 && sm197.peakErr <= 1.5 && sm197.endErr <= 2.5,
+      `불룩: 잇기만 ${sm197.bulgeBefore.toFixed(1)} → 부드럽게 ${sm197.bulgeMax.toFixed(1)}(≤2.5) · 아랫선 최대 오차 ${sm197.botDev.toFixed(1)} · 윗선 ${sm197.topDev.toFixed(1)} · 봉우리 ${sm197.peakIdx}열(22±2) 오차 ${sm197.peakErr.toFixed(1)} · 끝점 ${sm197.endErr.toFixed(1)}`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve

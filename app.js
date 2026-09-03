@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.35.0";
+const APP_VERSION = "v3.36.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6071,6 +6071,62 @@ function balIgnoreZones(trace, side) {
 }
 
 const BAL_BRIDGE_MODE = true;   // v3.23.0 — 표시용 trace 에 양옆 잇기 적용 (false 로 두면 v3.15.0 그대로)
+/* ⭐⭐⭐ v3.36.0 — **선은 부드럽다: 삐뚤삐뚤 튀어나온 부분은 무시한다** (원장님 2026-09-02 22:49: 「선이 삐뚤삐뚤하다는
+   개념을 이해할 수 있니? 부드러운 선이 와야 하는 지점에 삐뚤삐뚤 빠져나온 부분을 무시할 수 있니?(초록 부분 무시)」 —
+   미러링 아랫선에 빨간 물결선(전체가 삐뚤삐뚤)과 초록 원(안쪽 끝 근처에서 아래로 불룩 튀어나온 구간)을 그려 주심).
+   ───────────────────────────────────────────────────────────────────────────
+   v3.23.0 의 양옆 잇기(balBridgeOutliers)는 **급격한 단차**만 잡는다 — 한 열에서 갑자기 20% 넘게 뛰는 것. 초록 원 같은
+   **완만한 불룩함**(여러 열에 걸쳐 조금씩 나갔다 돌아오는 것)과 열마다 1~3px 씩 흔들리는 잔떨림은 단차가 없어서 그대로
+   지나갔다. 눈썹의 윤곽은 한 붓으로 그린 **부드러운 곡선**이다 — 그 곡선에서 잠깐 벗어났다 돌아오는 것은 털·그늘이지
+   윤곽이 아니다.
+   방법(위선·아래선 각각): ① 창(열 수의 SM_WIN(40%), 최소 5 · 홀수)마다 최소제곱 2차 곡선을 재고, 그 곡선에서의 잔차 중
+   **눈썹 몸통 쪽 분위수**(아래선 30% · 위선 70%)를 더한 값을 그 열의 곡선값으로 삼는다 — 밖으로 튄 열들(잔차가 바깥쪽)은
+   분위수가 보지 않고 정상 열의 무리가 곡선이 된다. 아치처럼 넓은 굽이는 창이 따라간다. (단순 중앙값·중앙값 직선은
+   불룩함이 창의 1/3 을 차지하면 같이 끌려갔다 — 실측.) ② 그 위에 3열 이동 평균 ③ **모든 점**을 그 곡선값으로 — 선은 부드럽다.
+   ⚠️ 표시 전용 — 판정(devFront 등)·자 배치에는 관여하지 않는다 (v3.23.0 과 같은 자리). 양쪽 끝은 창을 줄여 재므로
+   끝점은 거의 그대로다. ⛔ v3.16~3.20 처럼 사진 전체를 규칙으로 덮는 것이 아니라, 읽은 점을 **그 점들이 만드는 곡선**으로
+   정리하는 것이다. 회귀 197. */
+const SM_WIN = 0.4, SM_Q = 0.3;   // 창 40% · 잔차 분위수 30%(몸통 쪽): 불룩함이 창의 40% 이하면 지워진다 (초록 원 ≈ 12%)
+function balSmoothTrace(trace) {
+  const n = trace.length;
+  if (n < 7) return trace;
+  const out = trace.map((p) => ({ ...p }));
+  let win = Math.max(5, Math.round(SM_WIN * n)); if (win % 2 === 0) win++;
+  const half = (win - 1) / 2;
+  const xs = trace.map((p) => p.x);
+  const qtl = (arr, q) => { const s = arr.slice().sort((a, b) => a - b); return s[Math.max(0, Math.min(s.length - 1, Math.round(q * (s.length - 1))))]; };
+  for (const key of ["top", "bot"]) {
+    const ys = trace.map((p) => p[key]);
+    if (ys.some((v) => v === undefined || !isFinite(v))) continue;
+    /* 창마다 ① 최소제곱 2차 곡선을 재고 ② 그 곡선에서의 잔차 가운데 **눈썹 몸통 쪽 분위수**(아래선은 30% · 위선은 70%)를
+       고른다 — 밖으로 불룩 튀어나온 열들(잔차가 바깥쪽으로 큼)은 분위수가 보지 않고, 정상 열들의 무리가 곡선이 된다.
+       단순 중앙값·중앙값 직선은 불룩함이 창의 1/3 을 차지하면 같이 끌려갔다(실측). 기울어진 구간에서도 직선을 먼저
+       빼므로 곡선이 따라간다. */
+    const q = key === "bot" ? SM_Q : 1 - SM_Q;
+    const fit = ys.map((_, i) => {
+      const a = Math.max(0, i - half), b = Math.min(n - 1, i + half);
+      const r = Math.min(i - a, b - i), lo = i - r, hi = i + r, m = hi - lo + 1;
+      if (m < 3) return ys[i];
+      /* 최소제곱 **2차 곡선**(직선이면 아치 봉우리에서 잔차가 한쪽으로 쏠려 분위수가 봉우리를 2px 눌렀다 — 실측) */
+      const x0 = xs[i];
+      let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, t0 = 0, t1 = 0, t2 = 0;
+      for (let j = lo; j <= hi; j++) { const u = xs[j] - x0, y = ys[j]; s0++; s1 += u; s2 += u * u; s3 += u * u * u; s4 += u * u * u * u; t0 += y; t1 += u * y; t2 += u * u * y; }
+      /* 3×3 정규방정식 (크래머) — [s0 s1 s2; s1 s2 s3; s2 s3 s4] [c0 c1 c2] = [t0 t1 t2] */
+      const D = s0 * (s2 * s4 - s3 * s3) - s1 * (s1 * s4 - s3 * s2) + s2 * (s1 * s3 - s2 * s2);
+      let c0, c1, c2;
+      if (Math.abs(D) > 1e-9) {
+        c0 = (t0 * (s2 * s4 - s3 * s3) - s1 * (t1 * s4 - s3 * t2) + s2 * (t1 * s3 - s2 * t2)) / D;
+        c1 = (s0 * (t1 * s4 - s3 * t2) - t0 * (s1 * s4 - s3 * s2) + s2 * (s1 * t2 - t1 * s2)) / D;
+        c2 = (s0 * (s2 * t2 - t1 * s3) - s1 * (s1 * t2 - t1 * s2) + t0 * (s1 * s3 - s2 * s2)) / D;
+      } else { c0 = t0 / s0; c1 = 0; c2 = 0; }
+      const res = []; for (let j = lo; j <= hi; j++) { const u = xs[j] - x0; res.push(ys[j] - (c0 + c1 * u + c2 * u * u)); }
+      return c0 + qtl(res, q);
+    });
+    const sm = fit.map((_, i) => { const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1); let t = 0; for (let k = a; k <= b; k++) t += fit[k]; return t / (b - a + 1); });
+    for (let i = 0; i < n; i++) out[i][key] = sm[i];
+  }
+  return out;
+}
 
 function renderBalCurve(frag) {
   const bc = S.balCurve;
@@ -6081,7 +6137,7 @@ function renderBalCurve(frag) {
   const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
   const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  const trace = BAL_BRIDGE_MODE ? balBridgeOutliers(balIgnoreZones(refC.trace, ref)) : refC.trace;   // v3.24.0: 무시 규칙 → 파란점↔파란점 잇기
+  const trace = BAL_BRIDGE_MODE ? balSmoothTrace(balBridgeOutliers(balIgnoreZones(refC.trace, ref))) : refC.trace;   // v3.24.0: 무시 규칙 → 잇기 → v3.36.0: 부드럽게
   const n = trace.length;
 
   /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
@@ -6610,7 +6666,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES,
+  runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q,
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, edgeColorFor, relLum,
