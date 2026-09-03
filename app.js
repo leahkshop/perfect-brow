@@ -383,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.39.0";
+const APP_VERSION = "v3.40.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -4790,6 +4790,13 @@ function autoFromDrawing() {
 let archDotsTimer = null;
 function showArchDots() {
   try {
+    /* ⭐ v3.40.0 — **진단점 5개(민트 2·초록·분홍·흰) 완전히 숨김** (원장님 지시 2026-09-03:
+       「시작시 보이는 민트 초록 흰색 핑크점들 숨김」). v3.15.0 에서 raw/파랑/주황 점은 이미
+       뺐고 이 5개만 "눈에 보이는 진단"으로 남겨 뒀었는데, 이제 그 다섯 개도 화면엔 안
+       그린다 — S.archDots·S.archRead 등 값 계산과 가이드 배치는 그대로, 그리기만 끈다
+       (아래 로직을 지우지 않고 이 자리에서 막아 두면 나중에 다시 켜 달라 하실 때 되돌리기
+       쉽다). ⛔ 미러링(renderBalCurve)의 점선은 이 함수와 무관 — 그건 그대로 켜져 있다. */
+    return;
     const stage = document.getElementById("stage");
     if (!stage || !S.archDots || !S.archDots.length) return;
     const { W, H } = S.dim;

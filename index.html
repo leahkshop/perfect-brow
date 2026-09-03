@@ -809,6 +809,13 @@ body.rot90 .sheet-in{width:min(480px,94vw);max-height:92vh}
    내용(스와치 줄·슬라이더 줄 등)이 안 줄어들고 트랙 자체가 내용 폭까지 부풀어(542px 등)
    시트 오른쪽이 화면 밖으로 잘려 나갑니다 (CSS Grid 블로우아웃). */
 body.rot90 .setcols{grid-template-columns:minmax(0,1fr);gap:14px}
+/* ⭐ v3.40.0 — 예시 눈썹(미리보기 칸)을 세로 모드에서 시트 스크롤 상단에 고정 (원장님 지시
+   2026-09-03 「설정에서 스크롤 다운하면 위 예시 눈썹이 안보인다 · 예시 눈썹은 고정하고 그
+   아래부터 스크롤」). 스크롤 컨테이너는 .sheet-in(overflow:auto) — 그 안에서 이 칸만
+   position:sticky 로 붙이면 탭·슬라이더(오른쪽/아래 칸)만 이 밑으로 흘러간다.
+   background 는 뒤에서 스크롤되는 내용이 비치지 않도록 필수. */
+body.rot90 #lookPrevCol{position:sticky;top:0;z-index:3;background:var(--surface);
+  padding-bottom:6px;margin-bottom:2px}
 /* v3.38.0 — 세로 모드는 세로 공간이 넉넉하므로(844px) 라벨·탭·스와치·슬라이더를 전반적으로
    1.4~1.6배 키운다 — 「변경하고자 하는 선의 글자」가 커지는 것이 이번 지시의 핵심이다. */
 body.rot90 .sheet-hd h3{font-size:19px}
@@ -1158,8 +1165,12 @@ body:not(.land) #railLang{display:none}
     </div>
 
     <div class="setcols">
-      <!-- ② 왼쪽 — 미리보기 (위 3줄 = 기본 선 · 맨 아래 = 잡은 선) -->
-      <div>
+      <!-- ② 왼쪽 — 미리보기 (위 3줄 = 기본 선 · 맨 아래 = 잡은 선)
+           ⭐ v3.40.0 — id="lookPrevCol" 추가 (원장님 지시 2026-09-03 「설정에서 스크롤 다운하면
+           위 예시 눈썹이 안보인다 · 예시 눈썹은 고정하고 그 아래부터 스크롤」). 세로 모드(rot90)에서
+           .setcols 가 한 칸으로 쌓이며 .sheet-in 전체가 스크롤되다 보니 이 칸도 같이 흘러갔었다 —
+           아래 CSS(body.rot90 #lookPrevCol)에서 position:sticky 로 고정한다. -->
+      <div id="lookPrevCol">
         <!-- v3.39.0 — 한 칸(360×320). ⛔ 720 (두 칸)으로 되돌리지 마세요 — 원장님 지시 2026-09-03
              「어두운 피부 밝은피부 둘중 선택해서 하나만 보도록 … 눈과 눈썹은 하나로만」. -->
         <svg id="lookPrev" viewBox="0 0 360 320" preserveAspectRatio="xMidYMid meet"></svg>

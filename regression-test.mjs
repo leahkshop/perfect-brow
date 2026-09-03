@@ -2306,10 +2306,11 @@ if (RUN(5)) {
     cC.errs.length === 0 && cC.newOk === true && cC.devFront === false && cC.devArch === false && cC.devTail === false,
     `앞머리다름=${cC.devFront} · 아치다름=${cC.devArch} · 꼬리다름=${cC.devTail}`);
 
-  /* 184. ⭐ v3.15.0 — **진단 점(showArchDots) 기본 표시를 5개로 줄임** (원장님 지시 2026-09-02
-     「처음 들어가면 … 민트점두개, 아치선위에초록점, 꼬리선 위에 핑크, 흰점 빼고 모든점은
-      숨기기 · 다른 점들은 시스템 내부에서만 작동하도록」). raw 열별 점·아치엣지/아치두께
-     파랑 최종값·산꼭대기 주황 점은 더 이상 그리지 않는다 — 계산은 그대로, 화면만 줄었다. */
+  /* 184. ⭐ v3.15.0 에서 5개(민트2·초록1·분홍1·흰1)로 줄였던 진단 점(showArchDots)을
+     v3.40.0 — **전부 숨김**으로 다시 바꿈 (원장님 지시 2026-09-03 「시작시 보이는 민트 초록
+     흰색 핑크점들 숨김」). showArchDots() 는 이제 맨 위에서 그냥 return — S.archDots 등
+     값 계산과 가이드 배치는 그대로, 화면에 점 자체를 하나도 안 그린다.
+     ⛔ v3.15.0 의 "다섯 개만 남기기" 기대치로 되돌리지 마세요 — 이 지시가 그걸 덮었습니다. */
   {
     const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
     const p = await ctx.newPage();
@@ -2330,17 +2331,12 @@ if (RUN(5)) {
       window.PB.showArchDots();
       const svg = document.getElementById("archDotsOverlay");
       const fills = svg ? Array.from(svg.querySelectorAll("circle")).map((c) => c.getAttribute("fill")) : [];
-      const count = (hex) => fills.filter((f) => f === hex).length;
-      const hiddenColors = ["#4C8DFF", "#A855F7", "#00E5FF", "#26C6DA", "#FFA500", "#2E8BFF"];
-      const noHidden = hiddenColors.every((hex) => count(hex) === 0);
-      return { ok, total: fills.length, mint: count("#5EEAD4"), green: count("#00C853"),
-               pink: count("#FF4D94"), white: count("#FFFFFF"), noHidden };
+      return { ok, total: fills.length, overlayExists: !!svg };
     }, LMK);
     await ctx.close();
-    check("184. 진단 점(showArchDots) 기본 표시 — 민트2·초록1·분홍1·흰1 다섯 개만, raw·파랑·주황은 숨김 (원장님 지시 2026-09-02)",
-      errs.length === 0 && r184.ok === true && r184.total === 5 && r184.mint === 2 && r184.green === 1
-        && r184.pink === 1 && r184.white === 1 && r184.noHidden,
-      `점 개수=${r184.total}(기대 5) · 민트=${r184.mint} 초록=${r184.green} 분홍=${r184.pink} 흰=${r184.white} · 숨긴 색 없음=${r184.noHidden}`);
+    check("184. 진단 점(showArchDots) 기본 표시 — 전부 숨김, 오버레이 자체가 안 생긴다 (원장님 지시 2026-09-03)",
+      errs.length === 0 && r184.ok === true && r184.total === 0 && !r184.overlayExists,
+      `점 개수=${r184.total}(기대 0) · 오버레이 존재=${r184.overlayExists}(기대 false)`);
   }
 
   /* 185. ⭐ v3.15.0 — **미러링 켤 때 앞머리→꼬리 순차 애니메이션** (원장님 지시 2026-09-02
