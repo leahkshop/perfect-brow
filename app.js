@@ -378,7 +378,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.34.0";
+const APP_VERSION = "v3.35.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -5702,6 +5702,7 @@ const BAL_BAD = "#3DFFC9";
    ⚠️ 민트(BAL_BAD, 5포인트 틀린 토막)와 헷갈리지 않도록 초록·청록 계열은 뺐다. 흰색은 흰 점(진단)과 겹쳐 뺐다.
    고른 색은 localStorage(pb_balcolor)에 남는다. 점만 바뀌고 판정(민트 토막)은 그대로. */
 const BAL_COLORS = { red: "#FF3B4E", yellow: "#FFE14D", blue: "#2E8BFF" };
+const BAL_DOT = { rTop: 1.5, rBot: 1.2, op: 0.5 };   // v3.35.0 — 양쪽 공통 점 굵기·투명도 (= 예전 기준쪽 값)
 const balColor = () => BAL_COLORS[S.balColor] || BAL_RED;
 const BAL_BAND = 0.045;    // ⚠️ v3.10.0 이후 balBandPx() 의 안전 폴백값으로만 쓰인다 (아래 참고)
 const BAL_SAMPLES = 21;    // 한 토막에서 뽑는 x 표본 수
@@ -6099,16 +6100,21 @@ function renderBalCurve(frag) {
      「미러링 전체 선 색상은 빨간색으로 · 블링킹 빼 · 틀린 부분은 5포인트만 민트」). 기준쪽 실측 점은 옅게,
      반대쪽 미러링 점은 진하게 — 어느 쪽이 거울상인지 구분만 남긴다. badZone 은 내부 값으로만 유지. */
   void badZone;
+  /* ⭐ v3.35.0 — **양쪽 점의 굵기·투명도를 똑같이** (원장님 지시 2026-09-02: 「미러링 양쪽 굵기와 투명도 현재 왼쪽에
+     적용되는 것과 같게 변경」). v3.26.0 까지는 기준쪽 옅게(r1.5/1.2 · 0.5) · 거울쪽 진하게(r2.0/1.7 · 0.9)로 구분했는데,
+     원장님이 기준쪽(왼쪽) 쪽의 가는·옅은 점을 고르셨다. 이제 어느 쪽이든 BAL_DOT 하나. 어느 쪽이 거울상인지는 왼쪽/오른쪽
+     버튼이 말해 준다. 회귀 196. */
+  const dot = (x, y, r) => frag.appendChild(mk("circle", { cx: x, cy: y, r, fill: balColor(), "fill-opacity": BAL_DOT.op }));
   for (let i = 0; i < refCount; i++) {
     const p = trace[i];
-    frag.appendChild(mk("circle", { cx: p.x, cy: p.top, r: 1.5, fill: balColor(), "fill-opacity": 0.5 }));
-    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: p.x, cy: p.bot, r: 1.2, fill: balColor(), "fill-opacity": 0.5 }));
+    dot(p.x, p.top, BAL_DOT.rTop);
+    if (p.bot !== undefined) dot(p.x, p.bot, BAL_DOT.rBot);
   }
   for (let i = 0; i < mirCount; i++) {
     const p = trace[i];
     const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
-    frag.appendChild(mk("circle", { cx: mx, cy: p.top, r: 2.0, fill: balColor(), "fill-opacity": 0.9 }));
-    if (p.bot !== undefined) frag.appendChild(mk("circle", { cx: mx, cy: p.bot, r: 1.7, fill: balColor(), "fill-opacity": 0.9 }));
+    dot(mx, p.top, BAL_DOT.rTop);
+    if (p.bot !== undefined) dot(mx, p.bot, BAL_DOT.rBot);
   }
 }
 
@@ -6615,7 +6621,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, darkBlobsUp, archDecide, eyeArchRange,
-  BROW_FRAC, browFillNeed, fitBrowsToFrame, BAL_COLORS, balColor,
+  BROW_FRAC, browFillNeed, fitBrowsToFrame, BAL_COLORS, balColor, BAL_DOT,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
   FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY };   /* v1.97.0 — 예비 동공 정렬 검사용 */

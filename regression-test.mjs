@@ -2579,7 +2579,12 @@ if (RUN(5)) {
       return { shown: dk.offsetWidth > 0, n: dk.querySelectorAll("button").length,
                leftOfReset: d.right <= r.left + 1 && Math.abs(d.top - r.top) <= 4 && d.right > r.left - 40,
                red: circles.filter((c) => /ff3b4e/i.test(c.getAttribute("fill") || "")).length, circles: circles.length,
-               selRed: !!dk.querySelector('button[data-color="red"].on'), curve: !!S.balCurve };
+               selRed: !!dk.querySelector('button[data-color="red"].on'), curve: !!S.balCurve,
+               /* 196 — 양쪽 점의 굵기·투명도가 같은가 (기준쪽 값 r1.5/1.2 · 0.5) */
+               sides: (() => { const cx = S.g.v1 * S.dim.W; const dots = circles.filter((c) => /ff3b4e/i.test(c.getAttribute("fill") || ""));
+                 const sig = (arr) => Array.from(new Set(arr.map((c) => `${c.getAttribute("r")}/${c.getAttribute("fill-opacity")}`))).sort().join(",");
+                 const L = dots.filter((c) => +c.getAttribute("cx") < cx), R = dots.filter((c) => +c.getAttribute("cx") > cx);
+                 return { L: sig(L), R: sig(R), nL: L.length, nR: R.length }; })() };
     });
     await p.click('#balColorDock button[data-color="yellow"]');
     await p.waitForTimeout(150);
@@ -2611,6 +2616,9 @@ if (RUN(5)) {
     await p.click("#btnBalance");
     await p.waitForTimeout(200);
     const off195 = await p.evaluate(() => { const dk = document.getElementById("balColorDock"); return { balOn: window.PB.S.balOn, dockHidden: dk.offsetWidth === 0, curve: !!window.PB.S.balCurve }; });
+    check("196. 미러링 점 — 양쪽 굵기·투명도가 같다 (기준쪽 값 r1.5/1.2 · 투명도 0.5 · 거울쪽도 동일) (원장님 지시 2026-09-02)",
+      on195.sides.nL > 0 && on195.sides.nR > 0 && on195.sides.L === on195.sides.R && on195.sides.L === "1.2/0.5,1.5/0.5",
+      `왼쪽 ${on195.sides.nL}점 [${on195.sides.L}] · 오른쪽 ${on195.sides.nR}점 [${on195.sides.R}] (기대 1.2/0.5,1.5/0.5)`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve
