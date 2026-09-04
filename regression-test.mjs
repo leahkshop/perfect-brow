@@ -2728,6 +2728,30 @@ if (RUN(5)) {
     check("203. 앞머리 끝 규칙 — 안쪽 끝 3~4열이 그늘로 꺾여 내려가면 몸통 흐름으로 잇는다(물결 제거) · 완만한 경사·윗선은 그대로 · 파이프라인에 포함 (원장님 2026-09-04 「앞머리 시작되는 라인 고도화」)",
       fe203.n === 35 && fe203.waveOld >= 4 && fe203.waveNew <= 2.5 && fe203.rawKept && fe203.gentleDev <= 1 && fe203.topDev < 1e-9 && fe203.inPipe,
       `끝 4열 흐름 이탈: 전 ${fe203.waveOld.toFixed(1)} → 후 ${fe203.waveNew.toFixed(1)}(≤2.5) [${fe203.end}] · 5열째부터 원값=${fe203.rawKept} · 완만한 경사 변화 ${fe203.gentleDev.toFixed(2)}(≤1) · 윗선 변화 ${fe203.topDev} · 파이프라인=${fe203.inPipe}`);
+    /* 206. ⭐⭐⭐ v3.44.0 — **작은 박스로 경계를 다시 잰다** (원장님 아이디어 2026-09-04 「판독 부분을 작은 박스로 해서 그 안의 흰 부분
+       아래 검은 부분이 시작되는 지점 · 위쪽도」). 합성 사진(픽셀 직접): 이마 200 · 윗 옅은 띠 5줄(170→105) · 몸통 90(85~120) ·
+       아랫 옅은 띠 10줄(100→130) · 눈두덩 132. 밴드가 놓듯 원값을 띠의 바깥 끝(top 80 · bot 131)에 두면 → 박스가 몸통 쪽
+       중간값 교차로 끌어들인다(top ≈ 81.5 · bot ≈ 122.5). 대조 ① 옅은 띠가 없는 또렷한 눈썹은 1px 안에서 그대로 ② 박스 안 대비가
+       없는 열(전부 피부)은 원값 그대로 ③ 파이프라인(runBalanceCurve)에 들어가 있다. */
+    const bx206 = await p.evaluate(async () => {
+      const PB = window.PB;
+      const mkImg = (W, H, rowLum) => { const d = new Uint8ClampedArray(W * H * 4); for (let y = 0; y < H; y++) { const v = rowLum(y); for (let x = 0; x < W; x++) { const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } } return { data: d, width: W, height: H }; };
+      const fade = (y) => y < 80 ? 200 : y < 85 ? [170, 150, 130, 115, 105][y - 80] : y <= 120 ? 90 : y <= 130 ? [100, 108, 115, 120, 124, 126, 127, 128, 129, 130][y - 121] : 132;
+      const crisp = (y) => y < 85 ? 200 : y <= 120 ? 90 : 132;
+      const tr = (top, bot) => Array.from({ length: 10 }, (_, i) => ({ x: 50 + i * 10, top, bot, zone: 0 }));
+      const A = PB.balBoxEdges(mkImg(200, 200, fade), tr(80, 131));
+      const B = PB.balBoxEdges(mkImg(200, 200, crisp), tr(85, 121));
+      const Cc = PB.balBoxEdges(mkImg(200, 200, () => 150), tr(85, 121));
+      const rng = (t, k) => [Math.min(...t.map((q) => q[k])), Math.max(...t.map((q) => q[k]))];
+      const src = await fetch("app.js").then((r) => r.text());
+      return { aTop: rng(A, "top"), aBot: rng(A, "bot"), bTop: rng(B, "top"), bBot: rng(B, "bot"), cTop: rng(Cc, "top"), cBot: rng(Cc, "bot"),
+               inPipe: /L\.trace = balBoxEdges\(img, L\.trace\); R\.trace = balBoxEdges\(img, R\.trace\);/.test(src) };
+    });
+    const within = (r, lo, hi) => r[0] >= lo && r[1] <= hi;
+    check("206. 작은 박스 경계 — 옅은 띠 바깥에 놓인 위·아래 점을 박스 안 흰↔검 중간값 교차(몸통 쪽)로 끌어들인다 · 또렷한 눈썹·대비 없는 열은 그대로 · 파이프라인 포함 (원장님 아이디어 2026-09-04)",
+      within(bx206.aTop, 81, 84) && within(bx206.aBot, 122, 126) && within(bx206.bTop, 84, 85.5) && within(bx206.bBot, 120, 121.5)
+        && within(bx206.cTop, 85, 85) && within(bx206.cBot, 121, 121) && bx206.inPipe,
+      `옅은 띠: top 80→[${bx206.aTop}](81~84) · bot 131→[${bx206.aBot}](122~126) · 또렷: top [${bx206.bTop}] bot [${bx206.bBot}] · 대비 없음: top [${bx206.cTop}] bot [${bx206.cBot}] · 파이프라인=${bx206.inPipe}`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve

@@ -383,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.43.0";
+const APP_VERSION = "v3.44.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6105,6 +6105,63 @@ function readSideCurve(img, side) {
   } catch (e) { return null; }
 }
 
+/* ⭐⭐⭐ v3.44.0 — **작은 박스로 경계를 다시 잰다** (원장님 아이디어 2026-09-04, 실기기 스크린샷에 초록 박스를 그려 주심:
+   「픽셀로 검증이 잘 안 되서 도트를 못 집으면 아예 판독 부분을 작은 박스로 해서 그 안에 있는 흰 부분 아래, 검은 부분이
+   시작되는 지점(앞머리부터 아치두께) · 반대로 위쪽도 — 그러면 검은 부분과 흰 부분이 더 확실히 보이지 않니?」).
+   ───────────────────────────────────────────────────────────────────────────
+   맞는 말이다 — 오늘 두 번 고친 것(v3.42·v3.43 「피부는 발 밑의 피부」)이 바로 이 원리의 반쪽이었다: 기준 흰색을 사진
+   전체(이마)가 아니라 **그 자리 근처**에서 잡아야 한다. 박스는 그것을 위·아래 모두에, 그리고 열 하나가 아니라 **박스 폭
+   전체의 평균**으로 한다 — 털 한 올·모공 한 점이 열 하나를 흔드는 것을 옆 열들이 눌러 준다.
+   방법(열마다, 위선·아래선 각각): 열 좌우 6px(2px 간격 7표본) × 지금 경계값 위아래 두께의 절반(최소 6px)인 박스를
+   잡고, 세로 한 줄씩 가로 평균을 낸 밝기 프로필을 만든다. 박스 안의 **검정 = 프로필 10% 밝기 · 흰색 = 90% 밝기**,
+   경계 = 눈썹 몸통 쪽에서 피부 쪽으로 걸으며 검은 줄을 한 번이라도 지난 뒤 처음으로 **중간값(흰+검)/2 을 3줄 연속**
+   넘는 자리. 박스 안 흰↔검 차이가 BOX_MIN_CONTRAST 미만이면(꼬리 끝·옅은 파우더) 판단을 보류하고 원값을 둔다.
+   원값보다 두께가 3px 미만이 되면(윗선·아랫선이 붙음) 원값. ⚠️ 표시 전용 — 판정(devFront)·자(frontDecide 등)는
+   그대로. 원장님 사진 실측: 앞머리 쪽 아랫선 점이 파우더가 옅어진 띠(118~124) 대신 진한 몸통의 아랫끝(≈112)에,
+   윗선 점이 이마 쪽 옅은 띠 대신 몸통 윗끝에 선다 — 초록 박스 자리 그대로. 회귀 206. */
+const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3;
+function balBoxEdges(img, trace) {
+  try {
+    if (!img || !trace || trace.length < 3) return trace;
+    const IW = img.width, IH = img.height;
+    const out = trace.map((p) => ({ ...p }));
+    const refine = (p, yc, dir) => {                       /* dir +1 = 아래선(아래로 갈수록 피부) · -1 = 윗선 */
+      const th = Math.max(4, p.bot - p.top);
+      const hh = Math.max(6, Math.round(BOX_HALF_H * th));
+      const xs = [];
+      for (let dx = -BOX_HALF_W; dx <= BOX_HALF_W; dx += 2) { const x = Math.round(p.x + dx); if (x >= 0 && x < IW) xs.push(x); }
+      const y0 = Math.max(0, Math.round(yc - hh)), y1 = Math.min(IH - 1, Math.round(yc + hh));
+      if (!xs.length || y1 - y0 < 6) return yc;
+      const a = [];
+      for (let y = y0; y <= y1; y++) { let s = 0; for (const x of xs) s += lumaAt(img, IW, x, y); a.push(s / xs.length); }
+      const n = a.length;
+      const sm = a.map((_, k) => (a[Math.max(0, k - 1)] + a[k] + a[Math.min(n - 1, k + 1)]) / 3);
+      const sorted = sm.slice().sort((u, v) => u - v);
+      const black = sorted[Math.floor((n - 1) * 0.1)], white = sorted[Math.floor((n - 1) * 0.9)];
+      if (white - black < BOX_MIN_CONTRAST) return yc;
+      const mid = (white + black) / 2;
+      /* 몸통 쪽 끝에서 피부 쪽으로 — 검은 줄을 지난 뒤 처음 3줄 연속 mid 를 넘는 자리 */
+      const start = dir > 0 ? 0 : n - 1, step = dir;
+      let seenDark = false;
+      for (let k = start; k >= 0 && k < n; k += step) {
+        if (sm[k] < mid) { seenDark = true; continue; }
+        if (!seenDark) continue;
+        let ok = true;
+        for (let j = 1; j < BOX_RUN; j++) { const kk = k + step * j; if (kk < 0 || kk >= n || sm[kk] < mid) { ok = false; break; } }
+        if (ok) return y0 + k - (dir > 0 ? 0.5 : -0.5);   /* 경계 = 마지막 검은 줄과 첫 흰 줄 사이 */
+      }
+      return yc;
+    };
+    for (let i = 0; i < trace.length; i++) {
+      const p = trace[i];
+      if (!isFinite(p.top) || !isFinite(p.bot)) continue;
+      const nb = refine(p, p.bot, 1), nt = refine(p, p.top, -1);
+      if (nb - nt >= 3) { out[i].bot = nb; out[i].top = nt; }
+    }
+    return out;
+  } catch (e) { return trace; }
+}
+
 /* 좌우 곡선을 각각 읽어 비교 — 앞머리·아치·꼬리 세 지점에서 위·아래 경계 둘 다 본다.
    허용 오차는 기존과 같은 `balTolPx()`(얼굴 크기 기준)를 그대로 씁니다. */
 function runBalanceCurve() {
@@ -6113,6 +6170,9 @@ function runBalanceCurve() {
     if (!img) { S.balCurve = null; return false; }
     const L = readSideCurve(img, "L"), R = readSideCurve(img, "R");
     if (!L || !R) { S.balCurve = null; return false; }
+    /* ⭐⭐⭐ v3.44.0 — 원장님 아이디어(2026-09-04)「작은 박스」로 점선의 위·아래 경계를 다시 잰다 (아래 balBoxEdges).
+       판정(devFront 등)은 위 top/bot 3점만 쓰므로 표시 전용. */
+    L.trace = balBoxEdges(img, L.trace); R.trace = balBoxEdges(img, R.trace);
     const tol = balTolPx();
     const off = (a, b) => Math.abs(a - b) > tol;
     const devFront = off(L.top[0].y, R.top[0].y) || off(L.bot[0].y, R.bot[0].y);
@@ -6910,6 +6970,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
+  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST,   /* v3.44.0 — 작은 박스 경계 (회귀 206) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
