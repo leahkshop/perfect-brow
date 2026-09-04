@@ -4701,6 +4701,51 @@ if (RUN(5)) {
     check("157. 쌍꺼풀·주름 쉐도우 방어 — 두꺼운 쉐도우가 있어도 넘버링(7~16)이 눈썹을 고른다",
       atBrow && notShadow,
       `앞머리 ${r.fy} (눈썹 아랫선 ${r.expBrow.toFixed(0)} 에 섬=${atBrow} · 쉐도우 ${r.shadow.toFixed(0)} 아님=${notShadow} · 눈 위 ${r.tBrow === null ? "?" : r.tBrow.toFixed(1)} 눈금)`);
+
+    /* 204. ⭐⭐⭐ v3.42.0 — **「피부」는 발 밑의 피부다** (원장님 2026-09-04 「이보다 더 확실한 드로잉도 캐치가 안된다」).
+       원장님 사진 실측을 옮긴 합성: 이마(열 위쪽) 밝음(#e9d8c6≈220) · 눈썹 #3a2a20(≈45) · 눈썹 밑 **눈두덩 전체**가
+       이마보다 훨씬 어두움(#8a7666≈122, 이마↔최암부의 중간 132 아래) — 예전 문턱(열 전체 75% 밝기 기준)이면 눈두덩이
+       「검은색」이라 눈 위에서 눈썹까지 검은 것이 안 끊겨 후보 0개(→ null · 보통값). 이제 발 밑 피부(눈두덩) 기준 문턱으로
+       눈썹 아랫선(250)·윗선(215)을 읽는다. 대조: 같은 그림에서 눈두덩이 이마와 같은 밝기면 결과가 같아야 한다(규칙이 안 켜짐). */
+    {
+      const mk = (socket) => `<svg xmlns="http://www.w3.org/2000/svg" width="${IW}" height="${IH}">`
+        + `<rect width="${IW}" height="${IH}" fill="#e9d8c6"/>`
+        + `<rect x="200" y="250" width="260" height="80" fill="${socket}"/>`      /* 눈두덩 — 눈썹 아랫선(250)부터 눈까지 (열의 1/6 — 이마가 다수) */
+        + `<rect x="200" y="215" width="260" height="35" fill="#3a2a20"/></svg>`; /* 눈썹 (아랫선 250 · 윗선 215) */
+      const run = async (svg, name) => {
+        const f = path.join(ROOT, name);
+        fs.writeFileSync(f, svg);
+        const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+        const p = await ctx.newPage();
+        await p.goto(URL_BASE, { waitUntil: "domcontentloaded" });
+        await p.waitForTimeout(300);
+        await p.setInputFiles("#fileInput", f);
+        await p.waitForTimeout(1200);
+        const r = await p.evaluate(() => {
+          const PBx = window.PB, S = PBx.S, W = S.dim.W, H = S.dim.H;
+          S.landmarks = null; S.p = { zoom: 1, rot: 0, ox: 0, oy: 0 }; PBx.render();
+          const C = (ix, iy) => PBx.imgToCanvas(ix, iy, S.p);
+          const eyeC = C(0, 300).y;                              /* 눈 y=300 · 1눈금 = 6px → 눈썹 아랫선(250) = 눈 위 8.3 눈금 · 발 밑 창 = 12줄(눈두덩 ~23줄 안) */
+          S.g.h1 = eyeC / H; S.eyeZero = eyeC / H;
+          S.innerAnchor = (6 * 13.15) / W;
+          S.g.v1 = C(500, 0).x / W; S.g.v2 = C(420, 0).x / W;
+          const img = PBx.photoPixels();
+          const fd = PBx.frontDecide(img);
+          return { fy: fd ? fd.y : null, ft: fd ? fd.top : null, expBrow: C(320, 250).y, expTop: C(320, 215).y,
+                   base: PBx.FRONT_BASE_TK, baseMin: PBx.FRONT_BASE_MIN, gap: PBx.FRONT_BASE_GAP };
+        });
+        await ctx.close();
+        fs.unlinkSync(f);
+        return r;
+      };
+      const dark = await run(mk("#8a7666"), ".front-socket.svg");
+      const same = await run(mk("#e9d8c6"), ".front-socket-same.svg");
+      const dOk = dark.fy !== null && Math.abs(dark.fy - dark.expBrow) < 7 && dark.ft !== null && Math.abs(dark.ft - dark.expTop) < 7;
+      const sOk = same.fy !== null && Math.abs(same.fy - same.expBrow) < 7 && same.ft !== null && Math.abs(same.ft - same.expTop) < 7;
+      check("204. 발 밑 피부 — 눈썹 밑 눈두덩이 이마보다 어두워도(플래시 사진) 앞머리·앞두께는 눈썹 아랫선·윗선에 선다 · 같은 밝기면 그대로 (원장님 2026-09-04 「더 확실한 드로잉도 캐치가 안된다」)",
+        dOk && sOk && dark.base === 2 && dark.baseMin === 10 && Math.abs(dark.gap - 0.2) < 1e-9,
+        `어두운 눈두덩: 앞머리 ${dark.fy} (아랫선 ${dark.expBrow.toFixed(0)}) · 앞두께 ${dark.ft} (윗선 ${dark.expTop.toFixed(0)}) =${dOk} · 같은 밝기: 앞머리 ${same.fy} · 앞두께 ${same.ft} =${sOk} · base 2눈금/최소 10줄/20%`);
+    }
   }
 
   /* 158. ⭐⭐⭐ v2.1.3 — **앞머리 하한은 절대 규칙** (원장님 지시 2026-08-29:

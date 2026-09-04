@@ -383,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.41.0";
+const APP_VERSION = "v3.42.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3581,6 +3581,9 @@ const FRONT_DARK_MIN = 25;    // 이 대비도 없으면 검은 것이 없는 �
 const FRONT_WIN = 9;          // 두께 창 (px)
 const FRONT_HIT = 7;          // 창 안에서 이만큼 어두워야 눈썹 (얇은 선 방어)
 const FRONT_SKIN = 5;         // 검은 것 **바로 앞에 피부가 이만큼 이어져야** 인정
+/* v3.42.0 — 발 밑 피부(base) — 열 아래쪽 이 눈금(최소 줄 수)의 75% 밝기. 이마보다 이 비율(피부↔최암부 차)
+   넘게 어두우면 그 열의 「피부」로 삼는다 (darkBlobsUp 주석) */
+const FRONT_BASE_TK = 2, FRONT_BASE_MIN = 10, FRONT_BASE_GAP = 0.2;
 /* ⭐ v2.1.1 — **앞머리 넘버링 (대체값)** — 원장님 지시 2026-08-29 (폰 스크린샷의 빨간 선):
    「빨간 선은 눈으로부터 올라와 **대체값이 필요할 때 사용할 넘버링**, 파란색이 옳바른 (자리)」
    이너의 43 과 같은 구조를 **세로**로 만듭니다. 자는 같은 자 — 「내안각→센터」의 1/13.15
@@ -3631,10 +3634,35 @@ function darkBlobsUp(img, x, yB, yT, tMin, tMax) {
   if (skin - darkest < FRONT_DARK_MIN) return null;      // 검은 것이 없는 열
   /* ⚠️ 문턱은 **상대값만** 씁니다 — 절대값(예: 피부−40)을 섞으면 조명이 어두운 사진에서
      눈썹의 절반이 문턱 위에 남아 두께 창(7/9)을 못 채웁니다 (실측: 8장 중 6장 실패). */
-  const thr = skin - (skin - darkest) * FRONT_HALF;
+  const u2 = frontTickPx();
+  let thr = skin - (skin - darkest) * FRONT_HALF;
+  /* ⭐⭐⭐ v3.42.0 — **「피부」는 발 밑의 피부다** (원장님 2026-09-04, 실기기 스크린샷 + 원본 사진:
+     「이보다 더 확실한 드로잉도 캐치가 안된다」 — 앞두께 자가 눈썹 한가운데, 앞머리 자가 눈두덩에).
+     원인(원장님 사진 실측, 이너 옆 5열): 플래시 사진이라 이마는 180 으로 하얗게 날아가고 눈썹 밑 눈두덩은
+     118~131 로 어둡다. 이 열의 「피부」를 **열 전체의 75% 밝기**(=이마 181)로 잡으니 문턱이 136 이 되어
+     눈두덩(125)까지 「검은색」이 됐다 — 눈 위에서 출발해 눈썹까지 검은 것이 끊기지 않으니 「피부 다음의
+     검은 것」이 없어(①) 5열 중 3열이 후보 0개 → 판독 포기 → 앞머리 보통값(10.2)·앞두께는 밴드값. 나머지
+     2열은 눈두덩 그늘 바닥을 아랫끝으로 잡아 두께 8~9칸의 엉뚱한 덩어리.
+     규칙: 원장님 정의는 「눈 위에서 올라가면 **피부색이 이어지다가** 검은색으로 보이는 지점」 — 그 피부는
+     걸어 올라가며 **발 밑에 밟고 있는 피부**(눈썹 바로 아래 눈두덩)지 이마가 아니다. 그래서 열 아래쪽
+     2눈금(최소 10줄)의 75% 밝기를 「발 밑 피부(base)」로 재고, 그것이 열 전체 피부보다 뚜렷이 어두우면
+     (차이가 피부↔최암부의 20% 넘음) 문턱을 **base ↔ 최암부의 중간**으로 낮춘다. 눈두덩과 이마가 같은
+     밝기인 보통 사진에서는 base ≈ skin 이라 아무것도 안 바뀐다(min 으로 묶어 오늘보다 느슨해지는 일은
+     없다). base 와 최암부 차이가 FRONT_DARK_MIN 미만이면(발 밑이 이미 눈썹만큼 어두움 = 눈썹이 yB 안에
+     있거나 화장) 예전 문턱 그대로. 같은 사진 결과: 3열 후보 0 → 아랫끝 121·121·121, 2열 147·141 → 114·114
+     (그늘 바닥 → 눈썹 아랫선). 아치 판독(archDecide)도 이 함수를 쓰므로 같은 규칙이 함께 적용된다
+     (§0-X 「두 군데서 자라면 어긋난다」). 윗끝(softThr)은 이마 기준 그대로. 회귀 204. */
+  {
+    const nB = Math.min(col.length - FRONT_WIN, Math.max(FRONT_BASE_MIN, u2 ? Math.round(FRONT_BASE_TK * u2) : FRONT_BASE_MIN));
+    if (nB >= FRONT_BASE_MIN) {
+      const bs = col.slice(0, nB).sort((a, b) => a - b);
+      const base = bs[Math.floor(bs.length * 0.75)];
+      if (base < skin - FRONT_BASE_GAP * (skin - darkest) && base - darkest >= FRONT_DARK_MIN)
+        thr = Math.min(thr, base - (base - darkest) * FRONT_HALF);
+    }
+  }
   const softThr = skin - (skin - darkest) * FT_SOFT;
   const dark = col.map((v) => v < thr);
-  const u2 = frontTickPx();
   const nC = col.length;
   const pc = (y) => { const yy = Math.max(0, Math.min(nC - 1, y));
     return Math.max(0, Math.min(1, (skin - col[yy]) / Math.max(1, skin - darkest))); };
@@ -6864,6 +6892,6 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   BROW_FRAC, browFillNeed, fitBrowsToFrame, BAL_COLORS, balColor, BAL_DOT,
   ARCH_COLS, ARCH_SPAN, ARCH_UP, ARCH_T_LO, ARCH_T_HI, AT_T_MIN, AT_T_MAX, AT_FROM_FRONT, ARCH_FROM_AT, AT_FROM_ARCH, ARCH_MAX_OVER_FT, archEdgeMax, archStandard, applyArchThickFloor, tailTrace,
   FRONT_COLS, FRONT_SPAN, FRONT_LASH_GAP, FRONT_UP, FRONT_HALF, FRONT_DARK_MIN, FRONT_WIN, FRONT_HIT,
-  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY,   /* v1.97.0 — 예비 동공 정렬 검사용 */
+  FRONT_T_MID, FRONT_T_LO, FRONT_T_HI, FRONT_BASE_TK, FRONT_BASE_MIN, FRONT_BASE_GAP, frontTickPx, frontFloor, FT_T_MID, FT_T_MIN, FT_T_MAX, FT_P2_MIN, INNER_F_SOFT, ftGuard, eyeZeroY,   /* v1.97.0 — 예비 동공 정렬 검사용 */
   I18N,
   pvSkin, setPvSkin, VLEN_MIN, VLEN_MAX, SUBLEN_MIN, SUBLEN_MAX, browBandY };   /* v3.39.0 — 세로 길이·서브 길이·미리보기 피부 톤 검사용 */
