@@ -2752,6 +2752,29 @@ if (RUN(5)) {
       within(bx206.aTop, 81, 84) && within(bx206.aBot, 122, 126) && within(bx206.bTop, 84, 85.5) && within(bx206.bBot, 120, 121.5)
         && within(bx206.cTop, 85, 85) && within(bx206.cBot, 121, 121) && bx206.inPipe,
       `옅은 띠: top 80→[${bx206.aTop}](81~84) · bot 131→[${bx206.aBot}](122~126) · 또렷: top [${bx206.bTop}] bot [${bx206.bBot}] · 대비 없음: top [${bx206.cTop}] bot [${bx206.cBot}] · 파이프라인=${bx206.inPipe}`);
+    /* 207. ⭐⭐⭐ v3.45.0 — **꼬리 쪽도 같은 박스로 잇는다** (원장님 2026-09-04 「아치엣지에서 꼬리로 오는 쪽 · 아치두께에서 꼬리 쪽도
+       동일하게 적용해봐」). 합성 사진: 눈썹이 x=200→100 은 두께 40(80~120), x<100 부터 가늘어져 x=40 에서 4px, x<40 은 피부.
+       궤적은 x=190→100(밴드가 멈춘 자리)까지만. 꼬리 자 tailX=30 → 연장이 가늘어지는 몸통을 따라 x≈40 까지 가서 눈썹이
+       끝나면 멈춘다(자 30 을 넘지 않음). 대조: 꼬리 자가 궤적 안(150)이면 연장 없음. 파이프라인(runBalanceCurve) 포함. */
+    const bt207 = await p.evaluate(async () => {
+      const PB = window.PB;
+      const W = 300, H = 200, d = new Uint8ClampedArray(W * H * 4);
+      const edges = (x) => { const t = x < 100 ? (100 - x) * 0.3 : 0; return [80 + t, 120 - t]; };
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const [t, b] = edges(x); const v = (x >= 40 && x <= 220 && y >= t && y <= b) ? 60 : 200; const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+      const img = { data: d, width: W, height: H };
+      const tr = Array.from({ length: 16 }, (_, i) => ({ x: 190 - i * 6, top: 80, bot: 120, zone: i > 8 ? 1 : 0 }));
+      const ext = PB.balBoxTail(img, tr, 30);
+      const added = ext.slice(tr.length);
+      const lastX = added.length ? added[added.length - 1].x : null;
+      const dev = Math.max(0, ...added.map((q) => { const [t, b] = edges(q.x); return Math.max(Math.abs(q.top - t), Math.abs(q.bot - b)); }));
+      const same = PB.balBoxTail(img, tr, 150);
+      const src = await fetch("app.js").then((r) => r.text());
+      return { n0: tr.length, added: added.length, lastX, dev, sameN: same.length,
+               inPipe: /L\.trace = balBoxTail\(img, L\.trace, S\.g\.v4 \* W\); R\.trace = balBoxTail\(img, R\.trace, S\.g\.v5 \* W\);/.test(src) };
+    });
+    check("207. 꼬리 쪽 박스 연장 — 밴드가 멈춘 곳부터 꼬리 자까지 가늘어지는 몸통을 같은 박스로 잇고, 눈썹이 끝나면 멈춘다 · 자가 궤적 안이면 연장 없음 · 파이프라인 포함 (원장님 2026-09-04)",
+      bt207.added >= 7 && bt207.lastX !== null && bt207.lastX >= 34 && bt207.lastX <= 58 && bt207.dev <= 2.5 && bt207.sameN === bt207.n0 && bt207.inPipe,
+      `연장 ${bt207.added}열(≥7) · 마지막 x=${bt207.lastX}(34~58, 눈썹 끝 40·자 30) · 가장자리 오차 ${bt207.dev.toFixed(1)}(≤2.5) · 자가 안쪽이면 ${bt207.sameN}=${bt207.n0} · 파이프라인=${bt207.inPipe}`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve

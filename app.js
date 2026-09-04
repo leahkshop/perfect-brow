@@ -383,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.44.0";
+const APP_VERSION = "v3.45.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6120,43 +6120,80 @@ function readSideCurve(img, side) {
    그대로. 원장님 사진 실측: 앞머리 쪽 아랫선 점이 파우더가 옅어진 띠(118~124) 대신 진한 몸통의 아랫끝(≈112)에,
    윗선 점이 이마 쪽 옅은 띠 대신 몸통 윗끝에 선다 — 초록 박스 자리 그대로. 회귀 206. */
 const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3;
+/* 박스 하나 — 열 x · 지금 경계값 yc · 두께 th · dir(+1 아래선 / -1 윗선). 경계 y 를 돌려주고,
+   박스 안에 흰↔검 대비가 없으면 **null**(판단 보류). v3.45.0 에서 balBoxEdges 안에서 꺼내 꼬리 연장과 같이 쓴다. */
+function boxEdge(img, x0, yc, th, dir) {
+  const IW = img.width, IH = img.height;
+  const hh = Math.max(6, Math.round(BOX_HALF_H * Math.max(4, th)));
+  const xs = [];
+  for (let dx = -BOX_HALF_W; dx <= BOX_HALF_W; dx += 2) { const x = Math.round(x0 + dx); if (x >= 0 && x < IW) xs.push(x); }
+  const y0 = Math.max(0, Math.round(yc - hh)), y1 = Math.min(IH - 1, Math.round(yc + hh));
+  if (!xs.length || y1 - y0 < 6) return null;
+  const a = [];
+  for (let y = y0; y <= y1; y++) { let s = 0; for (const x of xs) s += lumaAt(img, IW, x, y); a.push(s / xs.length); }
+  const n = a.length;
+  const sm = a.map((_, k) => (a[Math.max(0, k - 1)] + a[k] + a[Math.min(n - 1, k + 1)]) / 3);
+  const sorted = sm.slice().sort((u, v) => u - v);
+  const black = sorted[Math.floor((n - 1) * 0.1)], white = sorted[Math.floor((n - 1) * 0.9)];
+  if (white - black < BOX_MIN_CONTRAST) return null;
+  const mid = (white + black) / 2;
+  /* 몸통 쪽 끝에서 피부 쪽으로 — 검은 줄을 지난 뒤 처음 3줄 연속 mid 를 넘는 자리 */
+  const start = dir > 0 ? 0 : n - 1, step = dir;
+  let seenDark = false;
+  for (let k = start; k >= 0 && k < n; k += step) {
+    if (sm[k] < mid) { seenDark = true; continue; }
+    if (!seenDark) continue;
+    let ok = true;
+    for (let j = 1; j < BOX_RUN; j++) { const kk = k + step * j; if (kk < 0 || kk >= n || sm[kk] < mid) { ok = false; break; } }
+    if (ok) return y0 + k - (dir > 0 ? 0.5 : -0.5);   /* 경계 = 마지막 검은 줄과 첫 흰 줄 사이 */
+  }
+  return null;
+}
 function balBoxEdges(img, trace) {
   try {
     if (!img || !trace || trace.length < 3) return trace;
-    const IW = img.width, IH = img.height;
     const out = trace.map((p) => ({ ...p }));
-    const refine = (p, yc, dir) => {                       /* dir +1 = 아래선(아래로 갈수록 피부) · -1 = 윗선 */
-      const th = Math.max(4, p.bot - p.top);
-      const hh = Math.max(6, Math.round(BOX_HALF_H * th));
-      const xs = [];
-      for (let dx = -BOX_HALF_W; dx <= BOX_HALF_W; dx += 2) { const x = Math.round(p.x + dx); if (x >= 0 && x < IW) xs.push(x); }
-      const y0 = Math.max(0, Math.round(yc - hh)), y1 = Math.min(IH - 1, Math.round(yc + hh));
-      if (!xs.length || y1 - y0 < 6) return yc;
-      const a = [];
-      for (let y = y0; y <= y1; y++) { let s = 0; for (const x of xs) s += lumaAt(img, IW, x, y); a.push(s / xs.length); }
-      const n = a.length;
-      const sm = a.map((_, k) => (a[Math.max(0, k - 1)] + a[k] + a[Math.min(n - 1, k + 1)]) / 3);
-      const sorted = sm.slice().sort((u, v) => u - v);
-      const black = sorted[Math.floor((n - 1) * 0.1)], white = sorted[Math.floor((n - 1) * 0.9)];
-      if (white - black < BOX_MIN_CONTRAST) return yc;
-      const mid = (white + black) / 2;
-      /* 몸통 쪽 끝에서 피부 쪽으로 — 검은 줄을 지난 뒤 처음 3줄 연속 mid 를 넘는 자리 */
-      const start = dir > 0 ? 0 : n - 1, step = dir;
-      let seenDark = false;
-      for (let k = start; k >= 0 && k < n; k += step) {
-        if (sm[k] < mid) { seenDark = true; continue; }
-        if (!seenDark) continue;
-        let ok = true;
-        for (let j = 1; j < BOX_RUN; j++) { const kk = k + step * j; if (kk < 0 || kk >= n || sm[kk] < mid) { ok = false; break; } }
-        if (ok) return y0 + k - (dir > 0 ? 0.5 : -0.5);   /* 경계 = 마지막 검은 줄과 첫 흰 줄 사이 */
-      }
-      return yc;
-    };
     for (let i = 0; i < trace.length; i++) {
       const p = trace[i];
       if (!isFinite(p.top) || !isFinite(p.bot)) continue;
-      const nb = refine(p, p.bot, 1), nt = refine(p, p.top, -1);
-      if (nb - nt >= 3) { out[i].bot = nb; out[i].top = nt; }
+      const th = p.bot - p.top;
+      const nb = boxEdge(img, p.x, p.bot, th, 1), nt = boxEdge(img, p.x, p.top, th, -1);
+      const b2 = nb === null ? p.bot : nb, t2 = nt === null ? p.top : nt;
+      if (b2 - t2 >= 3) { out[i].bot = b2; out[i].top = t2; }
+    }
+    return out;
+  } catch (e) { return trace; }
+}
+
+/* ⭐⭐⭐ v3.45.0 — **꼬리 쪽도 같은 박스로 잇는다** (원장님 2026-09-04 「꼬리 쪽 — 아치엣지에서 꼬리로 오는 쪽, 아치두께에서
+   꼬리 쪽도 동일하게 적용해봐」). 밴드 판독(readDrawing)은 파우더 꼬리가 옅어지는 곳에서 먼저 멈춰 점선이 꼬리 자(v4)
+   한참 앞에서 끝났다(고객 사진: 점선 끝 x=176 · 꼬리 자 149). 이제 궤적의 마지막 열에서 바깥(꼬리)으로 열 간격만큼씩
+   나가며, 직전 열의 윗선·아랫선을 출발값으로 **같은 박스**로 위·아래 경계를 다시 잰다 — 박스 안에 흰↔검 대비가 없으면
+   (눈썹이 끝남) 두 열 연속 실패에서 멈추고, 꼬리 자를 지나면 멈춘다. 새 열은 직전 열에서 두께의 절반+3px 넘게 튀면
+   버린다(머리카락·그늘). 두께가 2px 밑으로 모이면(수렴) 끝. 위·아래 한쪽만 읽히면 다른 쪽은 직전 값. 표시 전용. 회귀 207. */
+const BOX_TAIL_MAX = 0.5;     // 원 궤적 열 수의 이 비율까지만 연장
+function balBoxTail(img, trace, tailX) {
+  try {
+    if (!img || !trace || trace.length < 4 || !isFinite(tailX)) return trace;
+    const n = trace.length;
+    const dir = Math.sign(trace[n - 1].x - trace[n - 2].x) || -1;
+    const dx = Math.max(3, Math.abs(trace[n - 1].x - trace[n - 2].x));
+    if (Math.sign(tailX - trace[n - 1].x) !== dir) return trace;          // 꼬리 자가 이미 궤적 안쪽 — 연장 없음
+    const out = trace.map((p) => ({ ...p }));
+    let prev = out[n - 1], miss = 0, added = 0;
+    const maxAdd = Math.max(3, Math.round(BOX_TAIL_MAX * n));
+    for (let x = prev.x + dir * dx; added < maxAdd; x += dir * dx) {
+      if ((tailX - x) * dir < -2) break;                                    // 꼬리 자를 지남
+      const th = Math.max(2, prev.bot - prev.top);
+      const nt = boxEdge(img, x, prev.top, th, -1), nb = boxEdge(img, x, prev.bot, th, 1);
+      if (nt === null && nb === null) { if (++miss >= 2) break; continue; }
+      const t2 = nt === null ? prev.top : nt, b2 = nb === null ? prev.bot : nb;
+      const tol = th * 0.5 + 3;
+      if (Math.abs(t2 - prev.top) > tol || Math.abs(b2 - prev.bot) > tol) { if (++miss >= 2) break; continue; }
+      if (b2 - t2 < 2) break;                                               // 위아래가 만났다 = 꼬리 끝
+      miss = 0;
+      const np = { x, top: t2, bot: b2, zone: 1 };
+      out.push(np); prev = np; added++;
     }
     return out;
   } catch (e) { return trace; }
@@ -6173,6 +6210,8 @@ function runBalanceCurve() {
     /* ⭐⭐⭐ v3.44.0 — 원장님 아이디어(2026-09-04)「작은 박스」로 점선의 위·아래 경계를 다시 잰다 (아래 balBoxEdges).
        판정(devFront 등)은 위 top/bot 3점만 쓰므로 표시 전용. */
     L.trace = balBoxEdges(img, L.trace); R.trace = balBoxEdges(img, R.trace);
+    /* v3.45.0 — 꼬리 쪽도 같은 박스로 꼬리 자까지 잇는다 (balBoxTail) */
+    { const W = S.dim.W; L.trace = balBoxTail(img, L.trace, S.g.v4 * W); R.trace = balBoxTail(img, R.trace, S.g.v5 * W); }
     const tol = balTolPx();
     const off = (a, b) => Math.abs(a - b) > tol;
     const devFront = off(L.top[0].y, R.top[0].y) || off(L.bot[0].y, R.bot[0].y);
@@ -6970,7 +7009,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
-  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST,   /* v3.44.0 — 작은 박스 경계 (회귀 206) */
+  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX,   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
