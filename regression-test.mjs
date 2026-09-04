@@ -4731,8 +4731,13 @@ if (RUN(5)) {
           S.g.v1 = C(500, 0).x / W; S.g.v2 = C(420, 0).x / W;
           const img = PBx.photoPixels();
           const fd = PBx.frontDecide(img);
+          /* 205. v3.43.0 — 밴드 판독(columnRuns)의 아랫끝도 같은 규칙: 창 바닥(272)이 눈두덩 안에 있어도 덩어리의 bot 은 눈썹 아랫선(250) */
+          const y0 = Math.round(C(0, 120).y), y1 = Math.round(C(0, 272).y), cy = C(0, 232).y;
+          const cr = PBx.columnRuns(img, Math.round(C(320, 0).x), y0, y1, cy, 18);
+          const run = cr && cr.runs[cr.si];
           return { fy: fd ? fd.y : null, ft: fd ? fd.top : null, expBrow: C(320, 250).y, expTop: C(320, 215).y,
-                   base: PBx.FRONT_BASE_TK, baseMin: PBx.FRONT_BASE_MIN, gap: PBx.FRONT_BASE_GAP };
+                   base: PBx.FRONT_BASE_TK, baseMin: PBx.FRONT_BASE_MIN, gap: PBx.FRONT_BASE_GAP,
+                   runBot: run ? run.bot : null, runTop: run ? run.top : null, floor: y1 };
         });
         await ctx.close();
         fs.unlinkSync(f);
@@ -4745,6 +4750,15 @@ if (RUN(5)) {
       check("204. 발 밑 피부 — 눈썹 밑 눈두덩이 이마보다 어두워도(플래시 사진) 앞머리·앞두께는 눈썹 아랫선·윗선에 선다 · 같은 밝기면 그대로 (원장님 2026-09-04 「더 확실한 드로잉도 캐치가 안된다」)",
         dOk && sOk && dark.base === 2 && dark.baseMin === 10 && Math.abs(dark.gap - 0.2) < 1e-9,
         `어두운 눈두덩: 앞머리 ${dark.fy} (아랫선 ${dark.expBrow.toFixed(0)}) · 앞두께 ${dark.ft} (윗선 ${dark.expTop.toFixed(0)}) =${dOk} · 같은 밝기: 앞머리 ${same.fy} · 앞두께 ${same.ft} =${sOk} · base 2눈금/최소 10줄/20%`);
+      /* 205. ⭐⭐⭐ v3.43.0 — **밴드 판독(readDrawing→columnRuns)의 아랫끝도 발 밑 피부 기준** (원장님 2026-09-04 「테스트대로 너가
+         저 사진으로 미러링해봐」— 미러링 점선이 앞머리 앞 30% 를 비움). 같은 합성: 창 바닥(272)이 눈두덩 안 → 예전엔 덩어리가
+         눈썹→눈두덩→창 바닥까지 한 덩어리(bot = 창 바닥) → belowFront 에 걸려 열 통째로 버려짐. 이제 bot = 눈썹 아랫선(250).
+         윗끝(top=215)은 그대로 · 같은 밝기 대조도 그대로. */
+      const dRun = dark.runBot !== null && Math.abs(dark.runBot - dark.expBrow) <= 3 && Math.abs(dark.runTop - dark.expTop) <= 3 && dark.runBot < dark.floor - 8;
+      const sRun = same.runBot !== null && Math.abs(same.runBot - same.expBrow) <= 3 && Math.abs(same.runTop - same.expTop) <= 3;
+      check("205. 발 밑 피부 — 밴드 판독(columnRuns)의 아랫끝도 눈두덩이 어두우면 눈썹 아랫선에서 끊긴다(창 바닥 아님) · 윗끝·같은 밝기는 그대로 (원장님 2026-09-04 「저 사진으로 미러링해봐」)",
+        dRun && sRun,
+        `어두운 눈두덩: bot ${dark.runBot} (아랫선 ${dark.expBrow.toFixed(0)} · 창 바닥 ${dark.floor}) top ${dark.runTop} (윗선 ${dark.expTop.toFixed(0)}) =${dRun} · 같은 밝기: bot ${same.runBot} top ${same.runTop} =${sRun}`);
     }
   }
 

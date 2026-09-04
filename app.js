@@ -383,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.42.0";
+const APP_VERSION = "v3.43.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2953,7 +2953,29 @@ function columnRuns(img, x, y0, y1, cy, contrast) {
   const s = [...v].sort((a, b) => a - b), k = Math.floor(N * 0.6);
   let sum = 0;
   for (let i = k; i < N; i++) sum += s[i];
-  const cut = sum / Math.max(1, N - k) - contrast;
+  const skin = sum / Math.max(1, N - k);
+  const cut = skin - contrast;
+  /* ⭐⭐⭐ v3.42.0 — **아랫선 쪽 「피부」는 발 밑의 피부다** (원장님 2026-09-04 「이보다 더 확실한 드로잉도
+     캐치가 안된다」 · frontDecide/darkBlobsUp 과 같은 규칙, 같은 사진 실측). 이 함수의 피부는 창의 **밝은 쪽
+     40% 평균**(=이마)이라, 플래시 사진처럼 눈두덩(125)이 이마(181)보다 훨씬 어두우면 눈두덩까지 「잉크」가
+     되어 덩어리가 눈썹 → 눈두덩 → 창 바닥까지 한 덩어리로 이어진다: 앞머리 쪽 16열의 bot 이 전부 창 바닥(164),
+     이어지는 열들도 그늘 바닥(146→125). 그 열들은 표시 규칙 belowFront(앞머리보다 아래)에 걸려 통째로 버려져
+     미러링 점선이 앞머리 앞 30% 를 비웠다.
+     규칙: 창 아래쪽 2눈금(최소 10줄)의 75% 밝기 = base(발 밑 피부). base 가 피부보다 뚜렷이 어두우면(차이 >
+     피부↔최암부의 20%, 그리고 base 밑에 아직 잉크가 있음 base−최암부 > contrast) **덩어리의 아랫끝만** 제일
+     진한 곳에서 내려가며 `cutB = base − contrast` 로 다시 자른다. 윗끝·검출 자체는 예전 cut 그대로 —
+     앞두께·아치엣지(이마 기준 「피부가 나오는 지점」)는 안 바뀐다. 눈두덩과 이마가 같은 밝기면 base ≈ 피부라
+     아무것도 안 바뀐다. 회귀 204(darkBlobsUp)·205(columnRuns). */
+  let cutB = cut;
+  {
+    const u2 = frontTickPx();
+    const nB = Math.min(N - 4, Math.max(FRONT_BASE_MIN, u2 ? Math.round(FRONT_BASE_TK * u2) : FRONT_BASE_MIN));
+    if (nB >= FRONT_BASE_MIN) {
+      const bs = v.slice(N - nB).sort((a, b) => a - b);
+      const base = bs[Math.floor(bs.length * 0.75)], vmin = s[0];
+      if (base < skin - FRONT_BASE_GAP * (skin - vmin) && base - vmin > contrast) cutB = Math.min(cut, base - contrast);
+    }
+  }
 
   const runs = [];
   let t = -1, ink = 0;
@@ -2961,7 +2983,16 @@ function columnRuns(img, x, y0, y1, cy, contrast) {
     const dark = v[i] < cut;
     if (dark) { if (t < 0) { t = i; ink = 0; } ink += cut - v[i]; }
     if ((!dark || i === N - 1) && t >= 0) {
-      const b = dark ? i : i - 1, len = b - t + 1;
+      let b = dark ? i : i - 1;
+      /* v3.42.0 — 발 밑 피부 기준으로 아랫끝 다듬기 (위 주석). 제일 진한 곳(cut 기준)에서 아래로 걸으며
+         cutB 보다 밝아지는 첫 줄이 아랫끝. 잉크(len·ink)도 다듬은 구간으로 다시 센다 — 그늘이 씨앗 선택을
+         부풀리지 않도록. */
+      if (cutB < cut) {
+        let pk0 = t; for (let i2 = t; i2 <= b; i2++) if (v[i2] < v[pk0]) pk0 = i2;
+        let bb = pk0; while (bb + 1 <= b && v[bb + 1] < cutB) bb++;
+        if (bb < b) { b = bb; ink = 0; for (let i2 = t; i2 <= b; i2++) ink += cut - v[i2]; }
+      }
+      const len = b - t + 1;
       if (len >= 2 && len <= DRAW_MAX_FILL * N) {
         /* ⭐ v1.75.0 — **어두운 핵심**도 같이 재 둔다 (원장님 폰 2026-08-25).
            덩어리가 탐색창 바닥에 닿으면 그 `bot` 은 눈썹 아랫선이 아니라 **창 바닥**입니다.
