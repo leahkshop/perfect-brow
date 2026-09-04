@@ -2695,6 +2695,39 @@ if (RUN(5)) {
       sm197.len === 45 && sm197.bulgeBefore >= 6 && sm197.bulgeMax <= 2.5 && sm197.botDev <= 2.5 && sm197.topDev <= 2.5
         && Math.abs(sm197.peakIdx - 22) <= 2 && sm197.peakErr <= 1.5 && sm197.endErr <= 2.5,
       `불룩: 잇기만 ${sm197.bulgeBefore.toFixed(1)} → 부드럽게 ${sm197.bulgeMax.toFixed(1)}(≤2.5) · 아랫선 최대 오차 ${sm197.botDev.toFixed(1)} · 윗선 ${sm197.topDev.toFixed(1)} · 봉우리 ${sm197.peakIdx}열(22±2) 오차 ${sm197.peakErr.toFixed(1)} · 끝점 ${sm197.endErr.toFixed(1)}`);
+    /* 203. ⭐⭐ v3.41.0 — **앞머리 끝 규칙** (원장님 2026-09-04 「앞머리 부분의 드로잉은 충분히 인식할 수 있는데 저렇게
+       웨이브가 생기는 이유는 뭐니? 앞머리 시작되는 라인 고도화」). 원장님 사진 실측을 그대로 옮긴 합성 궤적 35열:
+       아랫선 = 몸통 148 → 128 경사 + 앞머리 평평(148×4) + **끝 4열이 그늘로 +4~8px 급락**(152·155·156·156) — v3.36.0 까지의
+       파이프라인(잇기→부드럽게)은 끝을 원값으로 두어 물결이 남고, 앞머리 끝 규칙을 거치면 끝 4열이 몸통 흐름 2.5px 안.
+       대조 ① 완만한 경사(급락 없음)는 1px 안에서 그대로 ② 윗선(앞두께가 앞머리에서 둥글게 내려옴 = 안쪽)은 손대지 않음
+       ③ renderBalCurve 파이프라인에 실제로 들어가 있다(app.js 본문). */
+    const fe203 = await p.evaluate(async () => {
+      const PB = window.PB;
+      const mk = (bots) => bots.map((b, i) => ({ x: 349 - i * 6.7, top: 101 - Math.min(i, 8) * 1.4, bot: b, zone: 0 }));
+      /* 원장님 사진 실측 아랫선(앞머리→몸통, 35열) */
+      const real = [152, 155, 156, 156, 148, 148, 148, 148, 147, 145, 145, 141, 137, 134, 134, 133, 130, 130, 129, 128, 128, 128, 128, 128, 128, 130, 130, 130, 130, 134, 135, 137, 138, 142, 142];
+      const tr = mk(real);
+      const flow = (i) => 148 + 0.5 * (4 - i);            /* 끝 4열의 몸통 흐름 예측(148 평평 + 살짝) */
+      const oldPipe = PB.balSmoothTrace(PB.balBridgeOutliers(tr));
+      const newPipe = PB.balSmoothTrace(PB.balFrontEnd(PB.balBridgeOutliers(tr)));
+      const endDev = (t) => Math.max(...[0, 1, 2, 3].map((i) => Math.abs(t[i].bot - flow(i))));
+      const waveOld = endDev(oldPipe), waveNew = endDev(newPipe);
+      /* 잇기·앞머리 끝 규칙만 통과한 값(부드럽게 전)도 본다 — 끝 4열은 예측값, 5열째부터는 원값 그대로 */
+      const fe = PB.balFrontEnd(PB.balBridgeOutliers(tr));
+      const rawKept = fe.slice(4).every((q, i) => Math.abs(q.bot - real[4 + i]) < 1e-9);
+      /* 대조 ① 완만한 경사: 끝이 흐름 안이면 손대지 않는다 */
+      const gentle = mk(real.map((b, i) => (i < 4 ? 148 + (4 - i) * 1.2 : b)));
+      const g2 = PB.balFrontEnd(PB.balBridgeOutliers(gentle));
+      const gentleDev = Math.max(...gentle.map((q, i) => Math.abs(g2[i].bot - q.bot)));
+      /* 대조 ② 윗선은 그대로 */
+      const topDev = Math.max(...tr.map((q, i) => Math.abs(fe[i].top - q.top)));
+      const src = await fetch("app.js").then((r) => r.text());
+      const inPipe = /balSmoothTrace\(balFrontEnd\(balBridgeOutliers\(balIgnoreZones\(/.test(src);
+      return { n: newPipe.length, waveOld, waveNew, rawKept, gentleDev, topDev, inPipe, end: newPipe.slice(0, 5).map((q) => +q.bot.toFixed(1)) };
+    });
+    check("203. 앞머리 끝 규칙 — 안쪽 끝 3~4열이 그늘로 꺾여 내려가면 몸통 흐름으로 잇는다(물결 제거) · 완만한 경사·윗선은 그대로 · 파이프라인에 포함 (원장님 2026-09-04 「앞머리 시작되는 라인 고도화」)",
+      fe203.n === 35 && fe203.waveOld >= 4 && fe203.waveNew <= 2.5 && fe203.rawKept && fe203.gentleDev <= 1 && fe203.topDev < 1e-9 && fe203.inPipe,
+      `끝 4열 흐름 이탈: 전 ${fe203.waveOld.toFixed(1)} → 후 ${fe203.waveNew.toFixed(1)}(≤2.5) [${fe203.end}] · 5열째부터 원값=${fe203.rawKept} · 완만한 경사 변화 ${fe203.gentleDev.toFixed(2)}(≤1) · 윗선 변화 ${fe203.topDev} · 파이프라인=${fe203.inPipe}`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve

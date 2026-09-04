@@ -383,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.40.0";
+const APP_VERSION = "v3.41.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6186,6 +6186,55 @@ function balIgnoreZones(trace, side) {
   } catch (e) { return trace; }
 }
 
+/* ⭐⭐ v3.41.0 — **앞머리 끝 규칙: 안쪽 끝의 선은 몸통의 흐름을 그대로 잇는다** (원장님 2026-09-04, 실기기 스크린샷:
+   「왼쪽 아래 앞머리 부분의 드로잉은 충분히 인식할 수 있는데 저렇게 웨이브가 생기는 이유는 뭐니? 앞머리 시작되는 라인 고도화」
+   — 미러링 아랫선이 앞머리 안쪽 끝 3~4열에서 갑자기 눈 쪽으로 꺾여 내려가는 물결).
+   ───────────────────────────────────────────────────────────────────────────
+   원인(원장님 사진 실측): 앞머리는 끝이 가늘어져 잉크가 옅고, 그 바로 밑에 눈두덩 그늘이 이어진다. 열별 아래끝 판독이 마지막
+   3~4열에서 그 그늘까지 내려가(몸통 아랫선 148 → 152·155·156·156) 8px 단차가 난다. 이 단차를 기존 두 규칙이 못 잡았다:
+   ① balBridgeOutliers 는 「튀었다가 **돌아오는** 열」을 찾아 잇는데, 궤적의 끝이라 돌아올 열이 없다(found<0 → 그대로).
+   ② balSmoothTrace 는 양쪽 끝에서 창을 대칭으로 줄이므로(끝점 = 창 1 = 원값) 끝 열은 거의 그대로 남는다. 그래서 몸통은
+   매끈한데 끝만 원값의 단차가 살아 남아 「경사 → 평평 → 급락」의 물결이 됐다.
+   규칙: 앞머리 끝 k열(열 수의 15%, 2~6)을, 그 **바로 안쪽** m열(=max(4,k))의 직선 흐름으로 예측한다. 끝 열이 그 예측보다
+   **바깥쪽**(아래선은 눈 쪽=아래, 위선은 위)으로 tol(두께의 8%, 최소 2.5px) 넘게 나가면 — 거기서부터 끝까지를 예측값으로
+   바꾼다(그늘이지 드로잉이 아니다 — v3.24.0 belowFront 와 같은 생각이되, 자 값이 아니라 **몸통의 흐름**이 기준이다; 이
+   사진처럼 앞머리 자 자체가 그늘 아랫끝에 놓인 경우에도 잡힌다). 안쪽(몸통 쪽)으로 들어온 끝은 손대지 않는다 — 앞두께가
+   앞머리에서 둥글게 내려오는 것은 정상 해부학이다. 완만한 경사(직선 흐름 안)는 그대로 — 앞머리 아랫선이 코 쪽으로 자연스럽게
+   내려가는 디자인은 지워지지 않는다. 꼬리 끝은 별도(tailTrace·수렴점)라 여기서 손대지 않는다.
+   ⚠️ 표시 전용 — 판정(devFront)·자 배치(frontDecide)에는 관여하지 않는다. 회귀 203. */
+const FE_FRAC = 0.15, FE_MIN = 2, FE_MAX = 6, FE_TOL_FRAC = 0.08, FE_TOL_MIN = 2.5;
+function balFrontEnd(trace) {
+  try {
+    const n = trace.length;
+    if (n < 10) return trace;
+    const k = clamp(Math.round(FE_FRAC * n), FE_MIN, FE_MAX);
+    const m = Math.max(4, k);
+    if (k + m > n) return trace;
+    const out = trace.map((p) => ({ ...p }));
+    const xs = trace.map((p) => p.x);
+    for (const key of ["top", "bot"]) {
+      const ys = trace.map((p) => p[key]);
+      if (ys.some((v) => v === undefined || !isFinite(v))) continue;
+      /* 바로 안쪽 m열의 최소제곱 직선 (x 기준) */
+      let sx = 0, sy = 0, sxx = 0, sxy = 0;
+      for (let j = k; j < k + m; j++) { sx += xs[j]; sy += ys[j]; sxx += xs[j] * xs[j]; sxy += xs[j] * ys[j]; }
+      const den = m * sxx - sx * sx;
+      const slope = Math.abs(den) > 1e-9 ? (m * sxy - sx * sy) / den : 0;
+      const icpt = (sy - slope * sx) / m;
+      const pred = (i) => icpt + slope * xs[i];
+      const th = Math.abs((trace[k].bot ?? trace[k].top) - trace[k].top);
+      const tol = Math.max(FE_TOL_MIN, FE_TOL_FRAC * th);
+      const outward = key === "bot" ? 1 : -1;
+      /* 안쪽에서 끝으로 가며 처음 바깥으로 tol 넘게 나간 열 — 거기서부터 끝(0)까지 예측값 */
+      let from = -1;
+      for (let i = k - 1; i >= 0; i--) { if ((ys[i] - pred(i)) * outward > tol) { from = i; break; } }
+      if (from < 0) continue;
+      for (let i = from; i >= 0; i--) out[i][key] = pred(i);
+    }
+    return out;
+  } catch (e) { return trace; }
+}
+
 const BAL_BRIDGE_MODE = true;   // v3.23.0 — 표시용 trace 에 양옆 잇기 적용 (false 로 두면 v3.15.0 그대로)
 /* ⭐⭐⭐ v3.36.0 — **선은 부드럽다: 삐뚤삐뚤 튀어나온 부분은 무시한다** (원장님 2026-09-02 22:49: 「선이 삐뚤삐뚤하다는
    개념을 이해할 수 있니? 부드러운 선이 와야 하는 지점에 삐뚤삐뚤 빠져나온 부분을 무시할 수 있니?(초록 부분 무시)」 —
@@ -6253,7 +6302,7 @@ function renderBalCurve(frag) {
   const cx = S.g.v1 * S.dim.W;
   const devs = [bc.devFront, bc.devArch, bc.devTail];
   const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  const trace = BAL_BRIDGE_MODE ? balSmoothTrace(balBridgeOutliers(balIgnoreZones(refC.trace, ref))) : refC.trace;   // v3.24.0: 무시 규칙 → 잇기 → v3.36.0: 부드럽게
+  const trace = BAL_BRIDGE_MODE ? balSmoothTrace(balFrontEnd(balBridgeOutliers(balIgnoreZones(refC.trace, ref)))) : refC.trace;   // v3.24.0: 무시 규칙 → 잇기 → v3.41.0: 앞머리 끝 → v3.36.0: 부드럽게
   const n = trace.length;
 
   /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
@@ -6801,7 +6850,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q,
+  runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
