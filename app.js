@@ -383,7 +383,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.45.0";
+const APP_VERSION = "v3.46.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6137,15 +6137,33 @@ function boxEdge(img, x0, yc, th, dir) {
   const black = sorted[Math.floor((n - 1) * 0.1)], white = sorted[Math.floor((n - 1) * 0.9)];
   if (white - black < BOX_MIN_CONTRAST) return null;
   const mid = (white + black) / 2;
-  /* 몸통 쪽 끝에서 피부 쪽으로 — 검은 줄을 지난 뒤 처음 3줄 연속 mid 를 넘는 자리 */
-  const start = dir > 0 ? 0 : n - 1, step = dir;
-  let seenDark = false;
+  /* ⭐⭐⭐ v3.46.0 — **피부 쪽에서 몸통 쪽으로 걷는다** (원장님 2026-09-04 「앞머리 아래부분 박스 처리하여 **아래 피부색부터**
+     점검하여 검은색이 나오는 부분을 드로잉으로 인식 — 점 처리하는 부분만 고도화」, 결 눈썹 스크린샷에 노란 박스).
+     v3.44.0 은 몸통 안에서 피부 쪽으로 걸어 「검은 줄을 지난 뒤 처음 흰 줄」을 경계로 삼았다 — 결(hair-stroke) 드로잉처럼
+     몸통 **안에** 피부가 비치는 틈이 있으면 그 틈에서 멈춰 점이 몸통 속으로 들어갔다(노란 박스 자리). 원장님 정의대로
+     뒤집는다: 박스의 **피부 쪽 끝**에서 출발해 흰 줄을 본 뒤 처음으로 3줄 연속 mid 아래(검정)인 자리 = 드로잉이 시작되는
+     곳. 다만 눈썹 밑의 점(mole)·잔털·주름처럼 **몸통과 떨어진 검은 것**에 걸리지 않도록, 그 검은 줄에서 박스의 몸통 쪽 끝까지
+     가는 동안 흰 줄이 3줄 연속 나오면(사이에 피부가 있다) 떨어진 덩어리로 보고 지나쳐 계속 걷는다. 결 눈썹의 틈은 박스
+     가로 평균(13px)이 메워 3줄 연속 흰색이 되지 않는다 — 그래서 결 틈은 지나가고 점은 걸러진다.
+     회귀 208. */
+  const start = dir > 0 ? n - 1 : 0, step = -dir;               /* 피부 쪽 끝 → 몸통 쪽 */
+  let seenWhite = false;
   for (let k = start; k >= 0 && k < n; k += step) {
-    if (sm[k] < mid) { seenDark = true; continue; }
-    if (!seenDark) continue;
+    if (sm[k] >= mid) { seenWhite = true; continue; }
+    if (!seenWhite) continue;
     let ok = true;
-    for (let j = 1; j < BOX_RUN; j++) { const kk = k + step * j; if (kk < 0 || kk >= n || sm[kk] < mid) { ok = false; break; } }
-    if (ok) return y0 + k - (dir > 0 ? 0.5 : -0.5);   /* 경계 = 마지막 검은 줄과 첫 흰 줄 사이 */
+    for (let j = 1; j < BOX_RUN; j++) { const kk = k + step * j; if (kk < 0 || kk >= n || sm[kk] >= mid) { ok = false; break; } }
+    if (!ok) continue;
+    /* 몸통에 이어지는가 — 여기서 박스의 몸통 쪽 끝까지 가는 동안 흰 줄이 G줄(두께의 15%, 최소 3) 연속 나오면 떨어진 것.
+       결 눈썹의 틈(가로 평균 뒤 두께의 10% 안팎)은 통과, 눈썹 밑 주름·속눈썹 그늘(두께만큼 떨어짐)은 걸러진다. 눈썹에 바짝 붙은 점(mole)은
+       한두 열을 끌어당길 수 있지만 그건 뒤의 잇기(balBridgeOutliers, 튀었다 돌아오는 열)가 편다. */
+    const G = Math.max(BOX_RUN, Math.round(0.15 * Math.max(4, th)));
+    let gap = 0, joined = true;
+    for (let j = k; j >= 0 && j < n; j += step) { if (sm[j] >= mid) { if (++gap >= G) { joined = false; break; } } else gap = 0; }
+    if (joined) return y0 + k + (dir > 0 ? 0.5 : -0.5);   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 */
+    /* 떨어진 검은 덩어리 — 지나친다 */
+    while (k + step >= 0 && k + step < n && sm[k + step] < mid) k += step;
+    seenWhite = false;
   }
   return null;
 }

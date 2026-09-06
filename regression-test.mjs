@@ -2775,6 +2775,28 @@ if (RUN(5)) {
     check("207. 꼬리 쪽 박스 연장 — 밴드가 멈춘 곳부터 꼬리 자까지 가늘어지는 몸통을 같은 박스로 잇고, 눈썹이 끝나면 멈춘다 · 자가 궤적 안이면 연장 없음 · 파이프라인 포함 (원장님 2026-09-04)",
       bt207.added >= 7 && bt207.lastX !== null && bt207.lastX >= 34 && bt207.lastX <= 58 && bt207.dev <= 2.5 && bt207.sameN === bt207.n0 && bt207.inPipe,
       `연장 ${bt207.added}열(≥7) · 마지막 x=${bt207.lastX}(34~58, 눈썹 끝 40·자 30) · 가장자리 오차 ${bt207.dev.toFixed(1)}(≤2.5) · 자가 안쪽이면 ${bt207.sameN}=${bt207.n0} · 파이프라인=${bt207.inPipe}`);
+    /* 208. ⭐⭐⭐ v3.46.0 — **피부 쪽에서 몸통 쪽으로 걷는다** (원장님 2026-09-04 「앞머리 아래부분 박스 처리하여 아래 피부색부터 점검하여
+       검은색이 나오는 부분을 드로잉으로 인식 — 점 처리하는 부분만 고도화」). 합성 ① 결 눈썹: 몸통 85~120 안에 피부가 비치는 틈
+       4줄(108~111) · 아래 옅은 띠 121~130 · 원값 bot 131 — v3.44 의 「몸통에서 피부 쪽」 걷기는 틈(108~111)에서 멈춰 107.5(몸통 속)
+       를 냈다. 피부 쪽에서 올라오면 옅은 띠를 지나 몸통 아랫끝 ≈120.5. ② 점(mole): 눈썹(85~120) 밑 피부 사이에 9줄(121~129 피부)
+       두고 130~136 검은 점 — 점은 떨어진 덩어리라 지나치고 bot ≈ 120.5. ③ 윗선도 같은 방향(이마 쪽에서 내려옴): 윗 옅은 띠
+       80~84 위 원값 78 → ≈ 84.5 근처(중간값 교차). */
+    const sk208 = await p.evaluate(() => {
+      const PB = window.PB;
+      const mkImg = (W, H, rowLum) => { const d = new Uint8ClampedArray(W * H * 4); for (let y = 0; y < H; y++) { const v = rowLum(y); for (let x = 0; x < W; x++) { const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } } return { data: d, width: W, height: H }; };
+      const strokes = (y) => y < 85 ? 200 : (y >= 108 && y <= 111) ? 200 : y <= 120 ? 60 : y <= 130 ? [100, 108, 115, 120, 124, 126, 127, 128, 129, 130][y - 121] : 132;
+      const mole = (y) => y < 85 ? 200 : y <= 120 ? 60 : (y >= 130 && y <= 136) ? 50 : 132;
+      const fadeTop = (y) => y < 80 ? 200 : y < 85 ? [170, 150, 130, 115, 105][y - 80] : y <= 120 ? 60 : 132;
+      const tr = (top, bot) => Array.from({ length: 10 }, (_, i) => ({ x: 50 + i * 10, top, bot, zone: 0 }));
+      const A = PB.balBoxEdges(mkImg(200, 200, strokes), tr(85, 131));
+      const B = PB.balBoxEdges(mkImg(200, 200, mole), tr(85, 126));
+      const Cc = PB.balBoxEdges(mkImg(200, 200, fadeTop), tr(78, 121));
+      const rng = (t, k) => [Math.min(...t.map((q) => q[k])), Math.max(...t.map((q) => q[k]))];
+      return { aBot: rng(A, "bot"), bBot: rng(B, "bot"), cTop: rng(Cc, "top"), aTop: rng(A, "top") };
+    });
+    check("208. 피부 쪽에서 몸통 쪽으로 — 결 눈썹의 틈(4줄)에 안 멈추고 몸통 아랫끝 · 눈썹 밑 점(mole)은 떨어진 덩어리라 지나침 · 윗선도 이마 쪽에서 내려옴 (원장님 2026-09-04 「아래 피부색부터 점검하여 검은색이 나오는 부분」)",
+      within(sk208.aBot, 119, 123) && within(sk208.bBot, 119.5, 121.5) && within(sk208.cTop, 81, 85) && within(sk208.aTop, 84, 86),
+      `결 틈: bot 131→[${sk208.aBot}](119~123, 틈 107.5 아님) · 점: bot 126→[${sk208.bBot}](≈120.5, 점 129.5 아님) · 윗 옅은 띠: top 78→[${sk208.cTop}](81~85) · 결 윗선 [${sk208.aTop}]`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve
