@@ -385,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.51.0";
+const APP_VERSION = "v3.52.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2801,6 +2801,7 @@ async function runFaceAI() {
       render();
       fallbackPupilAlign();       /* v1.97.0 — 동공을 직접 찾아 같은 크기·자리로 (확대 촬영 사진) */
       autoAiOnLoad();             /* v1.91.0 — 얼굴 인식이 안 돼도 예비 경로가 드로잉을 찾는다 */
+      aiFixOnLoad();              /* v3.52.0 — 불러오자마자 AI 보정 */
       return;
     }
     S.landmarks = res.faceLandmarks[0];
@@ -2815,6 +2816,7 @@ async function runFaceAI() {
     setAI(t("ai_ok"), "ok");
     render();
     autoAiOnLoad();               /* v1.91.0 — 시작 = AI 눈썹정렬 켜짐 (원장님 지시 2026-08-28) */
+    aiFixOnLoad();                /* v3.52.0 — 불러오자마자 AI 보정 */
   } catch (err) {
     console.warn("[PerfectBrow] face AI unavailable:", err);
     S.landmarks = null;
@@ -2822,6 +2824,7 @@ async function runFaceAI() {
     render();
     fallbackPupilAlign();         /* v1.97.0 — 모델이 없어도 동공 기준 크기·자리 통일 */
     autoAiOnLoad();               /* v1.91.0 — AI 모델이 없어도(오프라인) 예비 경로로 */
+    aiFixOnLoad();                /* v3.52.0 — 불러오자마자 AI 보정 */
   }
 }
 
@@ -5891,6 +5894,23 @@ function syncAiFixUI() {
     }
   }
 }
+/* ⭐⭐⭐ v3.52.0 — 사진을 불러오면 **AI 보정이 저절로 걸린다** (원장님 지시 2026-09-06:
+   「자동보정은 아주 좋은상태다. 그러니 사진을 불러온 즉시 자동보정이 자동으로 실행되도록 해라」).
+   ⛔⚠️ 자리는 runFaceAI 안, **autoAiOnLoad() 바로 뒤**입니다 — 앞으로 옮기지 마세요.
+      앞에 두면 시작 판독(autoFromDrawing)이 **보정된 화소**를 읽습니다. 판독 문턱(DRAW_CONTRAST 18 ·
+      DRAW_CONTRAST_SOFT 9)은 **절대 밝기차**인데, aiFixAuto 는 중앙값을 140 으로 맞추므로 이미 밝은
+      사진은 최대 -40% 까지 **어두워집니다** — 밝기차가 그만큼 줄어 옅은 획을 놓칩니다.
+      실측(회귀 89 · 테두리만 그린 드로잉): 보정 뒤 판독은 아우터 107, 원본 판독은 113, 실제 120.
+      사진과 자가 **같은 순간에** 놓이므로 v3.49.0 이 막던 「옛 화질로 읽은 자」 문제는 여기서 안 생깁니다.
+      v3.49.0 의 재측정(aiFixRemeasure)은 원장님이 **나중에 보정을 만졌을 때**를 위한 것이라 그대로 둡니다.
+   원장님이 이미 손을 댄 보정(touched)은 건드리지 않습니다. 바는 접힌 채로 두고 버튼만 켜집니다 —
+   사진을 넣을 때마다 바 3개가 튀어나오면 시술 중 화면을 가립니다(v3.8.4 의 「자동 알림 숨김」과 같은 결). */
+function aiFixOnLoad() {
+  if (!S.imgEl || S.aiFix.touched) return false;
+  const ok = aiFixAuto();
+  if (ok) { S.aiFix.bars = false; syncAiFixUI(); }
+  return ok;
+}
 /* ⭐ v3.49.0 — 보정한 화질로 **자를 다시 잰다** (원장님 지시 2026-09-06: 「각 바 눈썹 위에 얹어진 포인트 확인해봐라
    · 자동눈썹정렬 확인」). AI 보정을 켜기 전에 놓인 자는 **보정 전 화질**로 읽은 자리입니다 — 화면은 밝고 선명해졌는데
    자는 옛 화질 그대로라 눈썹 가장자리에서 어긋나 보입니다. 원장님이 손으로 옮긴 선이 하나도 없을 때만(doneSet 비어 있음)
@@ -7286,7 +7306,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
   rulerBoxRefine, RULER_BOX_MOVE, RULER_BOX_HALF_H,   /* v3.51.0 — 자 판독 눕힌 박스 (회귀 217) */
-  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_SAMPLES, BOX_MAX_SLOPE, traceSlope, snapState, applySnap,   /* v3.50.0 — 눕힌 박스·되돌리기 (회귀 215·216) */ BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
+  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_SAMPLES, BOX_MAX_SLOPE, traceSlope, snapState, applySnap,   /* v3.50.0 — 눕힌 박스·되돌리기 (회귀 215·216) */ BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, aiFixOnLoad, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,

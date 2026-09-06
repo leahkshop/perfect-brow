@@ -3242,6 +3242,15 @@ if (RUN(5)) {
                     tail: cv(sh.tail[0], sh.tailMid).y,
                     inner: cv(sh.inner, 160).x, outer: cv(sh.outer, 160).x,
                     archV: cv(sh.archV, 160).x };
+      /* ⭐ v3.52.0 — 이 블록(87~94·115·116·120·121)은 **판독 알고리즘**을 재는 자입니다.
+         v3.52.0 부터 사진을 불러오면 AI 보정이 저절로 켜지므로, 여기서 끄지 않으면 재는 대상이
+         「원본 화질 판독」에서 「보정 화질 판독」으로 슬쩍 바뀝니다. 실제 앱의 로드 순서는
+         **autoAiOnLoad(원본 판독) → aiFixOnLoad(보정)** 이라 로드 때 놓이는 자는 원본 판독이고,
+         이 테스트가 재려는 것도 그것입니다. 화면 보정은 회귀 218 이 따로 지킵니다.
+         ⛔ 이 줄을 지우지 마세요 — 지우면 테두리 드로잉(89)의 아우터가 113→107 로 밀립니다
+            (판독 문턱 DRAW_CONTRAST 18 이 **절대 밝기차**라, 대비를 170% 로 올리면 얇은
+             테두리 획의 가장자리가 잘려 꼬리가 짧게 읽힙니다). */
+      S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false };
       const ok = window.PB.autoFromDrawing();
       const g = S.g, D = window.PB.DEFAULT_GUIDE;
       /* ⚠️ v1.69.0 — 드로잉 맞춤이 놓는 것은 **앞두께·아치 둘뿐**. 나머지는 그대로여야 한다 */
@@ -7095,6 +7104,40 @@ if (RUN(5)) {
   check("214. AI 보정 = 그 화질로 자도 다시 재기 — 버튼·바를 놓을 때 자동 눈썹정렬을 다시 읽는다 · 손으로 옮긴 선이 있으면 건드리지 않는다 (원장님 지시 2026-09-06)",
     p214.r1 === false && p214.same && p214.r2 === false && p214.inToggle && p214.onSlider && p214.guard,
     `손으로 옮긴 선 있음 → 재측정 ${p214.r1}(자 그대로=${p214.same}) · 랜드마크 없음 → ${p214.r2} · 버튼에 연결=${p214.inToggle} 바에 연결=${p214.onSlider} 잠금장치=${p214.guard}`);
+
+  /* 218. ⭐⭐⭐ v3.52.0 — **사진을 불러오면 AI 보정이 저절로 걸린다** (원장님 지시 2026-09-06:
+     「자동보정은 아주 좋은상태다. 그러니 사진을 불러온 즉시 자동보정이 자동으로 실행되도록 해라」)
+     ① 로드 뒤 aiFix.on=true · 버튼 켜짐 · 화면 필터에 선명(#pbSharpen)이 걸려 있다
+     ② **바 3개는 접힌 채**로 둔다 — 사진마다 바가 튀어나오면 시술 중 화면을 가린다 (v3.8.4 와 같은 결)
+     ③ ⛔ 순서 못박음: runFaceAI 의 세 경로 모두 **autoAiOnLoad() 가 먼저, aiFixOnLoad() 가 나중**.
+        뒤집으면 시작 판독이 보정된 화소를 읽는데, 판독 문턱(DRAW_CONTRAST 18)이 절대 밝기차라
+        테두리만 그린 드로잉의 아우터가 113→107 로 밀린다 (회귀 89 로 실측).
+     ④ 원장님이 이미 손댄 보정(touched)은 다시 덮어쓰지 않는다 */
+  await p.setInputFiles("#fileInput", face.file);
+  await p.waitForTimeout(1600);
+  const p218 = await p.evaluate(async () => {
+    const PB = window.PB, S = PB.S;
+    PB.setPtrDown(false); PB.applyPhotoFilter();
+    const photo = document.getElementById("photo"), btn = document.getElementById("btnAiFix"), pn = document.getElementById("aiFixPanel");
+    const load = { on: S.aiFix.on, touched: S.aiFix.touched, bars: S.aiFix.bars, s: S.aiFix.s,
+                   btnOn: btn.classList.contains("on"), panelHidden: pn.hidden, filter: photo.style.filter };
+    /* ④ 손댄 보정은 그대로 */
+    S.aiFix = { on: true, b: 7, c: 111, s: 3, bars: false, touched: true };
+    const again = PB.aiFixOnLoad();
+    const kept = S.aiFix.b === 7 && S.aiFix.c === 111 && S.aiFix.s === 3;
+    /* ③ 순서 */
+    const src = await fetch("app.js").then((x) => x.text());
+    const body = src.match(/async function runFaceAI\(\)[\s\S]*?\n\}/)[0].replace(/\/\*[\s\S]*?\*\//g, "");
+    const seq = (body.match(/autoAiOnLoad|aiFixOnLoad/g) || []);
+    const pairs = seq.length === 6 && [0, 2, 4].every((i) => seq[i] === "autoAiOnLoad" && seq[i + 1] === "aiFixOnLoad");
+    return { load, again, kept, seq: seq.join("→"), pairs };
+  });
+  check("218. 사진을 불러오면 AI 보정이 저절로 — 버튼 켜짐·화면 보정 적용 · 바는 접힌 채 · 판독은 원본 화질 뒤에(순서 못박음) · 손댄 보정은 그대로 (원장님 지시 2026-09-06)",
+    p218.load.on === true && p218.load.touched === true && p218.load.bars === false && p218.load.panelHidden === true
+      && p218.load.btnOn === true && /url\(/.test(p218.load.filter) && p218.load.s > 0
+      && p218.again === false && p218.kept && p218.pairs,
+    `로드 뒤 on=${p218.load.on} 버튼켜짐=${p218.load.btnOn} 바접힘=${p218.load.bars}/패널숨김=${p218.load.panelHidden} 선명=${p218.load.s} · 필터 "${p218.load.filter}" · `
+    + `손댄 보정 유지=${p218.kept}(재실행 ${p218.again}) · 순서 ${p218.seq}(짝 맞음=${p218.pairs})`);
 
   await ctx.close();
 }
