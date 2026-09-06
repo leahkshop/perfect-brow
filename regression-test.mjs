@@ -2881,6 +2881,62 @@ if (RUN(5)) {
     check("211. 결 눈썹 앞머리 — 박스 한 줄은 가로 표본 중 어두운 4개 평균: 4px 마다 2px 획만 있는 구간도 검은색으로 보고 아랫끝·윗끝을 획의 바깥에 놓는다 (원장님 결 눈썹 원본 2026-09-04)",
       st211.n === 4 && okB && okT,
       `BOX_AGG_N=${st211.n} · 획 구간 아랫끝 [${st211.bots.map((v) => v === null ? "null" : v.toFixed(1))}](≈120.5) · 윗끝 [${st211.tops.map((v) => v === null ? "null" : v.toFixed(1))}](≈84.5)`);
+    /* 215. ⭐⭐⭐ v3.50.0 — **꼬리에서는 박스를 눕히고 좁힌다** (원장님 지시 2026-09-06: 「아치엣지에서 꼬리로 내려오는 부분에서 점이
+       위로 올라가는 게 반복된다 — 꼬리 부분의 윤곽 네모를 더 작게 하면 범위가 좁아져 더 잘 판독하지 않니?」). 합성: 두께가 34→5px 로
+       가늘어지며 기울기 1.5px/px 로 내려오는 꼬리. 가로로 퍼진 박스는 한 줄 안에 몸통과 피부를 함께 담아(번짐) 위·아래선이 각각
+       4~6px 씩 바깥으로 벌어졌다 — 가는 꼬리에서는 서로 넘나든다. 기울기를 주면(눕힘) 오차 2px 이내. */
+    const tl215 = await p.evaluate(() => {
+      const PB = window.PB;
+      const W = 300, H = 640, SL = 1.5;
+      const yc = (x) => 60 + SL * (x - 40), th = (x) => Math.max(5, 34 - 0.138 * (x - 40));
+      const d = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        let v = 205;
+        if (x >= 40 && x <= 250) { const t = yc(x) - th(x) / 2, b = yc(x) + th(x) / 2;
+          const dist = y < t ? t - y : (y > b ? y - b : 0); v = dist === 0 ? 60 : Math.min(205, 60 + dist * 100); }
+        const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+      }
+      const img = { data: d, width: W, height: H };
+      const rows = [];
+      for (const x of [100, 180, 215, 240, 246]) {
+        const t = yc(x) - th(x) / 2, b = yc(x) + th(x) / 2, T = th(x);
+        const flatT = PB.boxEdge(img, x, t - 2, T, -1), flatB = PB.boxEdge(img, x, b + 2, T, 1);          /* 예전: 가로 박스 */
+        const layT = PB.boxEdge(img, x, t - 2, T, -1, SL), layB = PB.boxEdge(img, x, b + 2, T, 1, SL);    /* 이제: 눕힌 박스 */
+        rows.push({ x, th: +T.toFixed(1),
+          fT: flatT === null ? null : +(flatT - t).toFixed(1), fB: flatB === null ? null : +(flatB - b).toFixed(1),
+          lT: layT === null ? null : +(layT - t).toFixed(1), lB: layB === null ? null : +(layB - b).toFixed(1) });
+      }
+      /* 기울기는 궤적에서 뽑아 파이프라인으로 들어가는가 */
+      const tr = [{ x: 10, top: 10, bot: 30 }, { x: 20, top: 25, bot: 45 }, { x: 30, top: 40, bot: 60 }];
+      return { rows, slope: PB.traceSlope(tr, 1, "top"), samples: PB.BOX_SAMPLES, cap: PB.BOX_MAX_SLOPE };
+    });
+    const okLay = tl215.rows.every((r) => r.lT !== null && r.lB !== null && Math.abs(r.lT) <= 2 && Math.abs(r.lB) <= 2);
+    const wasBad = tl215.rows.some((r) => r.fT === null || r.fB === null || Math.abs(r.fT) > 3 || Math.abs(r.fB) > 3);
+    check("215. 꼬리 박스 — 사선으로 내려오며 가늘어지는 꼬리에서 박스를 **눕히고 좁혀** 위·아래선을 2px 안에 놓는다 (가로 박스는 4~6px 벌어짐) (원장님 지시 2026-09-06)",
+      okLay && wasBad && tl215.samples === 7 && tl215.cap === 3 && Math.abs(tl215.slope - 1.5) < 1e-6,
+      `표본 ${tl215.samples}개 · 기울기 상한 ${tl215.cap} · 궤적 기울기 ${tl215.slope} · ` + tl215.rows.map((r) => `x${r.x}(두께${r.th}) 가로 ${r.fT}/${r.fB} → 눕힘 ${r.lT}/${r.lB}`).join(" · "));
+    /* 216. ⭐⭐⭐ v3.50.0 — **AI 보정도 되돌리기에 포함** (원장님 지시 2026-09-06: 「AI 보정 후 되돌리기 버튼을 누르면 이 보정까지
+       포함하여 뒤로 돌아가도록 설정」). 되돌리기 한 번 = 밝기·대비·선명 + (v3.49.0 이 다시 잰) 자가 함께 예전으로 · 다시 실행으로 복귀. */
+    const un216 = await p.evaluate(() => {
+      const PB = window.PB, S = PB.S, photo = document.getElementById("photo");
+      S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false }; PB.syncAiFixUI(); PB.applyPhotoFilter();
+      S.hist = []; S.redo = []; S.doneSet = [];
+      const before = { filter: photo.style.filter, aiOn: S.aiFix.on, hist: S.hist.length };
+      document.getElementById("btnAiFix").click();
+      const on = { filter: photo.style.filter, aiOn: S.aiFix.on, b: S.aiFix.b, s: S.aiFix.s, hist: S.hist.length, bars: S.aiFix.bars };
+      document.getElementById("btnUndo").click();
+      const undone = { filter: photo.style.filter, aiOn: S.aiFix.on, b: S.aiFix.b, s: S.aiFix.s, sliders: ["aiFixB", "aiFixC", "aiFixS"].map((id) => document.getElementById(id).value) };
+      document.getElementById("btnRedo").click();
+      const redone = { filter: photo.style.filter, aiOn: S.aiFix.on, b: S.aiFix.b, s: S.aiFix.s };
+      const hasAf = "af" in PB.snapState();
+      return { before, on, undone, redone, hasAf };
+    });
+    check("216. 되돌리기 = AI 보정까지 되돌린다 — 보정 한 번이 되돌리기 한 칸 · 밝기·대비·선명과 필터가 예전으로 · 다시 실행으로 복귀 (원장님 지시 2026-09-06)",
+      un216.hasAf && un216.before.filter === "" && !un216.before.aiOn
+        && un216.on.aiOn && un216.on.filter !== "" && un216.on.hist === un216.before.hist + 1
+        && !un216.undone.aiOn && un216.undone.filter === "" && un216.undone.s === 0 && un216.undone.sliders[2] === "0"
+        && un216.redone.aiOn && un216.redone.filter === un216.on.filter && un216.redone.s === un216.on.s,
+      `스냅샷에 보정=${un216.hasAf} · 켬: on=${un216.on.aiOn} 필터 "${un216.on.filter}" 기록 ${un216.before.hist}→${un216.on.hist} · 되돌림: on=${un216.undone.aiOn} 필터 "${un216.undone.filter}" 바 [${un216.undone.sliders}] · 다시실행: on=${un216.redone.aiOn} 선명 ${un216.redone.s}`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve

@@ -385,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.49.0";
+const APP_VERSION = "v3.50.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1704,10 +1704,14 @@ touch.addEventListener("wheel", (e) => {
    시작 전에 beginEdit() 로 스냅샷을 잡고, 끝나면 commitEdit() 이
    **실제로 값이 바뀌었을 때만** 스택에 넣는다. (탭만 한 경우는 기록되지 않음) */
 const HIST_MAX = 60;
+/* ⭐ v3.50.0 — **AI 보정도 되돌리기에 포함** (원장님 지시 2026-09-06: 「AI 보정을 한 뒤 되돌리기 버튼을 누르면 이 보정까지
+   포함하여 뒤로 돌아가도록」). 스냅샷에 aiFix 를 넣으면 ① 되돌리기 한 번에 밝기·대비·선명과 (v3.49.0 이 다시 잰) 자가
+   **함께** 예전으로 돌아가고 ② 다시 실행으로 되살아납니다. */
 const snapState = () => ({
   g: { ...S.g },
   p: { ...S.p },
   hs: S.hiddenSnapshot ? { ...S.hiddenSnapshot } : null,
+  af: { ...S.aiFix },
 });
 const sameState = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -1728,7 +1732,8 @@ function commitEdit() {
      미러링 점은 **드로잉 실측**이라 선을 옮겨도 낡지 않는다(회귀 182). 사진(S.p)이 움직였을 때만 같은 사진 위에서 다시
      잰다 — 실패하면 이전 판정을 그대로 둔다(점을 비우지 않는다). 미러링이 꺼져 있을 때는 예전대로 버린다. */
   if (S.balOn) {
-    if (JSON.stringify(before.p) !== JSON.stringify(S.p)) {
+    /* v3.50.0 — AI 보정이 바뀌어도 다시 잰다: 미러링 점은 보정된 화소로 읽은 것이라 보정이 바뀌면 낡는다 */
+    if (JSON.stringify(before.p) !== JSON.stringify(S.p) || JSON.stringify(before.af) !== JSON.stringify(S.aiFix)) {
       const keepB = S.balance, keepC = S.balCurve;
       try { runBalance(); runBalanceCurve(); } catch (e) { /* 조용히 */ }
       if (!S.balance) S.balance = keepB;
@@ -1752,6 +1757,7 @@ function applySnap(sn) {
   S.g = { ...sn.g };
   S.p = { ...sn.p };
   S.hiddenSnapshot = sn.hs ? { ...sn.hs } : null;
+  if (sn.af) { S.aiFix = { ...sn.af }; syncAiFixUI(); applyPhotoFilter(); }   /* v3.50.0 — 보정도 함께 되돌린다 */
   render();
   updateUndoBtn();
 }
@@ -5875,29 +5881,33 @@ function syncAiFixUI() {
    · 자동눈썹정렬 확인」). AI 보정을 켜기 전에 놓인 자는 **보정 전 화질**로 읽은 자리입니다 — 화면은 밝고 선명해졌는데
    자는 옛 화질 그대로라 눈썹 가장자리에서 어긋나 보입니다. 원장님이 손으로 옮긴 선이 하나도 없을 때만(doneSet 비어 있음)
    조용히 다시 잽니다 — 손으로 맞춘 자리는 절대 건드리지 않습니다(그건 AI 눈썹정렬 버튼이 할 일). */
+/* ⚠️ v3.50.0 — 되돌리기 한 칸 = 「AI 보정 한 번」이므로 기록(beginEdit/commitEdit)은 **부르는 쪽**이 감쌉니다.
+   여기서 step() 을 다시 부르면 보정값이 바뀌기 **전** 스냅샷이 아니라 바뀐 뒤 스냅샷이 잡혀 보정이 안 돌아갑니다. */
 function aiFixRemeasure() {
   if (!S.imgEl || !S.landmarks) return false;
   if (S.doneSet.length) return false;
-  let ok = false;
-  step(() => { ok = autoFromDrawing(); });
+  const ok = autoFromDrawing();
   if (ok) { render(); updateButtons(); }
   return ok;
 }
 function toggleAiFix() {
   if (!S.imgEl) return;
   if (!S.aiFix.on) {
+    beginEdit();                                           /* 보정 **전** 상태를 잡아 둔다 (되돌리기 1칸) */
     aiFixAuto(); S.aiFix.bars = true;
     const re = aiFixRemeasure();
+    commitEdit();
     showNote(t(re ? "aifix_remeasured" : "aifix_applied"), 2400);
-  } else S.aiFix.bars = !S.aiFix.bars;                     /* 한 번 더 = 바 숨김/보임 (보정값은 유지) */
+  } else S.aiFix.bars = !S.aiFix.bars;                     /* 한 번 더 = 바 숨김/보임 (보정값은 유지 · 기록 안 함) */
   syncAiFixUI();
 }
 $("btnAiFix").onclick = toggleAiFix;
 for (const [id, key] of [["aiFixB", "b"], ["aiFixC", "c"], ["aiFixS", "s"]]) {
   const el = $(id);
-  el.addEventListener("input", (e) => { S.aiFix[key] = parseInt(e.target.value, 10); S.aiFix.on = true; S.aiFix.touched = true;
+  el.addEventListener("input", (e) => { beginEdit();       /* v3.50.0 — 바를 끌기 시작한 순간의 보정값이 되돌아갈 자리 */
+    S.aiFix[key] = parseInt(e.target.value, 10); S.aiFix.on = true; S.aiFix.touched = true;
     if (key === "s") setPtrDown(true); syncAiFixUI(); applyPhotoFilter(); });
-  el.addEventListener("change", () => { setPtrDown(false); applyPhotoFilter(); aiFixRemeasure(); });   /* v3.49.0 — 바를 놓으면 그 화질로 자도 다시 */
+  el.addEventListener("change", () => { setPtrDown(false); applyPhotoFilter(); aiFixRemeasure(); commitEdit(); });   /* v3.49.0 — 바를 놓으면 그 화질로 자도 다시 · v3.50.0 되돌리기 1칸 */
 }
 
 function toggleBrightnessMode() {
@@ -6262,17 +6272,33 @@ function readSideCurve(img, side) {
    그대로. 원장님 사진 실측: 앞머리 쪽 아랫선 점이 파우더가 옅어진 띠(118~124) 대신 진한 몸통의 아랫끝(≈112)에,
    윗선 점이 이마 쪽 옅은 띠 대신 몸통 윗끝에 선다 — 초록 박스 자리 그대로. 회귀 206. */
 const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3, BOX_AGG_N = 4;
+const BOX_SAMPLES = 7, BOX_MAX_SLOPE = 3;   /* v3.50.0 — 표본 7개 고정 · 눕히는 기울기 상한(그 위는 머리카락·잡티) */
 /* 박스 하나 — 열 x · 지금 경계값 yc · 두께 th · dir(+1 아래선 / -1 윗선). 경계 y 를 돌려주고,
    박스 안에 흰↔검 대비가 없으면 **null**(판단 보류). v3.45.0 에서 balBoxEdges 안에서 꺼내 꼬리 연장과 같이 쓴다. */
 const BOX_SCALE = 3;          // v3.47.0 — 박스 경계는 캔버스의 3배 화소로 읽는다
-function boxEdge(img, x0c, ycc, thc, dir) {
+function boxEdge(img, x0c, ycc, thc, dir, slope) {
   const IW = img.width, IH = img.height;
   /* v3.47.0 — 화소가 캔버스보다 sc 배 크면 좌표·창·표본 간격을 그 배율로 (돌려줄 때 /sc). 1배 화소면 예전과 동일. */
   const sc = S.dim && S.dim.W ? Math.max(1, Math.round((IW / S.dim.W) * 100) / 100) : 1;
   const x0 = x0c * sc, yc = ycc * sc, th = Math.max(4, thc) * sc;
   const hh = Math.max(6 * sc, Math.round(BOX_HALF_H * th));
+  /* ⭐⭐⭐ v3.50.0 — **꼬리 쪽에서는 박스를 눕히고 좁힌다** (원장님 지시 2026-09-06: 「아치엣지에서 꼬리로 내려오는 부분에서
+     점이 위로 올라가는 게 반복된다 — 꼬리 부분의 윤곽 네모를 더 작게 하여 판독하면 범위가 좁아져 더 잘 판독하지 않니?」).
+     맞습니다. 합성 실측(회귀 215): 눈썹이 가로로 누워 있으면(기울기 0.3) 박스 경계 오차가 ±1.5px 인데, 꼬리처럼 사선으로
+     내려오면 ±4~6px 로 커지고 가는 꼬리(두께 6px)에서는 위·아래 선이 서로 넘나든다 — 가로로 13px 퍼진 박스가 사선을 가로질러
+     **한 줄 안에 몸통과 피부를 함께** 담기 때문입니다(번짐).
+     ① **눕힌다**: 표본을 가로 한 줄이 아니라 그 자리 눈썹 기울기(slope)를 따라 비스듬히 잡는다 — 박스가 눈썹을 따라 눕는다.
+     ② **좁힌다**: 두께가 얇아지면 박스 폭도 함께 좁힌다(hw = 두께의 절반, 최대 6px · 최소 2px) — 원장님 말씀 그대로.
+     ③ 표본 **개수는 7개 그대로**(간격을 폭에 맞춰 줄임) — v3.48.0 의 「어두운 4개 평균」이 결 눈썹에서 계속 통해야 하니까.
+     기울기를 못 받으면(slope 없음) 0 — 예전과 똑같이 가로 박스. */
+  const sl = isFinite(slope) ? clamp(slope, -BOX_MAX_SLOPE, BOX_MAX_SLOPE) : 0;
+  const hw = Math.max(2 * sc, Math.min(BOX_HALF_W * sc, Math.round(BOX_HALF_H * th)));
   const xs = [];
-  for (let dx = -BOX_HALF_W * sc; dx <= BOX_HALF_W * sc; dx += 2 * sc) { const x = Math.round(x0 + dx); if (x >= 0 && x < IW) xs.push(x); }
+  const gap = (2 * hw) / (BOX_SAMPLES - 1);
+  for (let i = 0; i < BOX_SAMPLES; i++) {
+    const dx = -hw + gap * i, x = Math.round(x0 + dx);
+    if (x >= 0 && x < IW) xs.push({ x, dy: Math.round(sl * dx) });
+  }
   const y0 = Math.max(0, Math.round(yc - hh)), y1 = Math.min(IH - 1, Math.round(yc + hh));
   if (!xs.length || y1 - y0 < 6 * sc) return null;
   const a = [];
@@ -6281,7 +6307,7 @@ function boxEdge(img, x0c, ycc, thc, dir) {
      잘렸다. 원장님 정의는 「피부에서 올라와 **검은색이 나오는** 곳」— 획 하나라도 있으면 검은 것이 나온 것이다. 어두운 4개 평균
      (BOX_AGG_N)은 13px 안에 획이 2~3개면 잡되, 모공 한 점(표본 1개)에는 안 흔들린다. 파우더 눈썹 2장: 앞머리 아랫선이 옅은 띠
      끝까지 2~6px 내려간 것 말고 변화 없음. 회귀 211. */
-  for (let y = y0; y <= y1; y++) { const vs = xs.map((x) => lumaAt(img, IW, x, y)).sort((u, v) => u - v); const m = Math.max(1, Math.min(vs.length, BOX_AGG_N)); let s = 0; for (let i = 0; i < m; i++) s += vs[i]; a.push(s / m); }
+  for (let y = y0; y <= y1; y++) { const vs = xs.map((s) => lumaAt(img, IW, s.x, Math.max(0, Math.min(IH - 1, y + s.dy)))).sort((u, v) => u - v); const m = Math.max(1, Math.min(vs.length, BOX_AGG_N)); let s = 0; for (let i = 0; i < m; i++) s += vs[i]; a.push(s / m); }
   const n = a.length;
   const sm = a.map((_, k) => (a[Math.max(0, k - 1)] + a[k] + a[Math.min(n - 1, k + 1)]) / 3);
   const sorted = sm.slice().sort((u, v) => u - v);
@@ -6319,6 +6345,17 @@ function boxEdge(img, x0c, ycc, thc, dir) {
   }
   return null;
 }
+/* v3.50.0 — 그 자리 눈썹의 기울기(px/px) — 앞뒤 두 열까지 보고 잰다(한 열만 보면 떨림에 흔들린다).
+   key = "top" 또는 "bot" — 위선·아래선은 꼬리에서 기울기가 다르다(위선은 내려오고 아래선은 완만). */
+function traceSlope(trace, i, key) {
+  const p = trace[i];
+  let a = null, b = null;
+  for (let j = i - 1; j >= Math.max(0, i - 2); j--) if (isFinite(trace[j][key])) { a = trace[j]; break; }
+  for (let j = i + 1; j <= Math.min(trace.length - 1, i + 2); j++) if (isFinite(trace[j][key])) { b = trace[j]; break; }
+  if (!a) a = p; if (!b) b = p;
+  const dx = b.x - a.x;
+  return Math.abs(dx) < 0.5 ? 0 : (b[key] - a[key]) / dx;
+}
 function balBoxEdges(img, trace) {
   try {
     if (!img || !trace || trace.length < 3) return trace;
@@ -6327,7 +6364,7 @@ function balBoxEdges(img, trace) {
       const p = trace[i];
       if (!isFinite(p.top) || !isFinite(p.bot)) continue;
       const th = p.bot - p.top;
-      const nb = boxEdge(img, p.x, p.bot, th, 1), nt = boxEdge(img, p.x, p.top, th, -1);
+      const nb = boxEdge(img, p.x, p.bot, th, 1, traceSlope(trace, i, "bot")), nt = boxEdge(img, p.x, p.top, th, -1, traceSlope(trace, i, "top"));
       const b2 = nb === null ? p.bot : nb, t2 = nt === null ? p.top : nt;
       if (b2 - t2 >= 3) { out[i].bot = b2; out[i].top = t2; }
     }
@@ -6350,12 +6387,15 @@ function balBoxTail(img, trace, tailX) {
     const dx = Math.max(3, Math.abs(trace[n - 1].x - trace[n - 2].x));
     if (Math.sign(tailX - trace[n - 1].x) !== dir) return trace;          // 꼬리 자가 이미 궤적 안쪽 — 연장 없음
     const out = trace.map((p) => ({ ...p }));
-    let prev = out[n - 1], miss = 0, added = 0;
+    let prev = out[n - 1], prev2 = out[n - 2], miss = 0, added = 0;
     const maxAdd = Math.max(3, Math.round(BOX_TAIL_MAX * n));
     for (let x = prev.x + dir * dx; added < maxAdd; x += dir * dx) {
       if ((tailX - x) * dir < -2) break;                                    // 꼬리 자를 지남
       const th = Math.max(2, prev.bot - prev.top);
-      const nt = boxEdge(img, x, prev.top, th, -1), nb = boxEdge(img, x, prev.bot, th, 1);
+      /* v3.50.0 — 연장 구간(꼬리)은 사선이 가장 심하다: 직전 두 열의 기울기로 박스를 눕힌다 */
+      const sdx = prev.x - prev2.x;
+      const slT = Math.abs(sdx) < 0.5 ? 0 : (prev.top - prev2.top) / sdx, slB = Math.abs(sdx) < 0.5 ? 0 : (prev.bot - prev2.bot) / sdx;
+      const nt = boxEdge(img, x, prev.top, th, -1, slT), nb = boxEdge(img, x, prev.bot, th, 1, slB);
       if (nt === null && nb === null) { if (++miss >= 2) break; continue; }
       const t2 = nt === null ? prev.top : nt, b2 = nb === null ? prev.bot : nb;
       const tol = th * 0.5 + 3;
@@ -6363,7 +6403,7 @@ function balBoxTail(img, trace, tailX) {
       if (b2 - t2 < 2) break;                                               // 위아래가 만났다 = 꼬리 끝
       miss = 0;
       const np = { x, top: t2, bot: b2, zone: 1 };
-      out.push(np); prev = np; added++;
+      out.push(np); prev2 = prev; prev = np; added++;
     }
     return out;
   } catch (e) { return trace; }
@@ -7184,7 +7224,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
-  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
+  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_SAMPLES, BOX_MAX_SLOPE, traceSlope, snapState, applySnap,   /* v3.50.0 — 눕힌 박스·되돌리기 (회귀 215·216) */ BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
