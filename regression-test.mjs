@@ -6916,6 +6916,87 @@ if (RUN(5)) {
     `viewBox="${v202.vb}" · 피부판 ${v202.rects}개(1이어야 함) 눈동자 ${v202.pupils}개(2) · `
     + `밝음 ${v202.light} → 어두움 ${v202.dark}(더 어두움=${v202.darker}) 저장=${v202.saved} · 기본으로 뒤 톤=${v202.afterReset}`);
 
+  /* 212. ⭐⭐⭐ v3.49.0 — **AI 보정 바 3개가 세로폰(rot90)에서도 버튼 왼쪽에 보인다** (원장님 신고 2026-09-06:
+     「AI보정 클릭하면 자동 보정 되지만 왼쪽으로 보정자들을 넣어달라고 했는데 너가 잊었다」).
+     v3.47.0 의 syncAiFixUI 는 getBoundingClientRect(회전된 화면 좌표)로 style.right/top(회전 전 레이아웃 좌표)을
+     계산해 패널을 화면 밖(x≈-432px)으로 보냈습니다 — BASELINE 1-6 과 같은 함정. 이제 offsetLeft/offsetTop 으로만 잽니다. */
+  const p212 = await p.evaluate(async () => {
+    const PB = window.PB, S = PB.S;
+    const pn = document.getElementById("aiFixPanel"), btn = document.getElementById("btnAiFix"), row = btn.closest(".urow");
+    S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false };
+    btn.click();
+    const lay = { pL: pn.offsetLeft, pT: pn.offsetTop, pW: pn.offsetWidth, rL: row.offsetLeft, rT: row.offsetTop };
+    const r = pn.getBoundingClientRect();
+    const src = await fetch("app.js").then((x) => x.text());
+    const bare = (x) => x.replace(/\/\*[\s\S]*?\*\//g, "");   /* 주석은 빼고 **코드만** 본다 (주석에 그 낱말이 들어 있다) */
+    const fn = bare(src.slice(src.indexOf("function syncAiFixUI"), src.indexOf("function toggleAiFix")));
+    return { rot: document.body.classList.contains("rot90"), hidden: pn.hidden, lay,
+      onScreen: r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1,
+      leftOfRow: lay.pL + lay.pW <= lay.rL && lay.pL + lay.pW > lay.rL - 40, sameTop: Math.abs(lay.pT - lay.rT) <= 2,
+      noRect: !/getBoundingClientRect/.test(fn), bars: ["aiFixB", "aiFixC", "aiFixS"].filter((id) => document.getElementById(id)).length };
+  });
+  check("212. AI 보정 바 3개 — 세로폰 가짜 회전(rot90)에서도 버튼 **왼쪽**에 · 화면 안 · 위치는 레이아웃 좌표(rect 금지)로 잰다 (원장님 신고 2026-09-06)",
+    p212.rot && !p212.hidden && p212.bars === 3 && p212.onScreen && p212.leftOfRow && p212.sameTop && p212.noRect,
+    `rot90=${p212.rot} · 바 ${p212.bars}개 보임=${!p212.hidden} · 패널 L=${p212.lay.pL}+${p212.lay.pW} vs 버튼줄 L=${p212.lay.rL}(왼쪽=${p212.leftOfRow}) 같은높이=${p212.sameTop} · 화면안=${p212.onScreen} · rect 안 씀=${p212.noRect}`);
+
+  /* 213. ⭐⭐⭐ v3.49.0 — **선을 만지는 동안에도 사진 보정이 그대로** (원장님 지시 2026-09-06: 「각 포인트들 바를 선택하면
+     보정이 사라져 사진이 흐려 보인다 · 각 바들을 선택해도 사진 보정이 그대로 유지되게 해라」).
+     v3.47.0 은 사진 영역에 손이 닿기만 해도 선명 필터를 뗐습니다. 이제 사진이 실제로 움직일 때만 떼고, 손을 떼면(또는 0.5초
+     안전판) 반드시 돌아옵니다 — pointerup 을 놓쳐도 흐린 채로 굳지 않습니다. */
+  const t213 = await p.evaluate(() => {
+    const PB = window.PB, S = PB.S, photo = document.getElementById("photo");
+    S.aiFix = { on: true, b: 20, c: 120, s: 40, bars: false, touched: true }; PB.syncAiFixUI(); PB.applyPhotoFilter();
+    const t = document.getElementById("touch").getBoundingClientRect();
+    return { base: photo.style.filter, cx: Math.round(t.x + t.width / 2), cy: Math.round(t.y + t.height / 2) };
+  });
+  await p.mouse.move(t213.cx, t213.cy);
+  await p.mouse.down();
+  const f213down = await p.evaluate(() => document.getElementById("photo").style.filter);
+  await p.mouse.move(t213.cx + 24, t213.cy + 18);
+  const f213move = await p.evaluate(() => document.getElementById("photo").style.filter);
+  await p.mouse.up();
+  const g213 = await p.evaluate(async () => {
+    const PB = window.PB, photo = document.getElementById("photo");
+    const afterUp = photo.style.filter;
+    PB.setPtrDown(true); const off = photo.style.filter;                 /* 사진을 옮기는 중 = 잠시 뗌 */
+    dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));      /* 손을 떼면 어디서 떼든 복귀 */
+    const back = photo.style.filter;
+    PB.setPtrDown(true); const off2 = photo.style.filter;
+    await new Promise((r) => setTimeout(r, 700));                         /* 안전판 — 이벤트를 놓쳐도 0.5초면 복귀 */
+    const src = await fetch("app.js").then((x) => x.text());
+    const pd = src.slice(src.indexOf('touch.addEventListener("pointerdown"'), src.indexOf('touch.addEventListener("pointermove"')).replace(/\/\*[\s\S]*?\*\//g, "");
+    return { afterUp, off, back, off2, watchdog: photo.style.filter, noneOnDown: !/setPtrDown\(true\)/.test(pd), onMove: /setPtrDown\(true\);\s*\/\* v3\.49\.0/.test(src) };
+  });
+  const sharp = (s) => /url\(/.test(s);
+  check("213. 사진 보정 유지 — 선을 잡고 끄는 동안에도 밝기·대비·선명 그대로 · 사진이 실제로 움직일 때만 잠시 떼고 손을 떼면(또는 0.5초 안전판) 반드시 복귀 (원장님 지시 2026-09-06)",
+    sharp(t213.base) && f213down === t213.base && f213move === t213.base && g213.afterUp === t213.base
+      && !sharp(g213.off) && g213.back === t213.base && !sharp(g213.off2) && g213.watchdog === t213.base
+      && g213.noneOnDown && g213.onMove,
+    `기준 "${t213.base}" · 누름 "${f213down}" 끌기 "${f213move}" 뗌 "${g213.afterUp}" · 사진이동 중 "${g213.off}"→복귀 "${g213.back}" · 안전판 "${g213.watchdog}" · pointerdown 에 없음=${g213.noneOnDown} · pan/xform 에 있음=${g213.onMove}`);
+
+  /* 214. ⭐⭐⭐ v3.49.0 — **AI 보정한 화질로 자를 다시 잰다** (원장님 지시 2026-09-06: 「각 바 눈썹 위에 얹어진 포인트
+     확인해봐라 · 자동눈썹정렬 확인」). 보정 전 화질로 놓인 자는 밝아진 사진 위에서 눈썹 가장자리와 어긋나 보입니다.
+     ⚠️ 원장님이 손으로 옮긴 선이 하나라도 있으면(doneSet) 절대 다시 재지 않습니다 — 손으로 맞춘 자리가 최우선. */
+  const p214 = await p.evaluate(async () => {
+    const PB = window.PB, S = PB.S;
+    const src = await fetch("app.js").then((x) => x.text());
+    const g0 = JSON.stringify(S.g);
+    S.doneSet = ["front"];
+    const r1 = PB.aiFixRemeasure();
+    const same = JSON.stringify(S.g) === g0;
+    S.doneSet = [];
+    const lm = S.landmarks; S.landmarks = null;
+    const r2 = PB.aiFixRemeasure();
+    S.landmarks = lm;
+    return { r1, same, r2,
+      inToggle: /const re = aiFixRemeasure\(\);/.test(src),
+      onSlider: /change", \(\) => \{ setPtrDown\(false\); applyPhotoFilter\(\); aiFixRemeasure\(\);/.test(src),
+      guard: /if \(S\.doneSet\.length\) return false;/.test(src) };
+  });
+  check("214. AI 보정 = 그 화질로 자도 다시 재기 — 버튼·바를 놓을 때 자동 눈썹정렬을 다시 읽는다 · 손으로 옮긴 선이 있으면 건드리지 않는다 (원장님 지시 2026-09-06)",
+    p214.r1 === false && p214.same && p214.r2 === false && p214.inToggle && p214.onSlider && p214.guard,
+    `손으로 옮긴 선 있음 → 재측정 ${p214.r1}(자 그대로=${p214.same}) · 랜드마크 없음 → ${p214.r2} · 버튼에 연결=${p214.inToggle} 바에 연결=${p214.onSlider} 잠금장치=${p214.guard}`);
+
   await ctx.close();
 }
 

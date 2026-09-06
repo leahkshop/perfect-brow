@@ -186,7 +186,7 @@ const I18N = {
     line_inner: "이너",
     line_outer: "아우터",
     editor_redo: "다시 실행",
-    editor_aifix: "AI 보정", aifix_b: "밝기", aifix_c: "대비", aifix_s: "선명", aifix_applied: "AI 보정 적용 — 밝기·대비·선명",   /* v3.47.0 */
+    editor_aifix: "AI 보정", aifix_b: "밝기", aifix_c: "대비", aifix_s: "선명", aifix_applied: "AI 보정 적용 — 밝기·대비·선명", aifix_remeasured: "AI 보정 적용 — 그 화질로 자도 다시 쟀습니다",   /* v3.47.0 · v3.49.0 */
     redo_done: "다시 실행했습니다",
     redo_none: "다시 실행할 작업이 없습니다",
     editor_all_lines: "전체라인",
@@ -354,7 +354,7 @@ const I18N = {
     line_inner: "Inner",
     line_outer: "Outer",
     editor_redo: "Redo",
-    editor_aifix: "AI Fix", aifix_b: "Light", aifix_c: "Contr.", aifix_s: "Sharp", aifix_applied: "AI fix applied — light · contrast · sharpen",   /* v3.47.0 */
+    editor_aifix: "AI Fix", aifix_b: "Light", aifix_c: "Contr.", aifix_s: "Sharp", aifix_applied: "AI fix applied — light · contrast · sharpen", aifix_remeasured: "AI fix applied — guides re-measured on the fixed photo",   /* v3.47.0 · v3.49.0 */
     redo_done: "Redone",
     redo_none: "Nothing to redo",
     editor_all_lines: "All lines",
@@ -385,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.48.0";
+const APP_VERSION = "v3.49.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1464,7 +1464,8 @@ function stagePoint(e) {
 
 touch.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  setPtrDown(true);                                   /* v3.47.0 — 끄는 동안 선명 필터 잠시 뗌 */
+  /* ⛔ v3.49.0 — 여기서 setPtrDown(true) 하지 않습니다: 선을 잡거나 탭만 해도 사진이 흐려졌습니다.
+     사진이 실제로 움직이는 곳(pointermove 의 pan·xform)에서만 잠시 뗍니다. */
 
   /* 동공 2점 지정 모드 — 다른 제스처보다 우선 */
   if (S.pickMode) {
@@ -1599,10 +1600,12 @@ touch.addEventListener("pointermove", (e) => {
     /* 손가락 이동량을 1:1 로 따라간다. 확대할수록 더 멀리 밀 수 있어야 하므로
        한계도 배율에 비례시킨다 (panLimit). */
     const lim = panLimit();
+    setPtrDown(true);                                  /* v3.49.0 — 사진이 실제로 밀릴 때만 선명 필터 잠시 뗌 */
     S.p.ox = clamp(gDrag.ox + (sp.x - gDrag.x0) / W, -lim, lim);
     S.p.oy = clamp(gDrag.oy + (sp.y - gDrag.y0) / H, -lim, lim);
     render();
   } else if (gMode === "xform" && gDrag && pts.size >= 2) {
+    setPtrDown(true);                                  /* v3.49.0 — 두 손가락 확대·회전 중에만 */
     const [a, b] = [...pts.values()];
     const d = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const ang = Math.atan2(b.y - a.y, b.x - a.x);
@@ -5834,11 +5837,21 @@ function applyPhotoFilter() {
   if (K && !S.ptrDown) parts.push("url(#pbSharpen)");
   photo.style.filter = parts.join(" ");
 }
+/* ⭐ v3.49.0 — 「각 바를 선택해도 사진 보정이 그대로 유지되게 해라」(원장님 지시 2026-09-06)
+   v3.47.0 은 사진 영역에 손가락이 닿기만 하면(선을 끄는 것도 포함) 선명 필터를 뗐습니다 — 선을 만지는 동안
+   사진이 흐려 보였고, 아이폰에서 pointerup 을 한 번 놓치면 흐린 채로 남았습니다.
+   이제 **사진이 실제로 움직일 때만**(두 손가락 확대·회전, 잠금 푼 사진 밀기, 사진 모드 가로바) 잠시 떼고,
+   ① 손을 떼면 무조건 복귀 ② 마지막 움직임 뒤 0.5초면 자동 복귀(안전판) — 흐린 채로 굳지 않습니다. */
+let ptrDownTimer = null;
 function setPtrDown(v) {
+  clearTimeout(ptrDownTimer);
+  if (v) ptrDownTimer = setTimeout(() => setPtrDown(false), 500);   /* 안전판 — 이벤트를 놓쳐도 되돌아온다 */
   if (S.ptrDown === v) return;
   S.ptrDown = v;
   if (S.aiFix.on && S.aiFix.s > 0) applyPhotoFilter();
 }
+addEventListener("pointerup", () => setPtrDown(false), true);
+addEventListener("pointercancel", () => setPtrDown(false), true);
 function syncAiFixUI() {
   const f = S.aiFix;
   const set = (id, vid, v) => { const el = $(id); if (el) el.value = v; const vv = $(vid); if (vv) vv.textContent = v; };
@@ -5846,18 +5859,37 @@ function syncAiFixUI() {
   const btn = $("btnAiFix"); if (btn) btn.classList.toggle("on", f.on);
   const pn = $("aiFixPanel"); if (pn) {
     pn.hidden = !f.bars;
-    /* 패널은 버튼 **왼쪽** — 버튼 폭(글자 길이)에 맞춰 right 를 잰다 (CSS 고정값이면 긴 글자에서 겹친다) */
-    if (f.bars && btn && pn.offsetParent) {
-      const pr = pn.offsetParent.getBoundingClientRect(), br = btn.getBoundingClientRect();
-      pn.style.right = `${Math.round(pr.right - br.left + 8)}px`;
-      pn.style.top = `${Math.round(br.top - pr.top)}px`;
+    /* 패널은 버튼 **왼쪽** — 버튼 줄(.urow) 폭(글자 길이)에 맞춰 right 를 잰다 (CSS 고정값이면 긴 글자에서 겹친다).
+       ⛔⚠️ v3.49.0 — 여기서 **getBoundingClientRect 를 쓰지 마세요** (BASELINE 1-6 · alignCenterDock 의 v1.93.0 주석과 같은 이유).
+          세로폰 가짜 회전(body.rot90)에서 rect 는 90° 돌아간 화면 좌표를 주는데 style.right/top 은 회전 **전** 레이아웃
+          좌표라서, v3.47.0 의 rect 계산은 패널을 화면 밖(x=-432px)으로 보냈습니다 — 원장님 폰에서 바가 아예 안 보인 원인.
+          offsetLeft/offsetTop(레이아웃 좌표)로만 잽니다. */
+    const row = btn ? btn.closest(".urow") : null;
+    if (f.bars && row && row.offsetParent) {
+      pn.style.right = `${Math.round(row.offsetParent.offsetWidth - row.offsetLeft + 8)}px`;
+      pn.style.top = `${Math.round(row.offsetTop)}px`;
     }
   }
 }
+/* ⭐ v3.49.0 — 보정한 화질로 **자를 다시 잰다** (원장님 지시 2026-09-06: 「각 바 눈썹 위에 얹어진 포인트 확인해봐라
+   · 자동눈썹정렬 확인」). AI 보정을 켜기 전에 놓인 자는 **보정 전 화질**로 읽은 자리입니다 — 화면은 밝고 선명해졌는데
+   자는 옛 화질 그대로라 눈썹 가장자리에서 어긋나 보입니다. 원장님이 손으로 옮긴 선이 하나도 없을 때만(doneSet 비어 있음)
+   조용히 다시 잽니다 — 손으로 맞춘 자리는 절대 건드리지 않습니다(그건 AI 눈썹정렬 버튼이 할 일). */
+function aiFixRemeasure() {
+  if (!S.imgEl || !S.landmarks) return false;
+  if (S.doneSet.length) return false;
+  let ok = false;
+  step(() => { ok = autoFromDrawing(); });
+  if (ok) { render(); updateButtons(); }
+  return ok;
+}
 function toggleAiFix() {
   if (!S.imgEl) return;
-  if (!S.aiFix.on) { aiFixAuto(); S.aiFix.bars = true; showNote(t("aifix_applied"), 2400); }
-  else S.aiFix.bars = !S.aiFix.bars;                       /* 한 번 더 = 바 숨김/보임 (보정값은 유지) */
+  if (!S.aiFix.on) {
+    aiFixAuto(); S.aiFix.bars = true;
+    const re = aiFixRemeasure();
+    showNote(t(re ? "aifix_remeasured" : "aifix_applied"), 2400);
+  } else S.aiFix.bars = !S.aiFix.bars;                     /* 한 번 더 = 바 숨김/보임 (보정값은 유지) */
   syncAiFixUI();
 }
 $("btnAiFix").onclick = toggleAiFix;
@@ -5865,7 +5897,7 @@ for (const [id, key] of [["aiFixB", "b"], ["aiFixC", "c"], ["aiFixS", "s"]]) {
   const el = $(id);
   el.addEventListener("input", (e) => { S.aiFix[key] = parseInt(e.target.value, 10); S.aiFix.on = true; S.aiFix.touched = true;
     if (key === "s") setPtrDown(true); syncAiFixUI(); applyPhotoFilter(); });
-  el.addEventListener("change", () => { setPtrDown(false); applyPhotoFilter(); });
+  el.addEventListener("change", () => { setPtrDown(false); applyPhotoFilter(); aiFixRemeasure(); });   /* v3.49.0 — 바를 놓으면 그 화질로 자도 다시 */
 }
 
 function toggleBrightnessMode() {
@@ -7152,7 +7184,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
-  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel,   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
+  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
