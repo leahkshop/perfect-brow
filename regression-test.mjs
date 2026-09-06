@@ -2865,6 +2865,22 @@ if (RUN(5)) {
       hi210.w1 === hi210.W && hi210.h1 === hi210.H && hi210.w3 === hi210.W * 3 && hi210.h3 === hi210.H * 3 && hi210.scale === 3 && hi210.inPipe
         && hi210.e1 !== null && Math.abs(hi210.e1 - 100.5) < 1e-6 && hi210.e3 !== null && hi210.e3 > 100 && hi210.e3 < 100.5,
       `1배 ${hi210.w1}×${hi210.h1} · 3배 ${hi210.w3}×${hi210.h3}(캔버스 ${hi210.W}×${hi210.H}) · BOX_SCALE=${hi210.scale} · 파이프라인=${hi210.inPipe} · 경계 100.33: 1배 ${hi210.e1} → 3배 ${hi210.e3 && hi210.e3.toFixed(2)}`);
+    /* 211. ⭐⭐⭐ v3.48.0 — **박스 한 줄 = 가로 표본 중 어두운 4개의 평균** (원장님 결 눈썹 원본 실측 2026-09-04). 합성: 몸통(85~120)이
+       x≤100 은 꽉 찬 60, x>100 은 **4px 마다 2px 획**(획 60 · 사이 피부 200) — 결 앞머리. 7개 평균이면 획 구간 한 줄이 ≈140 으로
+       중간값(130) 위 = 흰색 → 경계가 몸통 안으로 들어가거나 못 찾는다. 어두운 4개 평균이면 ≈95 = 검정 → 아랫끝 120.5 · 윗끝 84.5. */
+    const st211 = await p.evaluate(() => {
+      const PB = window.PB;
+      const W = 240, H = 200, d = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const inBody = y >= 85 && y <= 120; const stroke = x <= 100 || (x % 4) < 2; const v = inBody && stroke ? 60 : 200; const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+      const img = { data: d, width: W, height: H };
+      const bots = [], tops = [];
+      for (let x = 120; x <= 200; x += 10) { bots.push(PB.boxEdge(img, x, 131, 46, 1)); tops.push(PB.boxEdge(img, x, 78, 46, -1)); }
+      return { bots, tops, n: PB.BOX_AGG_N };
+    });
+    const okB = st211.bots.every((v) => v !== null && Math.abs(v - 120.5) <= 1.5), okT = st211.tops.every((v) => v !== null && Math.abs(v - 84.5) <= 1.5);
+    check("211. 결 눈썹 앞머리 — 박스 한 줄은 가로 표본 중 어두운 4개 평균: 4px 마다 2px 획만 있는 구간도 검은색으로 보고 아랫끝·윗끝을 획의 바깥에 놓는다 (원장님 결 눈썹 원본 2026-09-04)",
+      st211.n === 4 && okB && okT,
+      `BOX_AGG_N=${st211.n} · 획 구간 아랫끝 [${st211.bots.map((v) => v === null ? "null" : v.toFixed(1))}](≈120.5) · 윗끝 [${st211.tops.map((v) => v === null ? "null" : v.toFixed(1))}](≈84.5)`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve

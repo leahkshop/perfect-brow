@@ -385,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.47.0";
+const APP_VERSION = "v3.48.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6229,7 +6229,7 @@ function readSideCurve(img, side) {
    원값보다 두께가 3px 미만이 되면(윗선·아랫선이 붙음) 원값. ⚠️ 표시 전용 — 판정(devFront)·자(frontDecide 등)는
    그대로. 원장님 사진 실측: 앞머리 쪽 아랫선 점이 파우더가 옅어진 띠(118~124) 대신 진한 몸통의 아랫끝(≈112)에,
    윗선 점이 이마 쪽 옅은 띠 대신 몸통 윗끝에 선다 — 초록 박스 자리 그대로. 회귀 206. */
-const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3;
+const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3, BOX_AGG_N = 4;
 /* 박스 하나 — 열 x · 지금 경계값 yc · 두께 th · dir(+1 아래선 / -1 윗선). 경계 y 를 돌려주고,
    박스 안에 흰↔검 대비가 없으면 **null**(판단 보류). v3.45.0 에서 balBoxEdges 안에서 꺼내 꼬리 연장과 같이 쓴다. */
 const BOX_SCALE = 3;          // v3.47.0 — 박스 경계는 캔버스의 3배 화소로 읽는다
@@ -6244,7 +6244,12 @@ function boxEdge(img, x0c, ycc, thc, dir) {
   const y0 = Math.max(0, Math.round(yc - hh)), y1 = Math.min(IH - 1, Math.round(yc + hh));
   if (!xs.length || y1 - y0 < 6 * sc) return null;
   const a = [];
-  for (let y = y0; y <= y1; y++) { let s = 0; for (const x of xs) s += lumaAt(img, IW, x, y); a.push(s / xs.length); }
+  /* ⭐ v3.48.0 — 박스 한 줄의 값 = 가로 표본 7개 중 **어두운 4개의 평균** (원장님 결 눈썹 원본 실측 2026-09-04). 7개 평균이면
+     결(hair-stroke) 앞머리처럼 가는 획 사이로 피부가 비치는 곳은 「흰색」이 되어 점이 진한 몸통까지 들어가 앞머리 아랫선이 사선으로
+     잘렸다. 원장님 정의는 「피부에서 올라와 **검은색이 나오는** 곳」— 획 하나라도 있으면 검은 것이 나온 것이다. 어두운 4개 평균
+     (BOX_AGG_N)은 13px 안에 획이 2~3개면 잡되, 모공 한 점(표본 1개)에는 안 흔들린다. 파우더 눈썹 2장: 앞머리 아랫선이 옅은 띠
+     끝까지 2~6px 내려간 것 말고 변화 없음. 회귀 211. */
+  for (let y = y0; y <= y1; y++) { const vs = xs.map((x) => lumaAt(img, IW, x, y)).sort((u, v) => u - v); const m = Math.max(1, Math.min(vs.length, BOX_AGG_N)); let s = 0; for (let i = 0; i < m; i++) s += vs[i]; a.push(s / m); }
   const n = a.length;
   const sm = a.map((_, k) => (a[Math.max(0, k - 1)] + a[k] + a[Math.min(n - 1, k + 1)]) / 3);
   const sorted = sm.slice().sort((u, v) => u - v);
@@ -7147,7 +7152,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
-  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX, BOX_SCALE, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel,   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
+  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel,   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
