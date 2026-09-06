@@ -186,6 +186,7 @@ const I18N = {
     line_inner: "이너",
     line_outer: "아우터",
     editor_redo: "다시 실행",
+    editor_aifix: "AI 보정", aifix_b: "밝기", aifix_c: "대비", aifix_s: "선명", aifix_applied: "AI 보정 적용 — 밝기·대비·선명",   /* v3.47.0 */
     redo_done: "다시 실행했습니다",
     redo_none: "다시 실행할 작업이 없습니다",
     editor_all_lines: "전체라인",
@@ -353,6 +354,7 @@ const I18N = {
     line_inner: "Inner",
     line_outer: "Outer",
     editor_redo: "Redo",
+    editor_aifix: "AI Fix", aifix_b: "Light", aifix_c: "Contr.", aifix_s: "Sharp", aifix_applied: "AI fix applied — light · contrast · sharpen",   /* v3.47.0 */
     redo_done: "Redone",
     redo_none: "Nothing to redo",
     editor_all_lines: "All lines",
@@ -383,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.46.0";
+const APP_VERSION = "v3.47.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -827,6 +829,10 @@ const S = {
   pick: [],
   picking: false,        // 사진 선택 시트가 열려 있는 동안 (v1.27.0) — 그때만 세로로 되돌린다
   brightnessOn: false,                  // 밝기 조절 활성화 상태
+  /* v3.47.0 — AI 보정 (원장님 지시 2026-09-04). on=적용 중 · b 밝기(-40~80, CSS brightness 100+b %) · c 대비(80~180 %) ·
+     s 선명(0~100) · bars=바 패널 표시 · touched=사용자가 한 번이라도 켰음(미러링 자동 적용 여부) */
+  aiFix: { on: false, b: 0, c: 100, s: 0, bars: false, touched: false },
+  ptrDown: false,                       // v3.47.0 — 손가락이 내려가 있는 동안 선명 필터를 잠시 뗀다
   exposureBrightnessValue: 0,           // -100 ~ 100
 };
 
@@ -1458,6 +1464,7 @@ function stagePoint(e) {
 
 touch.addEventListener("pointerdown", (e) => {
   e.preventDefault();
+  setPtrDown(true);                                   /* v3.47.0 — 끄는 동안 선명 필터 잠시 뗌 */
 
   /* 동공 2점 지정 모드 — 다른 제스처보다 우선 */
   if (S.pickMode) {
@@ -1612,7 +1619,7 @@ touch.addEventListener("pointermove", (e) => {
 
 function endPointer(e) {
   pts.delete(e.pointerId);
-  if (pts.size === 0) S.dragOn = false;   /* 손을 떼면 다시 선명 (v1.54.0) */
+  if (pts.size === 0) { S.dragOn = false; setPtrDown(false); }   /* 손을 떼면 다시 선명 (v1.54.0 · v3.47.0 선명 필터 복귀) */
   /* "탭만" 했을 때(3px 데드존을 넘지 않음)의 판정 — 여러라인 / 한 줄 모드가 다르다 (BASELINE 1-7)
        · 여러라인 : 선택에 추가 / 이미 있으면 선택 해제 (숨기지 않음)
        · 한 줄    : 새 선이면 선택만, 이미 선택돼 있던 선을 다시 탭하면 숨김/표시 */
@@ -1893,6 +1900,7 @@ function buildLineButtons() {
 }
 
 function updateButtons() {
+  if ($("btnAiFix")) $("btnAiFix").classList.toggle("on", !!(S.aiFix && S.aiFix.on));   /* v3.47.0 */
   document.querySelectorAll(".lbtn").forEach((b) => {
     const spec = [...H_SPECS, ...V_SPECS].find((s) => s.key === b.dataset.key);
     const vis = S.g[b.dataset.vis];
@@ -5090,6 +5098,8 @@ function loadPhoto(file) {
     S.pick = [];
     S.brightnessOn = false;
     S.exposureBrightnessValue = 0;
+    S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false };   /* v3.47.0 — 새 사진 = AI 보정 초기화 */
+    if ($("aiFixPanel")) { $("aiFixPanel").hidden = true; syncAiFixUI(); }
     /* v1.47.0 원장님 지시 — 「가이드는 앱이 켜지면 항상 시작 상태로 유지, 사용자가 클릭할 때만 꺼짐」
        사진이 올라와 편집이 시작될 때마다 가이드 ON + 이너부터. 끄는 건 가이드 버튼 클릭뿐. */
     S.guideOn = true;
@@ -5768,6 +5778,9 @@ function toggleLock() {
   S.locked = !S.locked;
   /* 잠그면 사진 보정을 쓸 수 없으므로 가로 바를 선 조절로 되돌린다 */
   if (S.locked) S.hMode = "line";
+  /* ⭐ v3.47.0 — 잠금을 **풀면 밸런스(기울기)가 바로 골라진다** (원장님 지시 2026-09-04: 「사진잠금을 해제하면 밸런스에 자동으로
+     클릭되어 있도록 — 잠금 해제는 보통 밸런스를 맞추기 위한 게 많다」). 가로 바가 사진 보정·밸런스 모드로 넘어간다. */
+  else { S.hMode = "photo"; S.photoMode = "balance"; }
   updateButtons();
   updatePanels();
   toast(S.locked ? t("locked_msg") : t("unlocked_msg"));
@@ -5776,15 +5789,83 @@ $("btnLock").onclick = toggleLock;
 
 /* ═══ 밝기 조절 (v3.7.0) ═════════════════════════════════════════
    고객이 사진을 더 잘 보기 위해 라이브 조절 — 태양 버튼으로 활성화 */
-function applyExposureBrightness() {
-  const v = S.exposureBrightnessValue;
-  if (v === 0) {
-    photo.style.filter = "";
-    return;
+function applyExposureBrightness() { applyPhotoFilter(); }
+
+/* ═══ ⭐⭐⭐ v3.47.0 — AI 보정 (원장님 지시 2026-09-04) ═══════════════════════════════════
+   「미러링 전에 픽셀 판정은 사진을 밝게 처리한 이후에 픽셀을 판정하면 더 정확한 판정이 될 듯 — 사진이 밝지 않은 상태에서는
+     쉐도우 같은 것들 때문에 미러링 판정에 헤매는 것을 줄일 수 있다 / 다시실행 밑에 (AI 보정) 버튼 — 밝기·contrast·sharpen 을
+     저절로 선명하고 높은 화질로 · 누르면 왼쪽으로 바들이 보여져 자동 보정된 단계를 확인·조정 · 한 번 더 부르면 바 숨김」
+   ① 자동값(aiFixAuto): 캔버스 화소(원본 그대로)의 밝기 분포에서 — 중앙값(p50)이 140 이 되도록 밝기, 5%~95% 폭이 150 이 되도록
+      대비(100~170%), 선명은 40 고정. 얼굴이 이미 밝으면 밝기는 0 근처, 어두운 사진일수록 크게.
+   ② 화면(applyPhotoFilter): #photo 의 CSS filter = brightness·contrast + url(#pbSharpen)(feConvolveMatrix 커널 = 선명 값).
+      손가락이 내려가 있는 동안(S.ptrDown)은 선명 필터를 잠시 뗀다 — 2천만 화소 사진에 매 프레임 컨볼루션은 폰이 버벅인다.
+   ③ 판정(photoPixels): AI 보정이 켜져 있으면 판정용 화소에도 **같은 밝기·대비·선명**을 숫자로 적용한다 — 화면에서 보는 것과
+      판정이 보는 것이 같다. 미러링을 누를 때 AI 보정을 한 번도 안 켰으면 자동값을 적용하고 나서 판정한다(원장님 문장 그대로).
+   ⚠️ 기존 태양 버튼(밝기 슬라이더)은 그대로 — 두 밝기는 곱해진다. */
+function aiFixAuto() {
+  const raw = photoPixelsRaw(1);
+  if (!raw) return false;
+  const lum = [];
+  const d = raw.data, n = raw.width * raw.height;
+  for (let i = 0; i < n; i += 4) { const k = i * 4; lum.push(0.2126 * d[k] + 0.7152 * d[k + 1] + 0.0722 * d[k + 2]); }   /* 4화소에 하나 */
+  lum.sort((a, b) => a - b);
+  const q = (p) => lum[Math.max(0, Math.min(lum.length - 1, Math.round(p * (lum.length - 1))))];
+  const p5 = q(0.05), p50 = q(0.5), p95 = q(0.95);
+  const b = clamp(Math.round(((140 / Math.max(20, p50)) - 1) * 100 / 2) * 2, -40, 80);
+  const c = clamp(Math.round((150 / Math.max(30, p95 - p5)) * 100 / 2) * 2, 100, 170);
+  S.aiFix.on = true; S.aiFix.touched = true; S.aiFix.b = b; S.aiFix.c = c; S.aiFix.s = 40;
+  syncAiFixUI(); applyPhotoFilter();
+  return true;
+}
+function sharpenKernel() {
+  const k = (S.aiFix.on ? S.aiFix.s : 0) / 100 * 0.6;
+  return k > 0 ? [0, -k, 0, -k, 1 + 4 * k, -k, 0, -k, 0] : null;
+}
+function applyPhotoFilter() {
+  const parts = [];
+  const eb = S.exposureBrightnessValue || 0;
+  const b = S.aiFix.on ? S.aiFix.b : 0, c = S.aiFix.on ? S.aiFix.c : 100;
+  const bright = Math.round((100 + eb) * (100 + b) / 100);
+  if (bright !== 100) parts.push(`brightness(${bright}%)`);
+  if (c !== 100) parts.push(`contrast(${c}%)`);
+  const K = sharpenKernel();
+  const kEl = document.getElementById("pbSharpenK");
+  if (kEl) kEl.setAttribute("kernelMatrix", (K || [0, 0, 0, 0, 1, 0, 0, 0, 0]).map((v) => +v.toFixed(3)).join(" "));
+  if (K && !S.ptrDown) parts.push("url(#pbSharpen)");
+  photo.style.filter = parts.join(" ");
+}
+function setPtrDown(v) {
+  if (S.ptrDown === v) return;
+  S.ptrDown = v;
+  if (S.aiFix.on && S.aiFix.s > 0) applyPhotoFilter();
+}
+function syncAiFixUI() {
+  const f = S.aiFix;
+  const set = (id, vid, v) => { const el = $(id); if (el) el.value = v; const vv = $(vid); if (vv) vv.textContent = v; };
+  set("aiFixB", "aiFixBV", f.b); set("aiFixC", "aiFixCV", f.c); set("aiFixS", "aiFixSV", f.s);
+  const btn = $("btnAiFix"); if (btn) btn.classList.toggle("on", f.on);
+  const pn = $("aiFixPanel"); if (pn) {
+    pn.hidden = !f.bars;
+    /* 패널은 버튼 **왼쪽** — 버튼 폭(글자 길이)에 맞춰 right 를 잰다 (CSS 고정값이면 긴 글자에서 겹친다) */
+    if (f.bars && btn && pn.offsetParent) {
+      const pr = pn.offsetParent.getBoundingClientRect(), br = btn.getBoundingClientRect();
+      pn.style.right = `${Math.round(pr.right - br.left + 8)}px`;
+      pn.style.top = `${Math.round(br.top - pr.top)}px`;
+    }
   }
-  /* 밝기: 명도 조절 */
-  const brightness = 100 + v;
-  photo.style.filter = `brightness(${brightness}%)`;
+}
+function toggleAiFix() {
+  if (!S.imgEl) return;
+  if (!S.aiFix.on) { aiFixAuto(); S.aiFix.bars = true; showNote(t("aifix_applied"), 2400); }
+  else S.aiFix.bars = !S.aiFix.bars;                       /* 한 번 더 = 바 숨김/보임 (보정값은 유지) */
+  syncAiFixUI();
+}
+$("btnAiFix").onclick = toggleAiFix;
+for (const [id, key] of [["aiFixB", "b"], ["aiFixC", "c"], ["aiFixS", "s"]]) {
+  const el = $(id);
+  el.addEventListener("input", (e) => { S.aiFix[key] = parseInt(e.target.value, 10); S.aiFix.on = true; S.aiFix.touched = true;
+    if (key === "s") setPtrDown(true); syncAiFixUI(); applyPhotoFilter(); });
+  el.addEventListener("change", () => { setPtrDown(false); applyPhotoFilter(); });
 }
 
 function toggleBrightnessMode() {
@@ -5929,21 +6010,50 @@ function balTolPx() {
 }
 
 /* 지금 화면에 보이는 그대로의 사진 픽셀. 사진은 캔버스 안에서만 처리되고 어디에도 안 나갑니다. */
-function photoPixels() {
+/* v3.47.0 — `scale` 배로 키운 판정 화소 (원장님 지시 2026-09-04 「원본을 가지고 들어와라 — 저화질이면 드로잉 판단에 더
+   섬세하지 못한 거 아니니?」). 화면(#photo)은 원래부터 원본 파일 그대로였지만, **판정용 화소**는 캔버스 크기(≈782×390)로
+   그려 눈썹 두께가 35px 안팎이었다. 이제 필요한 곳(작은 박스 경계 · BOX_SCALE=3)은 3배 화소(≈2346×1170, 눈썹 두께 ≈100px)로
+   읽는다 — 원본의 세부가 그대로 판정에 들어온다. 좌표계는 그대로 캔버스 px, 표본만 1/3px 단위. */
+function photoPixelsRaw(scale) {
   const { W, H } = S.dim;
+  const sc = scale || 1;
   if (!S.imgEl || !W || !H) return null;
   const c = document.createElement("canvas");
-  c.width = W; c.height = H;
+  c.width = Math.round(W * sc); c.height = Math.round(H * sc);
   const ctx = c.getContext("2d", { willReadFrequently: true });
-  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, c.width, c.height);
   ctx.save();
+  ctx.scale(sc, sc);
   ctx.translate(W / 2 + S.p.ox * W, H / 2 + S.p.oy * H);
   ctx.scale(S.p.zoom, S.p.zoom);
   ctx.rotate((S.p.rot * Math.PI) / 180);
   ctx.drawImage(S.imgEl, -S.fitW / 2, -S.fitH / 2, S.fitW, S.fitH);
   ctx.restore();
-  try { return ctx.getImageData(0, 0, W, H); } catch { return null; }
+  try { return ctx.getImageData(0, 0, c.width, c.height); } catch { return null; }
 }
+/* v3.47.0 — AI 보정이 켜져 있으면 판정 화소에도 같은 밝기·대비·선명을 적용한다 (위 AI 보정 주석 ③) */
+function aiFixApply(img) {
+  if (!img || !S.aiFix.on) return img;
+  const d = img.data, W = img.width, H = img.height;
+  const b = (100 + S.aiFix.b) / 100, c = S.aiFix.c / 100;
+  const lut = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v++) lut[v] = Math.max(0, Math.min(255, Math.round(((v * b) - 128) * c + 128)));
+  for (let i = 0; i < d.length; i += 4) { d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
+  const K = sharpenKernel();
+  if (K) {
+    const k = -K[1];                                        /* 언샤프: 가운데 1+4k, 상하좌우 -k */
+    const src = new Uint8ClampedArray(d);
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const i = (y * W + x) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        const j = i + ch;
+        d[j] = (1 + 4 * k) * src[j] - k * (src[j - 4] + src[j + 4] + src[j - W * 4] + src[j + W * 4]);
+      }
+    }
+  }
+  return img;
+}
+function photoPixels(scale) { return aiFixApply(photoPixelsRaw(scale)); }
 
 const lumaAt = (img, W, x, y) => {
   const i = (y * W + x) * 4;
@@ -6122,13 +6232,17 @@ function readSideCurve(img, side) {
 const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3;
 /* 박스 하나 — 열 x · 지금 경계값 yc · 두께 th · dir(+1 아래선 / -1 윗선). 경계 y 를 돌려주고,
    박스 안에 흰↔검 대비가 없으면 **null**(판단 보류). v3.45.0 에서 balBoxEdges 안에서 꺼내 꼬리 연장과 같이 쓴다. */
-function boxEdge(img, x0, yc, th, dir) {
+const BOX_SCALE = 3;          // v3.47.0 — 박스 경계는 캔버스의 3배 화소로 읽는다
+function boxEdge(img, x0c, ycc, thc, dir) {
   const IW = img.width, IH = img.height;
-  const hh = Math.max(6, Math.round(BOX_HALF_H * Math.max(4, th)));
+  /* v3.47.0 — 화소가 캔버스보다 sc 배 크면 좌표·창·표본 간격을 그 배율로 (돌려줄 때 /sc). 1배 화소면 예전과 동일. */
+  const sc = S.dim && S.dim.W ? Math.max(1, Math.round((IW / S.dim.W) * 100) / 100) : 1;
+  const x0 = x0c * sc, yc = ycc * sc, th = Math.max(4, thc) * sc;
+  const hh = Math.max(6 * sc, Math.round(BOX_HALF_H * th));
   const xs = [];
-  for (let dx = -BOX_HALF_W; dx <= BOX_HALF_W; dx += 2) { const x = Math.round(x0 + dx); if (x >= 0 && x < IW) xs.push(x); }
+  for (let dx = -BOX_HALF_W * sc; dx <= BOX_HALF_W * sc; dx += 2 * sc) { const x = Math.round(x0 + dx); if (x >= 0 && x < IW) xs.push(x); }
   const y0 = Math.max(0, Math.round(yc - hh)), y1 = Math.min(IH - 1, Math.round(yc + hh));
-  if (!xs.length || y1 - y0 < 6) return null;
+  if (!xs.length || y1 - y0 < 6 * sc) return null;
   const a = [];
   for (let y = y0; y <= y1; y++) { let s = 0; for (const x of xs) s += lumaAt(img, IW, x, y); a.push(s / xs.length); }
   const n = a.length;
@@ -6146,21 +6260,22 @@ function boxEdge(img, x0, yc, th, dir) {
      가는 동안 흰 줄이 3줄 연속 나오면(사이에 피부가 있다) 떨어진 덩어리로 보고 지나쳐 계속 걷는다. 결 눈썹의 틈은 박스
      가로 평균(13px)이 메워 3줄 연속 흰색이 되지 않는다 — 그래서 결 틈은 지나가고 점은 걸러진다.
      회귀 208. */
+  const RUN = Math.max(BOX_RUN, Math.round(BOX_RUN * sc));      /* 3줄 연속 = 캔버스 3px (3배 화소면 9줄) */
   const start = dir > 0 ? n - 1 : 0, step = -dir;               /* 피부 쪽 끝 → 몸통 쪽 */
   let seenWhite = false;
   for (let k = start; k >= 0 && k < n; k += step) {
     if (sm[k] >= mid) { seenWhite = true; continue; }
     if (!seenWhite) continue;
     let ok = true;
-    for (let j = 1; j < BOX_RUN; j++) { const kk = k + step * j; if (kk < 0 || kk >= n || sm[kk] >= mid) { ok = false; break; } }
+    for (let j = 1; j < RUN; j++) { const kk = k + step * j; if (kk < 0 || kk >= n || sm[kk] >= mid) { ok = false; break; } }
     if (!ok) continue;
     /* 몸통에 이어지는가 — 여기서 박스의 몸통 쪽 끝까지 가는 동안 흰 줄이 G줄(두께의 15%, 최소 3) 연속 나오면 떨어진 것.
        결 눈썹의 틈(가로 평균 뒤 두께의 10% 안팎)은 통과, 눈썹 밑 주름·속눈썹 그늘(두께만큼 떨어짐)은 걸러진다. 눈썹에 바짝 붙은 점(mole)은
        한두 열을 끌어당길 수 있지만 그건 뒤의 잇기(balBridgeOutliers, 튀었다 돌아오는 열)가 편다. */
-    const G = Math.max(BOX_RUN, Math.round(0.15 * Math.max(4, th)));
+    const G = Math.max(RUN, Math.round(0.15 * th));
     let gap = 0, joined = true;
     for (let j = k; j >= 0 && j < n; j += step) { if (sm[j] >= mid) { if (++gap >= G) { joined = false; break; } } else gap = 0; }
-    if (joined) return y0 + k + (dir > 0 ? 0.5 : -0.5);   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 */
+    if (joined) return (y0 + k + (dir > 0 ? 0.5 : -0.5)) / sc;   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 (캔버스 px 로) */
     /* 떨어진 검은 덩어리 — 지나친다 */
     while (k + step >= 0 && k + step < n && sm[k + step] < mid) k += step;
     seenWhite = false;
@@ -6227,9 +6342,11 @@ function runBalanceCurve() {
     if (!L || !R) { S.balCurve = null; return false; }
     /* ⭐⭐⭐ v3.44.0 — 원장님 아이디어(2026-09-04)「작은 박스」로 점선의 위·아래 경계를 다시 잰다 (아래 balBoxEdges).
        판정(devFront 등)은 위 top/bot 3점만 쓰므로 표시 전용. */
-    L.trace = balBoxEdges(img, L.trace); R.trace = balBoxEdges(img, R.trace);
+    /* v3.47.0 — 박스 경계·꼬리 연장은 **3배 화소**(BOX_SCALE)로 읽는다 (photoPixelsRaw 주석). 실패하면 1배 그대로. */
+    const imgHi = photoPixels(BOX_SCALE) || img;
+    L.trace = balBoxEdges(imgHi, L.trace); R.trace = balBoxEdges(imgHi, R.trace);
     /* v3.45.0 — 꼬리 쪽도 같은 박스로 꼬리 자까지 잇는다 (balBoxTail) */
-    { const W = S.dim.W; L.trace = balBoxTail(img, L.trace, S.g.v4 * W); R.trace = balBoxTail(img, R.trace, S.g.v5 * W); }
+    { const W = S.dim.W; L.trace = balBoxTail(imgHi, L.trace, S.g.v4 * W); R.trace = balBoxTail(imgHi, R.trace, S.g.v5 * W); }
     const tol = balTolPx();
     const off = (a, b) => Math.abs(a - b) > tol;
     const devFront = off(L.top[0].y, R.top[0].y) || off(L.bot[0].y, R.bot[0].y);
@@ -6578,6 +6695,9 @@ function visibleLineKeys() {
    민트 깜빡임 자체가 말해 준다. 위쪽 작은 「밸런스 체킹중」(v3.15.0 지시)만 남긴다. */
 $("btnBalance").onclick = () => {
   if (S.balOn) { S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; render(); return; }
+  /* ⭐ v3.47.0 — 미러링 전에 AI 보정을 한 번도 안 켰으면 자동값을 먼저 적용하고 판정한다 (원장님 지시 2026-09-04:
+     「미러링 전에 픽셀 판정은 사진을 밝게 처리한 이후에」). 바는 안 띄운다 — 버튼을 누르면 보인다. */
+  if (!S.aiFix.touched && S.imgEl) { if (aiFixAuto()) showNote(t("aifix_applied"), 2400); }
   if (!runBalance()) return;
   runBalanceCurve();   /* ⭐ v3.13.0 — Phase 3: 좌우 독립 커브 판정도 함께 (실패해도 조용히 null) */
   S.balOn = true;
@@ -6706,10 +6826,10 @@ $("posPlusV").onclick  = () => step(() => { endIntroEarly(); noteSel(S.selUD); m
 
 /* 가로 조절자 — 세로선 좌우 이동 + 사진 보정 겸용 (v1.11.0) */
 posSliderH.addEventListener("input", (e) => { if (!hIsPhoto()) endIntroEarly(); beginEdit(); if (!hIsPhoto()) noteSel(S.selLR);
-  if (!hIsPhoto()) { S.dragOn = true; }                            /* v1.55.0 */
+  if (!hIsPhoto()) { S.dragOn = true; } else setPtrDown(true);     /* v1.55.0 · v3.47.0 사진 끄는 동안 선명 필터 잠시 뗌 */
   if (!hIsPhoto() && S.guideOn && GUIDE_FLOW.includes(S.selLR)) S.guideCur = S.selLR;
   applyH(parseFloat(e.target.value)); });
-posSliderH.addEventListener("change", () => { const moved = S.dragOn; S.dragOn = false;
+posSliderH.addEventListener("change", () => { const moved = S.dragOn; S.dragOn = false; setPtrDown(false);
   if (!hIsPhoto()) { if (moved) markDone(S.selLR); guideAdvance(S.selLR); } });
 $("posMinusH").onclick = () => step(() => { if (!hIsPhoto()) { endIntroEarly(); noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) - hConfig().step); });
 $("posPlusH").onclick  = () => step(() => { if (!hIsPhoto()) { endIntroEarly(); noteSel(S.selLR); markDone(S.selLR); } applyH(parseFloat(posSliderH.value) + hConfig().step); });
@@ -7027,7 +7147,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
-  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX,   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
+  balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_TAIL_MAX, BOX_SCALE, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel,   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,

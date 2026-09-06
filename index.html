@@ -355,6 +355,21 @@ body.land.compact #editor .guidetip .chip{font-size:9.5px;padding:5px 9px}
 .urow{position:absolute;top:48px;right:var(--redge);z-index:30;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .urow .dockbtn{height:34px;min-width:56px;flex-direction:row;gap:4px;font-size:10px;border-radius:11px}
 .urow .dockbtn i{width:14px;height:14px}
+/* v3.47.0 — AI 보정 버튼(켜짐)·바 패널: 패널은 되돌리기 열 **왼쪽**(right = 오른쪽 여백 + 열 폭 + 8px) */
+#btnAiFix.on{background:var(--grad);border-color:var(--a1);color:var(--on-accent);box-shadow:0 0 12px var(--glow)}
+.aifix-panel{position:absolute;top:48px;right:calc(var(--redge) + 66px);z-index:30;display:flex;flex-direction:column;gap:5px;
+  width:172px;padding:7px 9px;border-radius:13px;background:var(--glass);border:1px solid var(--a1);
+  backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);box-shadow:0 8px 34px var(--glow)}
+.aifix-panel[hidden]{display:none}   /* ⚠️ display:flex 가 UA 의 [hidden] 을 이기므로 명시 */
+.aifix-row{display:flex;align-items:center;gap:6px}
+.aifix-row .lb{width:26px;flex:none;font-size:10px;font-weight:800;color:var(--faint)}
+.aifix-row b{width:28px;flex:none;font-size:10px;text-align:right;color:var(--a2);font-variant-numeric:tabular-nums}
+.aifix-panel input[type=range]{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:18px;margin:0;background:transparent}
+.aifix-panel input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:rgba(255,255,255,.35)}
+.aifix-panel input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:rgba(255,255,255,.35)}
+.aifix-panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;margin-top:-6px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.aifix-panel input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+body.land.compact #editor .aifix-panel{top:42px;right:calc(var(--redge) + 60px);width:160px}
 .posctl.axis-v{flex-direction:column;flex:1;width:46px;min-height:0}
 .posctl.axis-v .pslot{flex:1;width:34px}
 .posctl.axis-v input[type=range]{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg)}
@@ -1025,7 +1040,21 @@ body:not(.land) #railLang{display:none}
     <div class="urow" id="undoRow">
       <button class="dockbtn" id="btnUndo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h9.5a5.5 5.5 0 0 1 0 11H8"/><path d="M7.5 4.5L3.5 8.5l4 4"/></svg></i><em data-i18n="editor_undo">되돌리기</em></button>
       <button class="dockbtn" id="btnRedo"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8.5h-9.5a5.5 5.5 0 0 0 0 11H16"/><path d="M16.5 4.5l4 4-4 4"/></svg></i><em data-i18n="editor_redo">다시 실행</em></button>
+      <!-- ⭐ v3.47.0 — AI 보정 (원장님 지시 2026-09-04: 「다시실행 밑에 (AI보정) 버튼 — 사진 보정은 사용자가 가장 알맞은
+           가독성을 높이기 위한 밝기·contrast·sharpen, 저절로 선명하고 높은 화질로 · 누르면 왼쪽으로 바들이 보여져 자동 보정된
+           단계를 확인·조정 · 한 번 더 부르면 바 숨김」). 값 계산·적용은 app.js aiFixAuto/applyPhotoFilter. -->
+      <button class="dockbtn" id="btnAiFix"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg></i><em data-i18n="editor_aifix">AI 보정</em></button>
     </div>
+    <!-- v3.47.0 — AI 보정 바 3개 (밝기·대비·선명) — AI 보정 버튼 **왼쪽**에 뜨는 패널. 값은 자동 보정 결과로 채워지고
+         사용자가 끌어서 바꿀 수 있다. 버튼을 다시 누르면 숨는다(보정값은 유지). -->
+    <div class="aifix-panel" id="aiFixPanel" hidden>
+      <div class="aifix-row"><span class="lb" data-i18n="aifix_b">밝기</span><input type="range" id="aiFixB" min="-40" max="80" step="2" value="0"><b id="aiFixBV">0</b></div>
+      <div class="aifix-row"><span class="lb" data-i18n="aifix_c">대비</span><input type="range" id="aiFixC" min="80" max="180" step="2" value="100"><b id="aiFixCV">100</b></div>
+      <div class="aifix-row"><span class="lb" data-i18n="aifix_s">선명</span><input type="range" id="aiFixS" min="0" max="100" step="5" value="0"><b id="aiFixSV">0</b></div>
+    </div>
+    <!-- v3.47.0 — 선명(sharpen) 필터 — CSS filter:url(#pbSharpen). 커널은 app.js 가 선명 값에 맞춰 바꾼다.
+         손가락으로 끄는 동안(포인터 내려감·슬라이더 끄는 중)은 큰 사진에서 느려지지 않도록 잠시 뗀다. -->
+    <svg width="0" height="0" style="position:absolute;width:0;height:0" aria-hidden="true"><filter id="pbSharpen" color-interpolation-filters="sRGB"><feConvolveMatrix id="pbSharpenK" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" preserveAlpha="true" edgeMode="duplicate"/></filter></svg>
     <div class="rdock" id="rightDock">
       <!-- v1.96.0 — 왼쪽 도크에는 위아래 조절 바 하나만 (조금 더 왼쪽 · 조금 더 아래) -->
       <div class="posctl axis-v" id="posCtlV">

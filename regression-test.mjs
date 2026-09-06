@@ -2745,7 +2745,7 @@ if (RUN(5)) {
       const rng = (t, k) => [Math.min(...t.map((q) => q[k])), Math.max(...t.map((q) => q[k]))];
       const src = await fetch("app.js").then((r) => r.text());
       return { aTop: rng(A, "top"), aBot: rng(A, "bot"), bTop: rng(B, "top"), bBot: rng(B, "bot"), cTop: rng(Cc, "top"), cBot: rng(Cc, "bot"),
-               inPipe: /L\.trace = balBoxEdges\(img, L\.trace\); R\.trace = balBoxEdges\(img, R\.trace\);/.test(src) };
+               inPipe: /L\.trace = balBoxEdges\(imgHi, L\.trace\); R\.trace = balBoxEdges\(imgHi, R\.trace\);/.test(src) };
     });
     const within = (r, lo, hi) => r[0] >= lo && r[1] <= hi;
     check("206. 작은 박스 경계 — 옅은 띠 바깥에 놓인 위·아래 점을 박스 안 흰↔검 중간값 교차(몸통 쪽)로 끌어들인다 · 또렷한 눈썹·대비 없는 열은 그대로 · 파이프라인 포함 (원장님 아이디어 2026-09-04)",
@@ -2770,7 +2770,7 @@ if (RUN(5)) {
       const same = PB.balBoxTail(img, tr, 150);
       const src = await fetch("app.js").then((r) => r.text());
       return { n0: tr.length, added: added.length, lastX, dev, sameN: same.length,
-               inPipe: /L\.trace = balBoxTail\(img, L\.trace, S\.g\.v4 \* W\); R\.trace = balBoxTail\(img, R\.trace, S\.g\.v5 \* W\);/.test(src) };
+               inPipe: /L\.trace = balBoxTail\(imgHi, L\.trace, S\.g\.v4 \* W\); R\.trace = balBoxTail\(imgHi, R\.trace, S\.g\.v5 \* W\);/.test(src) };
     });
     check("207. 꼬리 쪽 박스 연장 — 밴드가 멈춘 곳부터 꼬리 자까지 가늘어지는 몸통을 같은 박스로 잇고, 눈썹이 끝나면 멈춘다 · 자가 궤적 안이면 연장 없음 · 파이프라인 포함 (원장님 2026-09-04)",
       bt207.added >= 7 && bt207.lastX !== null && bt207.lastX >= 34 && bt207.lastX <= 58 && bt207.dev <= 2.5 && bt207.sameN === bt207.n0 && bt207.inPipe,
@@ -2797,6 +2797,74 @@ if (RUN(5)) {
     check("208. 피부 쪽에서 몸통 쪽으로 — 결 눈썹의 틈(4줄)에 안 멈추고 몸통 아랫끝 · 눈썹 밑 점(mole)은 떨어진 덩어리라 지나침 · 윗선도 이마 쪽에서 내려옴 (원장님 2026-09-04 「아래 피부색부터 점검하여 검은색이 나오는 부분」)",
       within(sk208.aBot, 119, 123) && within(sk208.bBot, 119.5, 121.5) && within(sk208.cTop, 81, 85) && within(sk208.aTop, 84, 86),
       `결 틈: bot 131→[${sk208.aBot}](119~123, 틈 107.5 아님) · 점: bot 126→[${sk208.bBot}](≈120.5, 점 129.5 아님) · 윗 옅은 띠: top 78→[${sk208.cTop}](81~85) · 결 윗선 [${sk208.aTop}]`);
+    /* 209. ⭐⭐⭐ v3.47.0 — **AI 보정** (원장님 지시 2026-09-04: 「다시실행 밑에 (AI보정) 버튼 · 밝기·contrast·sharpen 저절로 · 누르면 왼쪽으로
+       바들이 보여져 자동 보정된 단계를 확인·조정 · 한 번 더 부르면 바 숨김 / 미러링 전에 밝게 처리한 이후에 픽셀 판정 / 사진잠금을 해제하면
+       밸런스에 자동으로 클릭」). ① 버튼이 .urow 에서 다시실행 바로 밑 ② 누르면 자동값(밝기·대비·선명 40)이 바 3개에 채워지고 패널이 버튼
+       왼쪽에 보임 · #photo 의 CSS filter 에 밝기/대비/url(#pbSharpen) ③ 한 번 더 = 패널 숨김, 보정값·필터 유지 ④ 판정 화소(photoPixels)에
+       같은 보정이 들어감(어두운 합성 사진의 중앙 밝기가 올라감) ⑤ 미러링을 처음 누를 때 AI 보정을 안 켰으면 자동 적용 ⑥ 잠금 해제 →
+       hMode=photo · photoMode=balance ⑦ 새 사진 = 초기화. */
+    const ai209 = await p.evaluate(() => {
+      const PB = window.PB, S = PB.S;
+      const urow = Array.from(document.querySelectorAll("#undoRow > button")).map((b) => b.id);
+      const panel = document.getElementById("aiFixPanel"), btn = document.getElementById("btnAiFix"), photo = document.getElementById("photo");
+      const hiddenBefore = panel.hidden;
+      /* 어두운 판정 화소 실험: 원본 화소를 어둡게 흉내내려고 aiFix 값을 직접 넣어 aiFixApply 를 재본다 */
+      const mk = (v) => { const d = new Uint8ClampedArray(20 * 20 * 4); for (let i = 0; i < d.length; i += 4) { d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } return { data: d, width: 20, height: 20 }; };
+      S.aiFix = { on: true, b: 40, c: 120, s: 0, bars: false, touched: true };
+      const dark = PB.aiFixApply(mk(80)); const v80 = dark.data[(10 * 20 + 10) * 4];
+      S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false };
+      const same = PB.aiFixApply(mk(80)); const v80off = same.data[(10 * 20 + 10) * 4];
+      /* ② 버튼 → 자동값 + 패널 */
+      btn.click();
+      const after = { on: S.aiFix.on, bars: S.aiFix.bars, hidden: panel.hidden, s: S.aiFix.s, b: S.aiFix.b, c: S.aiFix.c,
+        sliders: ["aiFixB", "aiFixC", "aiFixS"].map((id) => document.getElementById(id).value),
+        filter: photo.style.filter, btnOn: btn.classList.contains("on"),
+        leftOfBtn: panel.getBoundingClientRect().right <= btn.getBoundingClientRect().left + 1 };
+      /* ③ 한 번 더 → 숨김, 값 유지 */
+      btn.click();
+      const again = { hidden: panel.hidden, on: S.aiFix.on, filter: photo.style.filter };
+      /* ⑤ 미러링 자동 적용 — 새 사진 상태를 흉내: touched=false, on=false */
+      S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false }; PB.applyPhotoFilter();
+      const filterOff = photo.style.filter;
+      document.getElementById("btnBalance").click();
+      const mir = { on: S.aiFix.on, touched: S.aiFix.touched, bars: S.aiFix.bars, filterOff, filterOn: photo.style.filter, balOn: S.balOn };
+      if (S.balOn) document.getElementById("btnBalance").click();
+      /* ⑥ 잠금 해제 → 밸런스 */
+      S.locked = true; document.getElementById("btnLock").click();
+      const unlock = { locked: S.locked, hMode: S.hMode, photoMode: S.photoMode };
+      document.getElementById("btnLock").click();
+      const relock = { locked: S.locked, hMode: S.hMode };
+      return { urow, hiddenBefore, v80, v80off, after, again, mir, unlock, relock };
+    });
+    const a209 = ai209.after;
+    const okBtn = ai209.urow.length === 3 && ai209.urow[1] === "btnRedo" && ai209.urow[2] === "btnAiFix";
+    const okAuto = a209.on && a209.bars && !a209.hidden && a209.s === 40 && a209.sliders[0] === String(a209.b) && a209.sliders[1] === String(a209.c) && a209.sliders[2] === "40"
+      && /url\(/.test(a209.filter) && a209.btnOn && a209.leftOfBtn;
+    const okAgain = ai209.again.hidden && ai209.again.on && ai209.again.filter === a209.filter;
+    const okPix = ai209.v80 > 80 + 20 && ai209.v80off === 80;
+    const okMir = ai209.mir.on && ai209.mir.touched && !ai209.mir.bars && ai209.mir.filterOff === "" && ai209.mir.filterOn !== "" && ai209.mir.balOn;
+    const okLock = !ai209.unlock.locked && ai209.unlock.hMode === "photo" && ai209.unlock.photoMode === "balance" && ai209.relock.locked && ai209.relock.hMode === "line";
+    check("209. AI 보정 — 다시실행 밑 버튼 · 누르면 자동 밝기·대비·선명(40)이 바 3개에 채워져 버튼 왼쪽에 보임 · 필터 적용 · 한 번 더 = 바 숨김(값 유지) · 판정 화소에도 보정 · 미러링 첫 실행 시 자동 적용 · 잠금 해제 = 밸런스 (원장님 지시 2026-09-04)",
+      ai209.hiddenBefore && okBtn && okAuto && okAgain && okPix && okMir && okLock,
+      `버튼 순서 [${ai209.urow}]=${okBtn} · 자동: on=${a209.on} 바=${!a209.hidden} 왼쪽=${a209.leftOfBtn} 값 ${a209.b}/${a209.c}/${a209.s} 필터 "${a209.filter}" =${okAuto} · 다시: 숨김=${ai209.again.hidden} 유지=${ai209.again.on} =${okAgain} · 판정화소 80→${ai209.v80}(끄면 ${ai209.v80off}) =${okPix} · 미러링 자동: ${ai209.mir.filterOff === "" ? "없음" : "?"}→"${ai209.mir.filterOn}" 바=${ai209.mir.bars} =${okMir} · 잠금해제: ${ai209.unlock.hMode}/${ai209.unlock.photoMode} 다시잠금 ${ai209.relock.hMode} =${okLock}`);
+    /* 210. ⭐⭐⭐ v3.47.0 — **3배 화소로 박스 경계** (원장님 지시 2026-09-04 「원본을 가지고 들어와라 — 저화질이면 드로잉 판단에 더 섬세하지
+       못한 거 아니니?」). photoPixels(3) 의 폭·높이가 캔버스의 3배 · 미러링이 3배 화소(BOX_SCALE)로 박스를 읽는다(본문) · 같은 눈썹을 1배·3배
+       화소로 그려 boxEdge 에 주면 3배 쪽은 1/3px 단위로 답한다(경계 100.33 → 1배는 100.5, 3배는 100.17~100.5). */
+    const hi210 = await p.evaluate(async () => {
+      const PB = window.PB, S = PB.S, W = S.dim.W, H = S.dim.H;
+      S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false };
+      const px1 = PB.photoPixelsRaw(1), px3 = PB.photoPixelsRaw(3);
+      const mk = (sc) => { const w = W * sc, h = 200 * sc, d = new Uint8ClampedArray(w * h * 4);
+        for (let y = 0; y < h; y++) { const yc = y / sc; const v = (yc >= 60 && yc < 100.33) ? 60 : 200; for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; } } return { data: d, width: w, height: h }; };
+      const e1 = PB.boxEdge(mk(1), 100, 104, 40, 1), e3 = PB.boxEdge(mk(3), 100, 104, 40, 1);
+      const src = await fetch("app.js").then((r) => r.text());
+      return { w1: px1 && px1.width, h1: px1 && px1.height, w3: px3 && px3.width, h3: px3 && px3.height, W, H, e1, e3, scale: PB.BOX_SCALE,
+               inPipe: /const imgHi = photoPixels\(BOX_SCALE\) \|\| img;/.test(src) && /balBoxEdges\(imgHi, L\.trace\)/.test(src) && /balBoxTail\(imgHi, L\.trace/.test(src) };
+    });
+    check("210. 3배 화소 — photoPixels(3)은 캔버스의 3배 · 미러링 박스 경계·꼬리 연장이 3배 화소로 읽음 · 같은 경계를 1/3px 단위로 답한다 (원장님 2026-09-04 「원본 화질」)",
+      hi210.w1 === hi210.W && hi210.h1 === hi210.H && hi210.w3 === hi210.W * 3 && hi210.h3 === hi210.H * 3 && hi210.scale === 3 && hi210.inPipe
+        && hi210.e1 !== null && Math.abs(hi210.e1 - 100.5) < 1e-6 && hi210.e3 !== null && hi210.e3 > 100 && hi210.e3 < 100.5,
+      `1배 ${hi210.w1}×${hi210.h1} · 3배 ${hi210.w3}×${hi210.h3}(캔버스 ${hi210.W}×${hi210.H}) · BOX_SCALE=${hi210.scale} · 파이프라인=${hi210.inPipe} · 경계 100.33: 1배 ${hi210.e1} → 3배 ${hi210.e3 && hi210.e3.toFixed(2)}`);
     await ctx.close();
     check("195. 미러링 점 색 3종 — 초기화 왼쪽 · 켜면 생기고 끄면 없어짐 · 노랑 선택 시 점 전부 노랑(저장) · 점은 선 편집·사진변경 시트·사진 이동 뒤에도 유지, 미러링 버튼으로만 종료 (원장님 지시 2026-09-02)",
       errs.length === 0 && pre195.dockHidden && on195.shown && on195.n === 3 && on195.leftOfReset && on195.circles > 0 && on195.red === on195.circles && on195.selRed && on195.curve
