@@ -385,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.50.0";
+const APP_VERSION = "v3.51.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3795,13 +3795,15 @@ function frontDecide(img) {
         if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = c; break; }
       }
     } else pick = cands[0];
-    if (pick) ys.push(pick);
+    if (pick) { pick.x = x; ys.push(pick); }
   }
   if (ys.length < 3) return null;
   /* 앞머리 = 아랫끝들의 중앙값 · 앞두께 = 윗끝들의 중앙값 */
   const bots = ys.map((c) => c.y).sort((a, b) => a - b);
   const tops = ys.map((c) => c.top).sort((a, b) => a - b);
-  return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)] };
+  const xs2 = ys.map((c) => c.x).sort((a, b) => a - b);
+  /* v3.51.0 — 읽은 열들의 가운데 x 도 함께 돌려준다 (자 판독 박스 다듬기가 그 자리에서 다시 잰다) */
+  return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)], x: xs2[Math.floor(xs2.length / 2)] };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -4344,6 +4346,9 @@ function autoFromDrawing() {
   const { W, H } = S.dim;
   const img = photoPixels();
   if (!img) return false;
+  /* v3.51.0 — 자 다듬기용 3배 화소는 **쓸 때 한 번만** 만든다 (미러링과 같은 BOX_SCALE) */
+  let _hi = undefined;
+  const hiPix = () => { if (_hi === undefined) { try { _hi = photoPixels(BOX_SCALE) || img; } catch (e) { _hi = img; } } return _hi; };
   /* 2패스 (v1.33.0) — ① 그린 드로잉(진한 대비) ② 실패하면 맨 눈썹(옅은 대비).
      원장님 스크린샷(2026-08-20)에서 맨 눈썹 사진이 1차에서 떨어져 랜드마크 배치로
      남았고, 그 배치가 「전혀 프로페셔널하지 못한」 위치였습니다. */
@@ -4555,6 +4560,11 @@ function autoFromDrawing() {
       setY("front", fd.y);
       /* ⭐ v2.2.0 — 같은 열의 윗끝 = **앞두께** (검은색이 끝나는 지점 · 눈썹 윗선) */
       if (fd.top !== null && fd.top < fd.y) setY("frontThickness", fd.top);
+      /* ⭐⭐⭐ v3.51.0 — 그 자리에서 **눕힌 박스**로 앞머리(아랫선)·앞두께(윗선)를 다시 잰다 (위 rulerBoxRefine).
+         넘버링 창은 아랫선에만 건다 — 윗선(앞두께)은 그 창보다 위에 있는 것이 정상이고, 두께는 ftGuard 가 지킨다. */
+      const rb = rulerBoxRefine(hiPix(), seq, fd.x, S.g.frontThickness * H, S.g.front * H, null, [FRONT_T_LO, FRONT_T_HI]);
+      if (rb) { setY("frontThickness", rb.top); setY("front", rb.bot); S.frontBox = { top: +rb.top.toFixed(1), bot: +rb.bot.toFixed(1) }; }
+      else S.frontBox = null;
     }
     /* 어떤 경로로 왔든 마지막에 **하한 집행** — 눈 위 7 눈금 미만이면 앞머리가 아니다.
        (상한 대체는 뺐습니다 — 크게 확대한 사진에서는 눈썹이 정당하게 16 을 넘습니다.) */
@@ -4647,6 +4657,10 @@ function autoFromDrawing() {
       const bandBot = at(pa, pb, "bot");
       S.archThickRead = { decide: +ad.thick.toFixed(1), band: bandBot === null ? null : +bandBot.toFixed(1), used: "decide" };
       setY("h2", ad.edge); setY("archThickness", ad.thick);
+      /* ⭐⭐⭐ v3.51.0 — 산꼭대기 자리에서 **눕힌 박스**로 아치엣지(윗선)·아치두께(아랫선)를 다시 잰다.
+         원장님 실기기 실측에서 자가 눈썹보다 얇게(74px vs 165px) 잡히던 자리 — 창·해부학·마지노선은 그대로. */
+      const rb = rulerBoxRefine(hiPix(), seq, seq[pk].x, S.g.h2 * H, S.g.archThickness * H, [ARCH_T_LO, ARCH_T_HI], [ARCH_T_LO, ARCH_T_HI]);
+      if (rb) { setY("h2", rb.top); setY("archThickness", rb.bot); S.archThickRead.box = { edge: +rb.top.toFixed(1), thick: +rb.bot.toFixed(1) }; }
     }
     else if (info.seen > 0) {
       /* ⭐ v2.6.0 — 판독 실패 → **표준값** (위 AT_FROM_FRONT 주석의 원장님 지시).
@@ -6276,12 +6290,14 @@ const BOX_SAMPLES = 7, BOX_MAX_SLOPE = 3;   /* v3.50.0 — 표본 7개 고정 ·
 /* 박스 하나 — 열 x · 지금 경계값 yc · 두께 th · dir(+1 아래선 / -1 윗선). 경계 y 를 돌려주고,
    박스 안에 흰↔검 대비가 없으면 **null**(판단 보류). v3.45.0 에서 balBoxEdges 안에서 꺼내 꼬리 연장과 같이 쓴다. */
 const BOX_SCALE = 3;          // v3.47.0 — 박스 경계는 캔버스의 3배 화소로 읽는다
-function boxEdge(img, x0c, ycc, thc, dir, slope) {
+function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
   const IW = img.width, IH = img.height;
   /* v3.47.0 — 화소가 캔버스보다 sc 배 크면 좌표·창·표본 간격을 그 배율로 (돌려줄 때 /sc). 1배 화소면 예전과 동일. */
   const sc = S.dim && S.dim.W ? Math.max(1, Math.round((IW / S.dim.W) * 100) / 100) : 1;
   const x0 = x0c * sc, yc = ycc * sc, th = Math.max(4, thc) * sc;
-  const hh = Math.max(6 * sc, Math.round(BOX_HALF_H * th));
+  /* v3.51.0 — 박스 높이 배수는 부를 때 정할 수 있다: 미러링(점이 이미 가장자리 근처)은 두께의 절반이면 충분하지만,
+     자 판독 다듬기는 자가 몸통 **속**에 서 있을 수 있어 두께만큼 넉넉히 봐야 가장자리가 박스 안에 들어온다. */
+  const hh = Math.max(6 * sc, Math.round((isFinite(halfHMul) ? halfHMul : BOX_HALF_H) * th));
   /* ⭐⭐⭐ v3.50.0 — **꼬리 쪽에서는 박스를 눕히고 좁힌다** (원장님 지시 2026-09-06: 「아치엣지에서 꼬리로 내려오는 부분에서
      점이 위로 올라가는 게 반복된다 — 꼬리 부분의 윤곽 네모를 더 작게 하여 판독하면 범위가 좁아져 더 잘 판독하지 않니?」).
      맞습니다. 합성 실측(회귀 215): 눈썹이 가로로 누워 있으면(기울기 0.3) 박스 경계 오차가 ±1.5px 인데, 꼬리처럼 사선으로
@@ -6336,8 +6352,13 @@ function boxEdge(img, x0c, ycc, thc, dir, slope) {
        결 눈썹의 틈(가로 평균 뒤 두께의 10% 안팎)은 통과, 눈썹 밑 주름·속눈썹 그늘(두께만큼 떨어짐)은 걸러진다. 눈썹에 바짝 붙은 점(mole)은
        한두 열을 끌어당길 수 있지만 그건 뒤의 잇기(balBridgeOutliers, 튀었다 돌아오는 열)가 편다. */
     const G = Math.max(RUN, Math.round(0.15 * th));
+    /* ⚠️ v3.51.0 — 「몸통에 이어지는가」는 **경계에서 두께만큼**만 본다. 예전엔 박스 끝까지 봤는데, 박스 높이가
+       두께의 절반이던 때는 그게 곧 「두께만큼」이었다. 자 판독 다듬기(RULER_BOX_HALF_H=1.2)처럼 박스가 높아지면
+       박스 끝이 **반대쪽 가장자리 너머 피부**까지 나가서, 멀쩡한 눈썹이 「떨어진 덩어리」로 걸러졌다(전부 null).
+       미러링(0.5배 박스)에서는 이 한도가 걸리지 않아 v3.44~v3.50 결과가 그대로다 — 회귀 206~211·215 로 확인. */
+    const CONN = Math.max(RUN, Math.round(2 * BOX_HALF_H * th));
     let gap = 0, joined = true;
-    for (let j = k; j >= 0 && j < n; j += step) { if (sm[j] >= mid) { if (++gap >= G) { joined = false; break; } } else gap = 0; }
+    for (let j = k; j >= 0 && j < n; j += step) { if (Math.abs(j - k) > CONN) break; if (sm[j] >= mid) { if (++gap >= G) { joined = false; break; } } else gap = 0; }
     if (joined) return (y0 + k + (dir > 0 ? 0.5 : -0.5)) / sc;   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 (캔버스 px 로) */
     /* 떨어진 검은 덩어리 — 지나친다 */
     while (k + step >= 0 && k + step < n && sm[k + step] < mid) k += step;
@@ -6356,6 +6377,46 @@ function traceSlope(trace, i, key) {
   const dx = b.x - a.x;
   return Math.abs(dx) < 0.5 ? 0 : (b[key] - a[key]) / dx;
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⭐⭐⭐ v3.51.0 — **자 판독도 눕힌 박스로 다듬는다** (원장님 허락 2026-09-06: 「자 판독도 눕힌 박스로 진행해」)
+   ───────────────────────────────────────────────────────────────────────────
+   왜: 원장님 실기기 스크린샷 실측(v3.49.0 보고)에서 **아치엣지가 산꼭대기 윗선보다 ≈50px 아래(몸통 안),
+   아치두께는 아랫선보다 ≈30px 위** — 자 74px vs 실제 눈썹 ≈165px. 자 판독(darkBlobsUp)은 **열 하나**를
+   1배 화소로 걸으며 「피부 − 대비」 문턱을 쓰기 때문에, 흐린 가장자리에서 일찍 멈추고 털 한 올·모공에 흔들린다.
+   미러링 점선은 v3.44~v3.50 에서 이미 **박스**로 바꿔 가장자리에 붙었다 — 같은 잣대를 자에도 준다.
+   ⚠️ **누가 무엇을 정하는가는 그대로**입니다 — 넘버링 창(FRONT_T_LO~HI · ARCH_T_LO~HI), 해부학 순서,
+   마지노선(applyArchThickFloor), 하한(frontFloor)·안전판(ftGuard)은 전부 예전 그대로 돌아갑니다.
+   이 함수는 **이미 정해진 자 두 줄(윗선·아랫선)의 높이만** 3배 화소의 눕힌 박스로 다시 재는 마무리입니다.
+   지키는 것 넷:
+     ① 3배 화소(BOX_SCALE) · 그 자리 눈썹 기울기(밴드에서 뽑음)로 눕힌 박스 — v3.50.0 과 같은 박스
+     ② 움직일 수 있는 거리는 **두께의 1배**까지 (그 이상 = 머리카락·그늘을 잡은 것 → 버림)
+     ③ 넘버링 창 밖으로 나가면 버림 (판독이 쓰던 그 창 그대로)
+     ④ 윗선이 아랫선보다 1px 넘게 위에 있어야 채택 — 뒤집히거나 붙으면 통째로 버림
+   못 읽으면(대비 없음) 조용히 원값. 회귀 217. */
+const RULER_BOX_MOVE = 1.0;      // 두께의 몇 배까지 움직여도 되는가
+const RULER_BOX_HALF_H = 1.2;    // 박스 높이 = 두께의 이 배 (자가 몸통 속에 서 있어도 가장자리가 박스 안에 들어오게)
+function rulerBoxRefine(imgHi, seq, x, yTop0, yBot0, winTop, winBot) {
+  try {
+    if (!imgHi || !isFinite(x) || !isFinite(yTop0) || !isFinite(yBot0)) return null;
+    const th = yBot0 - yTop0;
+    if (!(th > 2) || !seq || seq.length < 3) return null;
+    const tr = seq.map((p) => ({ x: p.x, top: p.top, bot: p.bot })).sort((a, b) => a.x - b.x);
+    let i = 0;
+    for (let k = 1; k < tr.length; k++) if (Math.abs(tr[k].x - x) < Math.abs(tr[i].x - x)) i = k;
+    const nt = boxEdge(imgHi, x, yTop0, th, -1, traceSlope(tr, i, "top"), RULER_BOX_HALF_H);
+    const nb = boxEdge(imgHi, x, yBot0, th, 1, traceSlope(tr, i, "bot"), RULER_BOX_HALF_H);
+    const lim = Math.max(6, RULER_BOX_MOVE * th);
+    const u = frontTickPx(), eyePx = eyeZeroY() * S.dim.H;
+    /* 넘버링 창 = 판독(darkBlobsUp)이 후보를 고를 때 쓴 그 창 그대로. 창이 없으면(자 없음) 통과 */
+    const inWin = (y, win) => { if (!u || !win) return true; const t = (eyePx - y) / u; return t >= win[0] && t <= win[1]; };
+    const take = (v, v0, win) => (v === null || Math.abs(v - v0) > lim || !inWin(v, win)) ? v0 : v;
+    const t2 = take(nt, yTop0, winTop), b2 = take(nb, yBot0, winBot);
+    if (!(t2 < b2 - 1)) return null;
+    if (t2 === yTop0 && b2 === yBot0) return null;
+    return { top: t2, bot: b2 };
+  } catch (e) { return null; }
+}
+
 function balBoxEdges(img, trace) {
   try {
     if (!img || !trace || trace.length < 3) return trace;
@@ -7224,6 +7285,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
+  rulerBoxRefine, RULER_BOX_MOVE, RULER_BOX_HALF_H,   /* v3.51.0 — 자 판독 눕힌 박스 (회귀 217) */
   balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_SAMPLES, BOX_MAX_SLOPE, traceSlope, snapState, applySnap,   /* v3.50.0 — 눕힌 박스·되돌리기 (회귀 215·216) */ BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */

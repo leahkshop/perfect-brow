@@ -2915,6 +2915,49 @@ if (RUN(5)) {
     check("215. 꼬리 박스 — 사선으로 내려오며 가늘어지는 꼬리에서 박스를 **눕히고 좁혀** 위·아래선을 2px 안에 놓는다 (가로 박스는 4~6px 벌어짐) (원장님 지시 2026-09-06)",
       okLay && wasBad && tl215.samples === 7 && tl215.cap === 3 && Math.abs(tl215.slope - 1.5) < 1e-6,
       `표본 ${tl215.samples}개 · 기울기 상한 ${tl215.cap} · 궤적 기울기 ${tl215.slope} · ` + tl215.rows.map((r) => `x${r.x}(두께${r.th}) 가로 ${r.fT}/${r.fB} → 눕힘 ${r.lT}/${r.lB}`).join(" · "));
+    /* 217. ⭐⭐⭐ v3.51.0 — **자 판독도 눕힌 박스로 다듬는다** (원장님 허락 2026-09-06 「자 판독도 눕힌 박스로 진행해」).
+       합성: 가장자리가 12px 에 걸쳐 흐리게 번지는 눈썹(파우더·저대비 사진) — 열 하나를 문턱으로 걷는 판독은 진한 속만 잡아
+       자가 눈썹보다 얇게(원장님 실측: 자 74px vs 실제 165px) 서고, 그 자리를 눕힌 박스로 다시 재면 가장자리에 붙는다.
+       지키는 것: ① 두께의 1배 넘게는 안 움직인다(머리카락 방어) ② 넘버링 창 밖은 버린다 ③ 위·아래가 뒤집히면 통째로 버린다
+       ④ 대비가 없으면 원값. */
+    const rf217 = await p.evaluate(() => {
+      const PB = window.PB;
+      const W = 260, H = 300, TOP = 100, BOT = 200, SOFT = 12;   /* 진짜 눈썹 = 100~200, 가장자리 12px 번짐 */
+      const d = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        let v = 200;
+        if (y >= TOP && y <= BOT) v = 60;
+        else { const dist = y < TOP ? TOP - y : y - BOT; if (dist < SOFT) v = Math.round(60 + (200 - 60) * (dist / SOFT)); }
+        const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+      }
+      const img = { data: d, width: W, height: H };
+      const seq = [];
+      for (let x = 60; x <= 200; x += 10) seq.push({ x, top: TOP, bot: BOT });
+      /* 판독이 몸통 속에 세운 자 (윗선 30px 아래 · 아랫선 25px 위) */
+      const inside = PB.rulerBoxRefine(img, seq, 130, TOP + 30, BOT - 25, null, null);
+      /* 두께의 1배를 넘는 이동 요구 = 버림 (머리카락 방어) */
+      const far = PB.rulerBoxRefine(img, seq, 130, TOP + 80, TOP + 88, null, null);
+      /* 자가 이미 가장자리에 있어도(보통 사진) 박스가 그것을 확인해 준다 — 높은 박스가 반대쪽 피부까지 봐서
+         멀쩡한 눈썹을 「떨어진 덩어리」로 걸러 버리면 전부 null 이 된다(v3.51.0 에서 잡은 함정) */
+      const onEdge = PB.rulerBoxRefine(img, seq, 130, TOP - 3, BOT + 3, null, null);
+      /* 대비 없는 자리(민무늬 피부) = 원값 → null */
+      const flatD = new Uint8ClampedArray(W * H * 4); flatD.fill(200); for (let i = 3; i < flatD.length; i += 4) flatD[i] = 255;
+      const flat = PB.rulerBoxRefine({ data: flatD, width: W, height: H }, seq, 130, 120, 170, null, null);
+      const src = null;
+      return { inside, far, flat, onEdge, move: PB.RULER_BOX_MOVE, hh: PB.RULER_BOX_HALF_H };
+    });
+    const src217 = await p.evaluate(() => fetch("app.js").then((r) => r.text()).then((t) => ({
+      front: /rulerBoxRefine\(hiPix\(\), seq, fd\.x, S\.g\.frontThickness \* H, S\.g\.front \* H, null, \[FRONT_T_LO, FRONT_T_HI\]\)/.test(t),
+      arch: /rulerBoxRefine\(hiPix\(\), seq, seq\[pk\]\.x, S\.g\.h2 \* H, S\.g\.archThickness \* H, \[ARCH_T_LO, ARCH_T_HI\], \[ARCH_T_LO, ARCH_T_HI\]\)/.test(t),
+      hi: /_hi = photoPixels\(BOX_SCALE\) \|\| img/.test(t),
+    })));
+    const ins = rf217.inside;
+    check("217. 자 판독 다듬기 — 흐린 가장자리에서 몸통 속에 서 있던 앞머리·앞두께·아치엣지·아치두께를 3배 화소 눕힌 박스로 눈썹 가장자리에 붙인다 · 두께의 1배 넘는 이동·대비 없음은 버림 (원장님 허락 2026-09-06)",
+      !!ins && Math.abs(ins.top - 94) <= 4 && Math.abs(ins.bot - 206) <= 4
+        && !!rf217.onEdge && Math.abs(rf217.onEdge.top - 94) <= 4 && Math.abs(rf217.onEdge.bot - 206) <= 4
+        && rf217.far === null && rf217.flat === null && rf217.move === 1 && rf217.hh === 1.2
+        && src217.front && src217.arch && src217.hi,
+      `몸통 속(130/175) → ${ins ? ins.top.toFixed(1) + "/" + ins.bot.toFixed(1) : "null"} (참 눈썹 100~200, 번짐 한가운데 ≈94/206) · 가장자리 위(97/203) → ${rf217.onEdge ? rf217.onEdge.top.toFixed(1) + "/" + rf217.onEdge.bot.toFixed(1) : "null(높은 박스가 멀쩡한 눈썹을 걸러냄!)"} · 먼 이동=${rf217.far === null ? "버림" : "잘못 채택"} · 민무늬=${rf217.flat === null ? "원값" : "잘못 채택"} · 한도 ${rf217.move}배 · 앞머리 연결=${src217.front} 아치 연결=${src217.arch} 3배화소=${src217.hi}`);
     /* 216. ⭐⭐⭐ v3.50.0 — **AI 보정도 되돌리기에 포함** (원장님 지시 2026-09-06: 「AI 보정 후 되돌리기 버튼을 누르면 이 보정까지
        포함하여 뒤로 돌아가도록 설정」). 되돌리기 한 번 = 밝기·대비·선명 + (v3.49.0 이 다시 잰) 자가 함께 예전으로 · 다시 실행으로 복귀. */
     const un216 = await p.evaluate(() => {
