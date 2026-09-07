@@ -389,7 +389,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.61.0";
+const APP_VERSION = "v3.62.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1736,17 +1736,16 @@ function commitEdit() {
      미러링 점은 **드로잉 실측**이라 선을 옮겨도 낡지 않는다(회귀 182). 사진(S.p)이 움직였을 때만 같은 사진 위에서 다시
      잰다 — 실패하면 이전 판정을 그대로 둔다(점을 비우지 않는다). 미러링이 꺼져 있을 때는 예전대로 버린다. */
   if (S.balOn) {
-    /* v3.50.0 — AI 보정이 바뀌어도 다시 잰다: 미러링 점은 보정된 화소로 읽은 것이라 보정이 바뀌면 낡는다 */
-    if (JSON.stringify(before.p) !== JSON.stringify(S.p) || JSON.stringify(before.af) !== JSON.stringify(S.aiFix)) {
-      const keepB = S.balance, keepC = S.balCurve;
-      try { runBalance(); runBalanceCurve(); } catch (e) { /* 조용히 */ }
-      if (!S.balance) S.balance = keepB;
-      if (!S.balCurve) S.balCurve = keepC;
-    }
+    /* ⭐⭐⭐ v3.62.0 — **미러링이 켜져 있는 동안에는 아무것도 다시 재지 않는다** (원장님 지시 2026-09-07).
+       v3.50.0 은 사진(S.p)이나 AI 보정이 바뀌면 다시 쟀는데, 그것이 「버튼을 누르면 점이 튄다」의 원인이었다.
+       점은 이제 사진 좌표로 얼려 있어(freezeBalDots) 사진을 옮기거나 확대해도 드로잉의 같은 자리에 그대로
+       붙어 있다 — 다시 잴 이유가 없다. 다시 재는 것은 미러링을 껐다 켤 때뿐이다.
+       ⛔ 여기에 runBalanceCurve() 를 다시 넣지 마세요 (회귀 226). */
   } else {
     S.balance = null;                                   // 선을 건드리면 측정값이 낡는다 (v1.26.0)
     S.balCurve = null;                                  // v3.13.0 — 커브 판정도 함께 낡는다
     S.balAnim = null;                                   // v3.15.0 — 애니메이션도 함께 낡는다
+    S.balFrozen = null;                                 // v3.62.0 — 얼린 점도 함께
   }
   updateUndoBtn();
 }
@@ -2279,6 +2278,17 @@ function imgToCanvas(px, py, tr) {
   const rx = vx * Math.cos(r) - vy * Math.sin(r);
   const ry = vx * Math.sin(r) + vy * Math.cos(r);
   return { x: W / 2 + rx * tr.zoom + tr.ox * W, y: H / 2 + ry * tr.zoom + tr.oy * H };
+}
+
+/* ⭐⭐⭐ v3.62.0 — 캔버스 좌표 → **사진 좌표** (imgToCanvas 의 역함수).
+   미러링 점을 사진에 얼려 붙이는 데 씁니다 (freezeBalDots). */
+function canvasToImg(cxp, cyp, tr) {
+  const { W, H } = S.dim;
+  if (!S.s0 || !tr || !tr.zoom) return null;
+  const rx = (cxp - W / 2 - tr.ox * W) / tr.zoom, ry = (cyp - H / 2 - tr.oy * H) / tr.zoom;
+  const r = (tr.rot * Math.PI) / 180, c = Math.cos(r), sn = Math.sin(r);
+  const vx = rx * c + ry * sn, vy = -rx * sn + ry * c;
+  return { x: vx / S.s0 + S.iw / 2, y: vy / S.s0 + S.ih / 2 };
 }
 
 /* 동공 위치(정규화 캔버스 좌표)로부터 가이드 라인 일괄 배치.
@@ -5192,7 +5202,7 @@ function loadPhoto(file) {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
-    S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null;
+    S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; S.balFrozen = null;
     /* ⭐ v3.26.0 — 새 사진도 **잠금 상태로 시작** (원장님 지시 2026-09-02: 「사진 잠금은 앱이 시작되면 잠금 상태로
        시작하고 사용자가 끄면 색상 조금 더 꺼진 느낌으로」). 시술 중 사진이 손에 밀리지 않는 것이 기본.
        사진을 옮기려면 잠금을 풀어야 한다. 첫 자동 정렬(runFaceAI→autoAlign)은 잠금과 무관하게 사진을 놓는다.
@@ -5855,7 +5865,7 @@ $("btnReset").onclick = () => {
     S.g = { ...DEFAULT_GUIDE };
     if (!keepPhoto) S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
-    S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null;
+    S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; S.balFrozen = null;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.pickMode = false;
@@ -6450,12 +6460,18 @@ let BOX_SURE_FRAC = 0.20;  /* 그 자리 눈썹 두께의 이 비율 (확대율 
    ⛔ 창을 좁히지 마세요 — 좁히면 확대해서 쓰는 실제 화면에서 또렷한 선까지 숨습니다(v3.59.0 의 잘못). */
 let BOX_LAST_SCORE = null;    // 마지막 boxEdge 의 경계 점수 (0~1) · 못 찾았으면 null
 let BOX_LAST_CONTRAST = 0;    // 그때 박스의 흰↔검 밝기차 (절대값)
+/* v3.61.1 — 진단: boxEdge 가 왜 답을 못 냈는지 한 낱말로 남긴다 (photo-test.mjs 가 읽는다).
+   "ok" · "box-small"(박스가 너무 얕다) · "no-contrast"(흰↔검 차이 없음) · "no-run"(검은 줄 3연속이 없다)
+   · "not-joined"(검은 줄은 찾았는데 몸통과 떨어져 있다고 보고 지나쳤다). 판독 로직에는 관여하지 않는다. */
+let BOX_LAST_WHY = "";
+let BOX_LAST_SKIPS = 0;       // not-joined 로 지나친 후보 개수
 const BOX_SAMPLES = 7, BOX_MAX_SLOPE = 3;   /* v3.50.0 — 표본 7개 고정 · 눕히는 기울기 상한(그 위는 머리카락·잡티) */
 /* 박스 하나 — 열 x · 지금 경계값 yc · 두께 th · dir(+1 아래선 / -1 윗선). 경계 y 를 돌려주고,
    박스 안에 흰↔검 대비가 없으면 **null**(판단 보류). v3.45.0 에서 balBoxEdges 안에서 꺼내 꼬리 연장과 같이 쓴다. */
 const BOX_SCALE = 3;          // v3.47.0 — 박스 경계는 캔버스의 3배 화소로 읽는다
 function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
   BOX_LAST_SCORE = null; BOX_LAST_CONTRAST = 0;      /* v3.59.0 — 부를 때마다 초기화 */
+  BOX_LAST_WHY = "no-run"; BOX_LAST_SKIPS = 0;       /* v3.61.1 — 진단 */
   const IW = img.width, IH = img.height;
   /* v3.47.0 — 화소가 캔버스보다 sc 배 크면 좌표·창·표본 간격을 그 배율로 (돌려줄 때 /sc). 1배 화소면 예전과 동일. */
   const sc = S.dim && S.dim.W ? Math.max(1, Math.round((IW / S.dim.W) * 100) / 100) : 1;
@@ -6481,7 +6497,7 @@ function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
     if (x >= 0 && x < IW) xs.push({ x, dy: Math.round(sl * dx) });
   }
   const y0 = Math.max(0, Math.round(yc - hh)), y1 = Math.min(IH - 1, Math.round(yc + hh));
-  if (!xs.length || y1 - y0 < 6 * sc) return null;
+  if (!xs.length || y1 - y0 < 6 * sc) { BOX_LAST_WHY = "box-small"; return null; }
   const a = [];
   /* ⭐ v3.48.0 — 박스 한 줄의 값 = 가로 표본 7개 중 **어두운 4개의 평균** (원장님 결 눈썹 원본 실측 2026-09-04). 7개 평균이면
      결(hair-stroke) 앞머리처럼 가는 획 사이로 피부가 비치는 곳은 「흰색」이 되어 점이 진한 몸통까지 들어가 앞머리 아랫선이 사선으로
@@ -6493,7 +6509,7 @@ function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
   const sm = a.map((_, k) => (a[Math.max(0, k - 1)] + a[k] + a[Math.min(n - 1, k + 1)]) / 3);
   const sorted = sm.slice().sort((u, v) => u - v);
   const black = sorted[Math.floor((n - 1) * 0.1)], white = sorted[Math.floor((n - 1) * 0.9)];
-  if (white - black < BOX_MIN_CONTRAST) return null;
+  if (white - black < BOX_MIN_CONTRAST) { BOX_LAST_WHY = "no-contrast"; return null; }
   BOX_LAST_CONTRAST = white - black;                 /* v3.59.0 */
   const mid = (white + black) / 2;
   /* ⭐⭐⭐ v3.46.0 — **피부 쪽에서 몸통 쪽으로 걷는다** (원장님 2026-09-04 「앞머리 아래부분 박스 처리하여 **아래 피부색부터**
@@ -6531,9 +6547,11 @@ function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
       const span = Math.max(1, Math.round(BOX_SURE_SPAN * sc), Math.round(BOX_SURE_FRAC * th));
       const pcAt = (i) => (white - sm[Math.max(0, Math.min(n - 1, i))]) / Math.max(1, white - black);
       BOX_LAST_SCORE = clamp(pcAt(k + step * span) - pcAt(k - step * span), 0, 1);
+      BOX_LAST_WHY = "ok";
       return (y0 + k + (dir > 0 ? 0.5 : -0.5)) / sc;   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 (캔버스 px 로) */
     }
     /* 떨어진 검은 덩어리 — 지나친다 */
+    BOX_LAST_WHY = "not-joined"; BOX_LAST_SKIPS++;      /* v3.61.1 — 진단 */
     while (k + step >= 0 && k + step < n && sm[k + step] < mid) k += step;
     seenWhite = false;
   }
@@ -6625,13 +6643,14 @@ function balBoxEdges(img, trace) {
       const th = p.bot - p.top;
       /* v3.59.0 — 점수를 받으려면 호출을 **나눠서** 해야 한다 (BOX_LAST_SCORE 는 마지막 호출의 것) */
       const nb = boxEdge(img, p.x, p.bot, th, 1, traceSlope(trace, i, "bot"));
-      const sb = BOX_LAST_SCORE, cb = BOX_LAST_CONTRAST;
+      const sb = BOX_LAST_SCORE, cb = BOX_LAST_CONTRAST, wb = BOX_LAST_WHY, kb = BOX_LAST_SKIPS;
       const nt = boxEdge(img, p.x, p.top, th, -1, traceSlope(trace, i, "top"));
-      const st = BOX_LAST_SCORE, ct = BOX_LAST_CONTRAST;
+      const st = BOX_LAST_SCORE, ct = BOX_LAST_CONTRAST, wt = BOX_LAST_WHY, kt = BOX_LAST_SKIPS;
       const b2 = nb === null ? p.bot : nb, t2 = nt === null ? p.top : nt;
       if (b2 - t2 >= 3) { out[i].bot = b2; out[i].top = t2; }
       out[i].scoreTop = st; out[i].scoreBot = sb;
       out[i].contTop = ct; out[i].contBot = cb;        /* v3.60.1 — 진단용: 그 박스의 흰↔검 밝기차 */
+      out[i].whyTop = wt; out[i].whyBot = wb; out[i].skipTop = kt; out[i].skipBot = kb;   /* v3.61.1 — 진단 */
       /* ⭐⭐⭐ v3.58.0 — **판단이 안 되면 숨김** (원장님 지시 2026-09-07: 「이 부분이 점수로 판단되지
          않으면 미러링시 점선을 숨김처리한다 … 이상한데 점선처리하면 에러로 보인다」).
          boxEdge 가 null = 박스 안에 흰↔검 대비가 없다 = 옅음/짙음 경계를 점수로 매길 수 없다.
@@ -7011,54 +7030,62 @@ function balSmoothTrace(trace) {
   return out;
 }
 
-function renderBalCurve(frag) {
+/* ⭐⭐⭐ v3.62.0 — **미러링 점은 한 번 만들어지면 절대 움직이지 않는다** (원장님 지시 2026-09-07:
+   「미러링은 만들어진 후 절대 다른 버튼들이 조작되어도 움직이지 않고 픽스된 채로 있도록 해라 —
+    지금은 미러링 이후 사진을 조작하면 점들이 움직인다」).
+   ───────────────────────────────────────────────────────────────────────────
+   예전에는 점을 **매 프레임 다시 계산**했습니다: renderBalCurve 가 S.balCurve.trace 에 무시 규칙·잇기·
+   앞머리 끝·부드럽게를 그때그때 다시 걸고, 거울축도 그 순간의 이너 가이드(v1)로 잡았습니다. 게다가 사진을
+   움직이거나 AI 보정을 건드리면 편집 기록 자리(pushHist)에서 **다시 재기(runBalanceCurve)** 까지 했습니다.
+   그래서 버튼 하나만 눌러도 점이 조금씩 튀었습니다.
+   이제 미러링을 켜는 **그 순간 한 번만** 계산해서, 화면 좌표가 아니라 **사진 좌표(canvasToImg)** 로 얼려
+   둡니다(S.balFrozen). 그린 뒤에는 지금 사진 변환(S.p)으로 되돌려 찍기만 합니다 —
+   ① 사진을 옮기거나 확대해도 점은 **드로잉의 같은 자리**에 그대로 붙어 있고
+   ② 이너·다른 선을 옮겨도, AI 보정을 만져도, 되돌리기를 눌러도 점은 꿈쩍하지 않습니다
+   ③ 색·투명도만 그때그때 반영합니다(위치가 아니므로).
+   다시 재는 것은 **미러링을 껐다 켤 때뿐**입니다.
+   ⛔ 여기에 다시 balSmoothTrace/balIgnoreZones 같은 계산을 넣지 마세요 — 그것이 점이 움직이던 원인입니다. */
+function freezeBalDots() {
+  S.balFrozen = null;
   const bc = S.balCurve;
-  if (!bc || !bc.L || !bc.R) return;
-  const ref = S.refSide;
-  const refC = bc[ref];
-  if (!refC.trace || !refC.trace.length) return;
+  if (!bc || !bc.L || !bc.R) return false;
+  const ref = S.refSide, refC = bc[ref];
+  if (!refC || !refC.trace || !refC.trace.length) return false;
+  const trace = BAL_BRIDGE_MODE ? balSmoothTrace(balFrontEnd(balBridgeOutliers(balIgnoreZones(refC.trace, ref)))) : refC.trace;   // v3.24.0 무시 규칙 → 잇기 → v3.41.0 앞머리 끝 → v3.36.0 부드럽게 (여기서 **한 번만**)
   const cx = S.g.v1 * S.dim.W;
-  const devs = [bc.devFront, bc.devArch, bc.devTail];
-  const badZone = (zone) => (zone === 0 ? devs[0] || devs[1] : devs[1] || devs[2]);
-  const trace = BAL_BRIDGE_MODE ? balSmoothTrace(balFrontEnd(balBridgeOutliers(balIgnoreZones(refC.trace, ref)))) : refC.trace;   // v3.24.0: 무시 규칙 → 잇기 → v3.41.0: 앞머리 끝 → v3.36.0: 부드럽게
-  const n = trace.length;
+  const sure = (p, k) => (k === "top" ? p.sureTop : p.sureBot) !== false;   // v3.58.0 판단이 안 된 점은 숨김
+  const R = [], M = [];
+  const add = (arr, x, y, r) => { const q = canvasToImg(x, y, S.p); if (q && isFinite(q.x) && isFinite(q.y)) arr.push({ x: q.x, y: q.y, r }); };
+  for (const p of trace) {
+    if (!isFinite(p.x) || !isFinite(p.top)) continue;
+    if (sure(p, "top")) { add(R, p.x, p.top, BAL_DOT.rTop); add(M, 2 * cx - p.x, p.top, BAL_DOT.rTop); }
+    if (p.bot !== undefined && isFinite(p.bot) && sure(p, "bot")) { add(R, p.x, p.bot, BAL_DOT.rBot); add(M, 2 * cx - p.x, p.bot, BAL_DOT.rBot); }
+  }
+  if (!R.length) return false;
+  S.balFrozen = { ref: R, mir: M };
+  return true;
+}
 
-  /* ⭐ v3.15.0 — 켜지는 순간엔 앞머리(index 0)→꼬리(index n-1) 순서로 두 단계 애니메이션.
-     1단계: 기준쪽(refC, 실제 위치) 점이 순서대로 채워진다. 2단계: 그 다음 반대쪽 미러링
-     점이 순서대로 채워진다. 애니메이션이 끝나면(S.balAnim=null) 둘 다 항상 전체가 보인다 —
-     기준쪽 실제 점도 계속 남겨 둔다(원장님이 자기 드로잉과 미러링을 나란히 비교하도록).
-     ⛔ 판정(devFront/devArch/devTail, runBalanceCurve)에는 전혀 관여하지 않는 순수 표시 연출. */
-  let refCount = n, mirCount = n;
+function renderBalCurve(frag) {
+  const fz = S.balFrozen;
+  if (!fz || !fz.ref || !fz.ref.length) return;
+  /* ⭐ v3.15.0 — 켜지는 순간엔 기준쪽 → 거울쪽 순서로 두 단계 애니메이션 (표시 연출 · 판정과 무관) */
+  let refCount = fz.ref.length, mirCount = fz.mir.length;
   if (S.balAnim) {
     const frac = clamp((performance.now() - S.balAnim.t0) / BAL_ANIM_MS, 0, 1);
-    if (S.balAnim.phase === "ref") { refCount = Math.round(n * frac); mirCount = 0; }
-    else { refCount = n; mirCount = Math.round(n * frac); }
+    if (S.balAnim.phase === "ref") { refCount = Math.round(fz.ref.length * frac); mirCount = 0; }
+    else { refCount = fz.ref.length; mirCount = Math.round(fz.mir.length * frac); }
   }
-
-  /* ⭐ v3.26.0 — 점선은 **전부 빨강(BAL_RED)**, 구간 판정으로 색을 바꾸지 않는다 (원장님 지시 2026-09-02
-     「미러링 전체 선 색상은 빨간색으로 · 블링킹 빼 · 틀린 부분은 5포인트만 민트」). 기준쪽 실측 점은 옅게,
-     반대쪽 미러링 점은 진하게 — 어느 쪽이 거울상인지 구분만 남긴다. badZone 은 내부 값으로만 유지. */
-  void badZone;
-  /* ⭐ v3.35.0 — **양쪽 점의 굵기·투명도를 똑같이** (원장님 지시 2026-09-02: 「미러링 양쪽 굵기와 투명도 현재 왼쪽에
-     적용되는 것과 같게 변경」). v3.26.0 까지는 기준쪽 옅게(r1.5/1.2 · 0.5) · 거울쪽 진하게(r2.0/1.7 · 0.9)로 구분했는데,
-     원장님이 기준쪽(왼쪽) 쪽의 가는·옅은 점을 고르셨다. 이제 어느 쪽이든 BAL_DOT 하나. 어느 쪽이 거울상인지는 왼쪽/오른쪽
-     버튼이 말해 준다. 회귀 196. */
-  /* v3.37.0 — 투명도는 이제 S.balOpacity(도크 드래그바로 조절, 기본값은 BAL_DOT.op 와 동일) */
-  const dot = (x, y, r) => frag.appendChild(mk("circle", { cx: x, cy: y, r, fill: balColor(), "fill-opacity": S.balOpacity }));
-  /* ⭐⭐⭐ v3.58.0 — **판단이 안 된 점은 그리지 않는다** (balBoxEdges 의 sureTop/sureBot).
-     기준쪽과 거울쪽에 똑같이 적용한다 — 한쪽만 숨기면 좌우가 달라 보여 더 큰 오해가 된다. */
-  const sure = (p, k) => (k === "top" ? p.sureTop : p.sureBot) !== false;
-  for (let i = 0; i < refCount; i++) {
-    const p = trace[i];
-    if (sure(p, "top")) dot(p.x, p.top, BAL_DOT.rTop);
-    if (p.bot !== undefined && sure(p, "bot")) dot(p.x, p.bot, BAL_DOT.rBot);
-  }
-  for (let i = 0; i < mirCount; i++) {
-    const p = trace[i];
-    const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
-    if (sure(p, "top")) dot(mx, p.top, BAL_DOT.rTop);
-    if (p.bot !== undefined && sure(p, "bot")) dot(mx, p.bot, BAL_DOT.rBot);
-  }
+  /* v3.26.0 점선은 전부 빨강 · v3.35.0 양쪽 굵기·투명도 동일 · v3.37.0 투명도는 도크 드래그바 */
+  const col = balColor(), op = S.balOpacity;
+  const draw = (arr, cnt) => {
+    for (let i = 0; i < cnt && i < arr.length; i++) {
+      const p = arr[i], c = imgToCanvas(p.x, p.y, S.p);
+      frag.appendChild(mk("circle", { cx: c.x, cy: c.y, r: p.r, fill: col, "fill-opacity": op }));
+    }
+  };
+  draw(fz.ref, refCount);
+  draw(fz.mir, mirCount);
 }
 
 /* ⭐ v3.15.0 — 미러링을 켤 때 앞머리→꼬리 순차 애니메이션으로 시작한다 (원장님 지시
@@ -7129,12 +7156,13 @@ function visibleLineKeys() {
    못 읽어 건너뜀」·「미러링 해제」·기준 쪽 바꿈 HUD 가 눈썹 한가운데를 가렸다. 판정은 화면의
    민트 깜빡임 자체가 말해 준다. 위쪽 작은 「밸런스 체킹중」(v3.15.0 지시)만 남긴다. */
 $("btnBalance").onclick = () => {
-  if (S.balOn) { S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; render(); return; }
+  if (S.balOn) { S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; S.balFrozen = null; render(); return; }
   /* ⭐ v3.47.0 — 미러링 전에 AI 보정을 한 번도 안 켰으면 자동값을 먼저 적용하고 판정한다 (원장님 지시 2026-09-04:
      「미러링 전에 픽셀 판정은 사진을 밝게 처리한 이후에」). 바는 안 띄운다 — 버튼을 누르면 보인다. */
   if (!S.aiFix.touched && S.imgEl) { if (aiFixAuto()) showNote(t("aifix_applied"), 2400); }
   if (!runBalance()) return;
   runBalanceCurve();   /* ⭐ v3.13.0 — Phase 3: 좌우 독립 커브 판정도 함께 (실패해도 조용히 null) */
+  freezeBalDots();     /* ⭐ v3.62.0 — 여기서 **한 번만** 계산해 사진 좌표로 얼린다 (위 주석) */
   S.balOn = true;
   startBalAnim();      /* ⭐ v3.15.0 — 앞머리→꼬리 순차 애니메이션으로 켠다 (아래) */
 };
@@ -7581,6 +7609,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
+  freezeBalDots, canvasToImg, beginEdit, commitEdit,   /* v3.62.0 — 미러링 점 고정 (회귀 226) */
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
   rulerBoxRefine, RULER_BOX_MOVE, RULER_BOX_HALF_H,   /* v3.51.0 — 자 판독 눕힌 박스 (회귀 217) */
   innerReadX, BAL_READ_LOW,   /* v3.58.0 — 이너 판독 기준 자르기 · 애매하면 숨김 (회귀 221·222) */
