@@ -389,7 +389,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.58.0";
+const APP_VERSION = "v3.59.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6416,11 +6416,24 @@ function readSideCurve(img, side) {
    그대로. 원장님 사진 실측: 앞머리 쪽 아랫선 점이 파우더가 옅어진 띠(118~124) 대신 진한 몸통의 아랫끝(≈112)에,
    윗선 점이 이마 쪽 옅은 띠 대신 몸통 윗끝에 선다 — 초록 박스 자리 그대로. 회귀 206. */
 const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3, BOX_AGG_N = 4;
+/* ⭐⭐⭐ v3.59.0 — **경계 점수** (원장님 재지시 2026-09-07: 「확실하지 않은 부분 점처리 안 하기로 했는데 저 결과에 대해
+   판단하고 다시 교정하라」).
+   v3.58.0 의 「판단이 안 되면 숨김」은 **작동하지 않았습니다**: 숨김 조건이 「박스 안에 대비가 전혀 없다」(boxEdge → null)
+   였는데, 실제 사진의 박스 안에는 눈썹 몸통이 들어 있어 대비가 **언제나** 있습니다 → 언제나 「확실」 → 읽음 100% ·
+   숨긴 점 0개. 원장님 설계의 기준은 대비의 **유무**가 아니라 「옅음↔짙음 **경계가 얼마나 뚜렷한가**」였습니다
+   (「조금 스머지된, 파우더 처리된 부분도 드로잉이 아니다 … 색이 옅음과 짙음의 경계를 판단 기준」).
+   이제 boxEdge 는 경계를 찾을 때마다 **점수**를 남깁니다: 찾은 자리 앞뒤 BOX_SURE_SPAN 칸(캔버스 px) 사이에서
+   어둡기 퍼센트가 얼마나 떨어지는가(0~1). 또렷한 드로잉 가장자리는 2~3px 안에 확 바뀌어 0.6~0.9,
+   파우더·스머지는 20~30px 에 걸쳐 스며 0.1~0.2 입니다. */
+const BOX_SURE_SPAN = 2;      // 경계 앞뒤 이 칸(캔버스 px)을 비교한다
+let BOX_LAST_SCORE = null;    // 마지막 boxEdge 의 경계 점수 (0~1) · 못 찾았으면 null
+let BOX_LAST_CONTRAST = 0;    // 그때 박스의 흰↔검 밝기차 (절대값)
 const BOX_SAMPLES = 7, BOX_MAX_SLOPE = 3;   /* v3.50.0 — 표본 7개 고정 · 눕히는 기울기 상한(그 위는 머리카락·잡티) */
 /* 박스 하나 — 열 x · 지금 경계값 yc · 두께 th · dir(+1 아래선 / -1 윗선). 경계 y 를 돌려주고,
    박스 안에 흰↔검 대비가 없으면 **null**(판단 보류). v3.45.0 에서 balBoxEdges 안에서 꺼내 꼬리 연장과 같이 쓴다. */
 const BOX_SCALE = 3;          // v3.47.0 — 박스 경계는 캔버스의 3배 화소로 읽는다
 function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
+  BOX_LAST_SCORE = null; BOX_LAST_CONTRAST = 0;      /* v3.59.0 — 부를 때마다 초기화 */
   const IW = img.width, IH = img.height;
   /* v3.47.0 — 화소가 캔버스보다 sc 배 크면 좌표·창·표본 간격을 그 배율로 (돌려줄 때 /sc). 1배 화소면 예전과 동일. */
   const sc = S.dim && S.dim.W ? Math.max(1, Math.round((IW / S.dim.W) * 100) / 100) : 1;
@@ -6459,6 +6472,7 @@ function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
   const sorted = sm.slice().sort((u, v) => u - v);
   const black = sorted[Math.floor((n - 1) * 0.1)], white = sorted[Math.floor((n - 1) * 0.9)];
   if (white - black < BOX_MIN_CONTRAST) return null;
+  BOX_LAST_CONTRAST = white - black;                 /* v3.59.0 */
   const mid = (white + black) / 2;
   /* ⭐⭐⭐ v3.46.0 — **피부 쪽에서 몸통 쪽으로 걷는다** (원장님 2026-09-04 「앞머리 아래부분 박스 처리하여 **아래 피부색부터**
      점검하여 검은색이 나오는 부분을 드로잉으로 인식 — 점 처리하는 부분만 고도화」, 결 눈썹 스크린샷에 노란 박스).
@@ -6489,7 +6503,14 @@ function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
     const CONN = Math.max(RUN, Math.round(2 * BOX_HALF_H * th));
     let gap = 0, joined = true;
     for (let j = k; j >= 0 && j < n; j += step) { if (Math.abs(j - k) > CONN) break; if (sm[j] >= mid) { if (++gap >= G) { joined = false; break; } } else gap = 0; }
-    if (joined) return (y0 + k + (dir > 0 ? 0.5 : -0.5)) / sc;   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 (캔버스 px 로) */
+    if (joined) {
+      /* ⭐ v3.59.0 — **경계 점수**: 이 자리 앞뒤 BOX_SURE_SPAN 칸의 어둡기 퍼센트 차이.
+         step 은 피부→몸통 방향이므로 k+step*span = 몸통 쪽, k−step*span = 피부 쪽이다. */
+      const span = Math.max(1, Math.round(BOX_SURE_SPAN * sc));
+      const pcAt = (i) => (white - sm[Math.max(0, Math.min(n - 1, i))]) / Math.max(1, white - black);
+      BOX_LAST_SCORE = clamp(pcAt(k + step * span) - pcAt(k - step * span), 0, 1);
+      return (y0 + k + (dir > 0 ? 0.5 : -0.5)) / sc;   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 (캔버스 px 로) */
+    }
     /* 떨어진 검은 덩어리 — 지나친다 */
     while (k + step >= 0 && k + step < n && sm[k + step] < mid) k += step;
     seenWhite = false;
@@ -6552,6 +6573,10 @@ function rulerBoxRefine(imgHi, seq, x, yTop0, yBot0, winTop, winBot) {
   } catch (e) { return null; }
 }
 
+/* ⭐⭐⭐ v3.59.0 — 「확실하다」의 문턱. 경계 점수(0~1)와 그때 박스의 밝기차 둘 다 넘어야 점을 찍는다.
+   ⛔ 이 값을 낮춰 「점이 많아 보이게」 하지 마세요 — 그러면 v3.58.0 처럼 파우더 위에 점이 다시 찍힙니다. */
+let BAL_SURE_SCORE = 0.35;      // 앞뒤 2칸 사이 어둡기 퍼센트가 이만큼은 떨어져야 「경계」다
+let BAL_SURE_CONTRAST = 22;     // 그 박스에 흰↔검 밝기차가 이만큼은 있어야 판단할 값이 있는 것이다
 function balBoxEdges(img, trace) {
   try {
     if (!img || !trace || trace.length < 3) return trace;
@@ -6560,14 +6585,31 @@ function balBoxEdges(img, trace) {
       const p = trace[i];
       if (!isFinite(p.top) || !isFinite(p.bot)) continue;
       const th = p.bot - p.top;
-      const nb = boxEdge(img, p.x, p.bot, th, 1, traceSlope(trace, i, "bot")), nt = boxEdge(img, p.x, p.top, th, -1, traceSlope(trace, i, "top"));
+      /* v3.59.0 — 점수를 받으려면 호출을 **나눠서** 해야 한다 (BOX_LAST_SCORE 는 마지막 호출의 것) */
+      const nb = boxEdge(img, p.x, p.bot, th, 1, traceSlope(trace, i, "bot"));
+      const sb = BOX_LAST_SCORE, cb = BOX_LAST_CONTRAST;
+      const nt = boxEdge(img, p.x, p.top, th, -1, traceSlope(trace, i, "top"));
+      const st = BOX_LAST_SCORE, ct = BOX_LAST_CONTRAST;
       const b2 = nb === null ? p.bot : nb, t2 = nt === null ? p.top : nt;
       if (b2 - t2 >= 3) { out[i].bot = b2; out[i].top = t2; }
+      out[i].scoreTop = st; out[i].scoreBot = sb;
       /* ⭐⭐⭐ v3.58.0 — **판단이 안 되면 숨김** (원장님 지시 2026-09-07: 「이 부분이 점수로 판단되지
          않으면 미러링시 점선을 숨김처리한다 … 이상한데 점선처리하면 에러로 보인다」).
          boxEdge 가 null = 박스 안에 흰↔검 대비가 없다 = 옅음/짙음 경계를 점수로 매길 수 없다.
          그 자리는 예전엔 판독값(추측)을 그대로 찍었는데, 이제 그리지 않는다 — renderBalCurve 참고. */
-      out[i].sureTop = nt !== null; out[i].sureBot = nb !== null;
+      out[i].sureTop = nt !== null && st !== null && st >= BAL_SURE_SCORE && ct >= BAL_SURE_CONTRAST;
+      out[i].sureBot = nb !== null && sb !== null && sb >= BAL_SURE_SCORE && cb >= BAL_SURE_CONTRAST;
+    }
+    /* ⭐ v3.59.0 — **구간으로 본다** (점 하나씩 켰다 껐다 하지 않는다). 확실/애매는 보통 눈썹의 한 **구간**으로
+       뭉쳐 나옵니다(원장님 사진 실측: 앞머리 16열이 통째로 낮고 몸통·꼬리 22열이 통째로 높다). 이웃 둘과 자기,
+       셋 중 다수를 따르면 한 열만 튀는 잡티·모공 때문에 선이 듬성듬성 끊겨 보이는 것을 막습니다.
+       ⛔ 이것은 **표시를 고르게** 하는 것이지 문턱을 낮추는 것이 아닙니다 — 낮은 구간은 그대로 숨습니다. */
+    for (const key of ["sureTop", "sureBot"]) {
+      const raw = out.map((q) => q[key] === true);
+      for (let i = 0; i < out.length; i++) {
+        const a = raw[Math.max(0, i - 1)], b = raw[i], c = raw[Math.min(out.length - 1, i + 1)];
+        out[i][key] = (a ? 1 : 0) + (b ? 1 : 0) + (c ? 1 : 0) >= 2;
+      }
     }
     return out;
   } catch (e) { return trace; }
@@ -6596,14 +6638,20 @@ function balBoxTail(img, trace, tailX) {
       /* v3.50.0 — 연장 구간(꼬리)은 사선이 가장 심하다: 직전 두 열의 기울기로 박스를 눕힌다 */
       const sdx = prev.x - prev2.x;
       const slT = Math.abs(sdx) < 0.5 ? 0 : (prev.top - prev2.top) / sdx, slB = Math.abs(sdx) < 0.5 ? 0 : (prev.bot - prev2.bot) / sdx;
-      const nt = boxEdge(img, x, prev.top, th, -1, slT), nb = boxEdge(img, x, prev.bot, th, 1, slB);
+      const nt = boxEdge(img, x, prev.top, th, -1, slT);
+      const st = BOX_LAST_SCORE, ct = BOX_LAST_CONTRAST;
+      const nb = boxEdge(img, x, prev.bot, th, 1, slB);
+      const sb = BOX_LAST_SCORE, cb = BOX_LAST_CONTRAST;
       if (nt === null && nb === null) { if (++miss >= 2) break; continue; }
       const t2 = nt === null ? prev.top : nt, b2 = nb === null ? prev.bot : nb;
       const tol = th * 0.5 + 3;
       if (Math.abs(t2 - prev.top) > tol || Math.abs(b2 - prev.bot) > tol) { if (++miss >= 2) break; continue; }
       if (b2 - t2 < 2) break;                                               // 위아래가 만났다 = 꼬리 끝
       miss = 0;
-      const np = { x, top: t2, bot: b2, zone: 1, sureTop: nt !== null, sureBot: nb !== null };   /* v3.58.0 — 판단이 안 된 쪽은 숨김 */
+      const np = { x, top: t2, bot: b2, zone: 1,   /* v3.59.0 — 꼬리 연장도 같은 경계 점수로 */
+        sureTop: nt !== null && st !== null && st >= BAL_SURE_SCORE && ct >= BAL_SURE_CONTRAST,
+        sureBot: nb !== null && sb !== null && sb >= BAL_SURE_SCORE && cb >= BAL_SURE_CONTRAST,
+        scoreTop: st, scoreBot: sb };
       out.push(np); prev2 = prev; prev = np; added++;
     }
     return out;
@@ -7459,6 +7507,8 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
   rulerBoxRefine, RULER_BOX_MOVE, RULER_BOX_HALF_H,   /* v3.51.0 — 자 판독 눕힌 박스 (회귀 217) */
   innerReadX, BAL_READ_LOW,   /* v3.58.0 — 이너 판독 기준 자르기 · 애매하면 숨김 (회귀 221·222) */
+  BOX_SURE_SPAN, get BAL_SURE_SCORE() { return BAL_SURE_SCORE; }, set BAL_SURE_SCORE(v) { BAL_SURE_SCORE = v; },
+  get BAL_SURE_CONTRAST() { return BAL_SURE_CONTRAST; }, set BAL_SURE_CONTRAST(v) { BAL_SURE_CONTRAST = v; },   /* v3.59.0 — 경계 점수 문턱 (회귀 223) */
   balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_SAMPLES, BOX_MAX_SLOPE, traceSlope, snapState, applySnap,   /* v3.50.0 — 눕힌 박스·되돌리기 (회귀 215·216) */ BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, aiFixOnLoad, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
