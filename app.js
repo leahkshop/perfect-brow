@@ -393,7 +393,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.64.0";
+const APP_VERSION = "v3.65.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -7143,7 +7143,11 @@ function renderBalCurve(frag) {
 const BAL_READ_LOW = 60;   /* v3.58.0 — 읽음 %가 이 밑이면 「애매한 곳은 숨겼습니다」로 알린다 */
 function startBalAnim() {
   S.balAnim = { phase: "ref", t0: performance.now() };
-  showNote(t("bal_checking"), BAL_ANIM_MS * 2 + 400);
+  /* ⭐⭐⭐ v3.65.0 — **미러링 안내는 띄우지 않는다** (원장님 지시 2026-09-07: 「미러링 안내는 이제 숨김해라」).
+     v3.15.0 부터 미러링을 켜면 「밸런스 체킹중」이 안내 자리에 떴는데, v3.64.0 에서 안내 묶음이 커지면서
+     시술 화면을 가렸습니다. 점이 앞머리→꼬리로 차오르는 것 자체가 이미 「지금 재고 있다」를 말해 줍니다.
+     문구(bal_checking)는 i18n 에 남겨 둡니다 — 회귀 185 가 showNote 자리 자체를 검사하는 데 씁니다.
+     ⛔ 여기에 안내를 다시 넣지 마세요 (회귀 227). */
   const step = () => {
     if (!S.balAnim || !S.balOn) { render(); return; }
     const frac = (performance.now() - S.balAnim.t0) / BAL_ANIM_MS;
