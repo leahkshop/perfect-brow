@@ -385,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.55.0";
+const APP_VERSION = "v3.57.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3846,11 +3846,13 @@ function frontDecide(img) {
       }
     } else pick = cands[0];
     if (pick) {
-      /* v3.55.0 — 아랫선(앞머리)을 윗선(앞두께)에서 아래로 내려오며 첫 경계로 다시 잰다 (edgeBelow 주석).
-         못 읽으면 예전 값 그대로 — 이 열은 「판단 불가」로 표시해 둔다(미러링 숨김 판단에 쓴다). */
-      const e = edgeBelow(img, x, pick.top, pick.top + Math.max(4, 0.2 * (pick.y - pick.top)), pick.y + 2);
-      pick.sure = e !== null;
-      if (e !== null) pick.y = e;
+      /* ⛔⛔⛔ v3.57.0 — **앞머리 아랫선에는 edgeBelow 를 쓰지 않는다** (원장님 신고 2026-09-07
+         「앞머리 앞두께 위치선정이 엉뚱한 곳에 있다」 — v3.55.0 을 실기기에서 확인하신 뒤).
+         v3.55.0 은 아치와 같은 잣대를 앞머리에도 댔습니다. 그런데 **아치에는 「그 고객의 앞 두께 ±2칸」이라는
+         범위가 있어 보호되지만, 앞머리에는 그 범위를 줄 것이 없습니다**(앞 두께가 바로 여기서 나오므로 순환).
+         범위 없이 「첫 경계」를 찾으면 눈썹 몸통 안의 결·밝기 변화를 경계로 착각해 아랫선이 위로 올라갑니다 —
+         실측 앞 두께 47.2px → 30.5px (16px 위로). 그래서 앞머리는 v3.54.0 까지의 방식(darkBlobsUp)으로 되돌립니다.
+         ⚠️ 아치두께(archDecide)의 edgeBelow 는 그대로 둡니다 — 거기에는 범위가 있고 원장님이 확인하셨습니다. */
       pick.x = x; ys.push(pick);
     }
   }
@@ -3860,7 +3862,7 @@ function frontDecide(img) {
   const tops = ys.map((c) => c.top).sort((a, b) => a - b);
   const xs2 = ys.map((c) => c.x).sort((a, b) => a - b);
   /* v3.51.0 — 읽은 열들의 가운데 x 도 함께 돌려준다 (자 판독 박스 다듬기가 그 자리에서 다시 잰다) */
-  return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)], x: xs2[Math.floor(xs2.length / 2)], sure: ys.filter((c) => c.sure).length, cols: ys.length };
+  return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)], x: xs2[Math.floor(xs2.length / 2)], cols: ys.length };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
