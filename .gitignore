@@ -11,3 +11,6 @@ package-lock.json
 
 # 배포 전 백업 zip — 맥 _출력/백업/ 에 보관하는 것이지 저장소에는 안 넣는다
 backup/
+
+# 원장님 실사진 시험 세트 — 고객 얼굴이라 저장소에 절대 넣지 않는다 (/home/claude/pb-photos/)
+photo-scores.json
