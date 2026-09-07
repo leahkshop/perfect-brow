@@ -171,6 +171,8 @@ const I18N = {
     bal_skip: "곳은 선을 못 읽어 건너뜀",
     bal_off: "미러링 표시 끔",
     bal_checking: "밸런스 체킹중",   /* v3.15.0 — 미러링 켜지는 동안 위 안내(showNote) 자리에 */
+    tip_prefix: "가이드",        /* v3.64.0 — 안내 문구 앞머리 (가이드가 켜진 상태임을 알린다) */
+    bal_pct: "밸런스",           /* v3.64.0 — 미러링 뒤 표시하는 밸런스 퍼센트 라벨 */
     bal_read: "미러링 %P% 읽음",   /* v3.58.0 — 애니메이션이 끝나면 몇 %를 확실히 읽었는지 */
     bal_read_low: "미러링 %P% 읽음 — 애매한 곳은 숨겼습니다",
     bal_no_photo: "사진을 먼저 불러오세요",
@@ -344,6 +346,8 @@ const I18N = {
     bal_skip: " skipped (line not readable)",
     bal_off: "Mirror view off",
     bal_checking: "Checking balance…",
+    tip_prefix: "Guide",
+    bal_pct: "Balance",
     bal_read: "Mirroring %P% read",
     bal_read_low: "Mirroring %P% read — unclear spots hidden",
     bal_no_photo: "Load a photo first",
@@ -389,7 +393,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.63.0";
+const APP_VERSION = "v3.64.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1321,14 +1325,33 @@ function updateGuideTip() {
      · 플로우 밖 선(눈·센터 등)을 골라 차례가 잠시 내려가도 **마지막 안내를 유지**한다 (S.tipKey)
      · 「안내」 토글(S.tipOn)이 꺼져 있으면 숨긴다 */
   if (S.guideOn && S.guideCur) S.tipKey = S.guideCur;
-  const key = S.guideOn && S.tipOn
+  /* ⭐⭐⭐ v3.64.0 — **「모든 라인 숨김」 중에는 안내를 띄우지 않는다** (원장님 지시 2026-09-07:
+     「라인이 안 보이는데 "○○에 맞추세요"라는 안내만 떠 있으면 무엇에 맞추라는 것인지 알 수 없다」).
+     숨김을 풀면 다시 나온다 — 상태만 보고 판단하므로 따로 저장할 것이 없다. */
+  const hiddenAll = !!S.hiddenSnapshot;
+  const key = S.guideOn && S.tipOn && !hiddenAll
     ? (S.guideCur || (S.intro ? GUIDE_FLOW[0] : S.tipKey) || GUIDE_FLOW[0]) : null;
   const msg = key ? t("tip_" + key) : "";
-  if (!key || msg === "tip_" + key) { el.hidden = true; return; }
+  if (!key || msg === "tip_" + key) { el.hidden = true; updateBalPct(); return; }
   /* 번호는 **지금 순서**에서 계산한다 — 원장님이 순서를 바꾸면 번호도 따라 바뀐다 (v1.81.0) */
   const i = GUIDE_FLOW.indexOf(key);
   el.hidden = false;
-  el.innerHTML = (i >= 0 ? (STEP_NUM[i] || (i + 1) + ".") + " " : "") + msg;
+  /* v3.64.0 — 앞머리에 「가이드 ·」 (가이드가 켜진 상태임을 알린다 · 원장님 지시 2026-09-07) */
+  el.innerHTML = t("tip_prefix") + " · " + (i >= 0 ? (STEP_NUM[i] || (i + 1) + ".") + " " : "") + msg;
+  updateBalPct();
+}
+
+/* ⭐⭐⭐ v3.64.0 — **밸런스 퍼센트 한 줄** (원장님 지시 2026-09-07).
+   미러링 잠금이 걸려 있을 때만, 가이드 문구 **바로 아래 행**에 「밸런스 NN%」 한 줄.
+   글자는 가이드 문구의 2배(CSS .balpct) · 톤은 부드럽게 · **색으로 경고하지 않는다** ·
+   판정 단어를 붙이지 않는다 · 읽음(신뢰도) %는 표시하지 않는다.
+   숫자는 잠금과 함께 얼려 둔 값(S.balFrozen.match)이라 사진을 갈아 끼워도 그대로 남는다. */
+function updateBalPct() {
+  const el = $("balPct"); if (!el) return;
+  const m = S.balOn && S.balFrozen ? S.balFrozen.match : null;
+  if (m === null || m === undefined || !isFinite(m)) { el.hidden = true; el.textContent = ""; return; }
+  el.hidden = false;
+  el.textContent = t("bal_pct") + " " + m + "%";
 }
 
 function render() {
@@ -6776,7 +6799,31 @@ function runBalanceCurve() {
       if (p.bot !== undefined && isFinite(p.bot)) { sTot++; if (p.sureBot !== false) sOk++; }
     }
     const read = sTot ? Math.round((100 * sOk) / sTot) : null;
-    S.balCurve = { L, R, devFront, devArch, devTail, tol, read };
+    /* ⭐⭐⭐ v3.64.0 — **밸런스 %** (원장님 지시 2026-09-07 「미러링이 작동된 이후 밸런스 퍼센트를 표시한다」).
+       뜻: **기준쪽 선을 거울에 비춘 자리와 반대쪽 실제 선이 얼마나 붙어 있나.**
+       열마다 위·아래 어긋남을 재어 평균을 내고, 그 평균을 **그 눈썹의 두께**로 나눕니다 —
+       어긋남이 0 이면 100%, 두께만큼 어긋나면 0%. 두께로 나누므로 확대율·사진 크기와 무관합니다.
+       ⛔ 판정 단어(좋음·보통)나 색 경고를 붙이지 마세요 — 좋고 나쁨은 원장님이 판단하십니다. */
+    let match = null;
+    try {
+      const A = (S.refSide === "L" ? L : R).trace, B = (S.refSide === "L" ? R : L).trace;
+      const cxp = S.g.v1 * S.dim.W, gap = [];
+      for (const a of A) {
+        const mx = 2 * cxp - a.x;
+        let best = null, bd = Infinity;
+        for (const b of B) { const d = Math.abs(b.x - mx); if (d < bd) { bd = d; best = b; } }
+        if (!best || bd > 6) continue;
+        if (isFinite(a.top) && isFinite(best.top)) gap.push(Math.abs(a.top - best.top));
+        if (isFinite(a.bot) && isFinite(best.bot)) gap.push(Math.abs(a.bot - best.bot));
+      }
+      const ths = A.map((q) => q.bot - q.top).filter(isFinite).sort((u, v) => u - v);
+      const th = ths.length ? ths[Math.floor(ths.length / 2)] : 0;
+      if (gap.length >= 6 && th > 2) {
+        const mean = gap.reduce((u, v) => u + v, 0) / gap.length;
+        match = clamp(Math.round(100 * (1 - mean / th)), 0, 100);
+      }
+    } catch (e) { match = null; }
+    S.balCurve = { L, R, devFront, devArch, devTail, tol, read, match };
     return true;
   } catch (e) { S.balCurve = null; return false; }
 }
@@ -7059,7 +7106,8 @@ function freezeBalDots() {
     if (p.bot !== undefined && isFinite(p.bot) && sure(p, "bot")) { add(R, p.x, p.bot, BAL_DOT.rBot); add(M, 2 * cx - p.x, p.bot, BAL_DOT.rBot); }
   }
   if (!R.length) return false;
-  S.balFrozen = { ref: R, mir: M };
+  /* v3.64.0 — 밸런스 %도 잠금과 **함께** 얼린다: 사진을 갈아 끼워도 그 잠금선의 숫자는 그대로 남는다 */
+  S.balFrozen = { ref: R, mir: M, match: bc.match === undefined ? null : bc.match };
   return true;
 }
 
@@ -7102,10 +7150,11 @@ function startBalAnim() {
     if (frac >= 1) {
       if (S.balAnim.phase === "ref") { S.balAnim = { phase: "mirror", t0: performance.now() }; }
       else {
+        /* ⭐ v3.64.0 — 「미러링 NN% 읽음」 안내는 **없앴다** (원장님 지시 2026-09-07: 「현재 가이드 문구 옆에
+           붙어 있는 「미러링 94% 읽음」은 없앤다 · 밸런스 퍼센트만 표시한다」). 읽음 값(S.balCurve.read)은
+           검사·진단용으로 그대로 남긴다 — 화면에만 안 띄운다.
+           ⛔ 여기에 읽음 % 안내를 다시 넣지 마세요 (회귀 227). */
         S.balAnim = null; render();
-        /* v3.58.0 — 애니메이션이 끝나면 읽음 % 한 줄 (숨긴 점이 많으면 다른 문구) */
-        const pc = S.balCurve ? S.balCurve.read : null;
-        if (pc !== null && pc !== undefined) showNote(t(pc < BAL_READ_LOW ? "bal_read_low" : "bal_read").replace("%P%", pc + "%"), 2600);
         return;
       }
     }
@@ -7632,7 +7681,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
-  updateGuideTip, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
+  updateGuideTip, updateBalPct, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
