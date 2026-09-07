@@ -393,7 +393,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.65.0";
+const APP_VERSION = "v3.66.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1329,7 +1329,12 @@ function updateGuideTip() {
      「라인이 안 보이는데 "○○에 맞추세요"라는 안내만 떠 있으면 무엇에 맞추라는 것인지 알 수 없다」).
      숨김을 풀면 다시 나온다 — 상태만 보고 판단하므로 따로 저장할 것이 없다. */
   const hiddenAll = !!S.hiddenSnapshot;
-  const key = S.guideOn && S.tipOn && !hiddenAll
+  /* ⭐⭐⭐ v3.66.0 — **미러링 중에는 화면에 안내가 하나도 없다** (원장님 지시 2026-09-07:
+     「미러링시 밸런스 표시는 숨겨라. 안내 없도록 · 미러링시 가이드 안내는 숨겨라」).
+     미러링은 선을 다 놓은 **뒤**의 작업입니다 — 그때는 좌우를 눈으로 견주는 것이 전부라
+     화면에 글자가 있으면 방해만 됩니다. 가이드 안내도, 밸런스 퍼센트도 함께 감춥니다.
+     미러링을 끄면 둘 다 예전처럼 돌아옵니다. */
+  const key = S.guideOn && S.tipOn && !hiddenAll && !S.balOn
     ? (S.guideCur || (S.intro ? GUIDE_FLOW[0] : S.tipKey) || GUIDE_FLOW[0]) : null;
   const msg = key ? t("tip_" + key) : "";
   if (!key || msg === "tip_" + key) { el.hidden = true; updateBalPct(); return; }
@@ -1346,9 +1351,15 @@ function updateGuideTip() {
    글자는 가이드 문구의 2배(CSS .balpct) · 톤은 부드럽게 · **색으로 경고하지 않는다** ·
    판정 단어를 붙이지 않는다 · 읽음(신뢰도) %는 표시하지 않는다.
    숫자는 잠금과 함께 얼려 둔 값(S.balFrozen.match)이라 사진을 갈아 끼워도 그대로 남는다. */
+const BAL_PCT_SHOW = false;   /* v3.66.0 — 미러링 중에는 안 띄운다 (원장님 지시). 다른 자리에 띄우기로 하면 true */
 function updateBalPct() {
   const el = $("balPct"); if (!el) return;
-  const m = S.balOn && S.balFrozen ? S.balFrozen.match : null;
+  /* ⭐⭐⭐ v3.66.0 — **미러링 중에는 밸런스 퍼센트도 띄우지 않는다** (원장님 지시 2026-09-07:
+     「미러링시 밸런스 표시는 숨겨라. 안내 없도록」). 밸런스 퍼센트는 미러링 중에만 있던 표시라,
+     지금 규칙에서는 화면에 나오지 않습니다 — 값은 그대로 계산·보관하므로(S.balFrozen.match)
+     나중에 다른 자리에 띄우기로 하시면 아래 한 줄만 풀면 됩니다.
+     ⛔ 미러링 중에 다시 띄우지 마세요 (회귀 227). */
+  const m = BAL_PCT_SHOW && S.balOn && S.balFrozen ? S.balFrozen.match : null;
   if (m === null || m === undefined || !isFinite(m)) { el.hidden = true; el.textContent = ""; return; }
   el.hidden = false;
   el.textContent = t("bal_pct") + " " + m + "%";
@@ -7685,7 +7696,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
   PALETTE, LOOK_DEF, LOOK_COMBOS, loadLook, saveLook, buildLookUI, lookPreview, edgeColorFor, relLum,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
-  updateGuideTip, updateBalPct, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
+  updateGuideTip, updateBalPct, BAL_PCT_SHOW, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
   workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
