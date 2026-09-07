@@ -389,7 +389,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.59.0";
+const APP_VERSION = "v3.60.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6425,7 +6425,29 @@ const BOX_HALF_W = 6, BOX_HALF_H = 0.5, BOX_MIN_CONTRAST = 14, BOX_RUN = 3, BOX_
    이제 boxEdge 는 경계를 찾을 때마다 **점수**를 남깁니다: 찾은 자리 앞뒤 BOX_SURE_SPAN 칸(캔버스 px) 사이에서
    어둡기 퍼센트가 얼마나 떨어지는가(0~1). 또렷한 드로잉 가장자리는 2~3px 안에 확 바뀌어 0.6~0.9,
    파우더·스머지는 20~30px 에 걸쳐 스며 0.1~0.2 입니다. */
-const BOX_SURE_SPAN = 2;      // 경계 앞뒤 이 칸(캔버스 px)을 비교한다
+const BOX_SURE_SPAN = 2;      // 경계 앞뒤 최소 이 칸(캔버스 px) — 아래 비율이 이보다 작으면 이 값을 쓴다
+/* ⭐⭐⭐ v3.60.0 — **점수 창은 눈썹 두께를 따라간다** (원장님 신고 2026-09-07: 「앞두께부터 아치까지는 점을
+   잘 맞게 측정했었는데 윗부분 포기하는 부분이 너무 많지 않니? 특히나 아주 명확한 위에 선들도 포기하는 게
+   프로페셔널하지 않다」).
+   v3.59.0 의 창은 **고정 2 캔버스 px** 이었습니다. 그런데 원장님은 눈썹이 화면을 가득 채우도록 **확대해서**
+   쓰십니다 — 확대하면 눈썹도 가장자리도 함께 커져서, 원본에서 또렷한 3px 가장자리가 캔버스에서는 15~25px 로
+   퍼집니다. 고정 2px 창은 그 전환의 앞머리 한 조각만 보고 「완만하다 = 애매」로 읽습니다. 즉 **확대할수록
+   또렷한 선까지 숨는** 자였습니다(제 계산은 확대 안 한 전신 사진에서만 맞았습니다).
+   창을 **두께의 비율**로 두면 확대율이 달라져도 같은 잣대가 됩니다 — 확대하면 두께도 창도 같이 커집니다. */
+let BOX_SURE_FRAC = 0.20;  /* 그 자리 눈썹 두께의 이 비율 (확대율 불변).
+   ⭐ 값의 근거 — 실측 2026-09-07.
+   ① 점수 = **창폭 ÷ 실제 가장자리 폭** 입니다 (합성 검증 오차 0: 스머지 6px→0.67=4/6 · 15px→0.27=4/15).
+      그래서 창이 고정 px 이면 **확대할수록 모든 점수가 내려갑니다** — 원장님처럼 눈썹이 화면을 채우도록
+      확대해 쓰면 또렷한 선까지 전부 숨습니다. 원장님 화면과 같은 배율로 자른 사진 실측: 창 고정 2px 에서
+      윗선 통과율 **4%**(사실상 전멸) · 창 0.20 에서 **100%**. 원장님 신고 그대로였습니다.
+   ② 문턱은 원본 사진에서 「맨살로 내려간 앞머리 16열(숨어야 함)」과 「진짜 드로잉 26열(보여야 함)」을
+      갈라 정했습니다:
+      | 창 · 문턱 | 맨살 윗선(숨어야) | 드로잉 윗선(보여야) |
+      | 고정2px · 0.35 | 0/16 ✔ | 25/26 — 그러나 **확대하면 4%**로 무너진다 |
+      | 0.20 · 0.52 | **16/16 ✘ 전부 보임** | 24/27 |
+      | 0.20 · 0.65 | 0/16 ✔ | 23/25 ✔ ← 채택 |
+      | 0.20 · 0.70 | 0/16 ✔ | 24/27 (아랫선은 더 엄격) |
+   ⛔ 창을 좁히지 마세요 — 좁히면 확대해서 쓰는 실제 화면에서 또렷한 선까지 숨습니다(v3.59.0 의 잘못). */
 let BOX_LAST_SCORE = null;    // 마지막 boxEdge 의 경계 점수 (0~1) · 못 찾았으면 null
 let BOX_LAST_CONTRAST = 0;    // 그때 박스의 흰↔검 밝기차 (절대값)
 const BOX_SAMPLES = 7, BOX_MAX_SLOPE = 3;   /* v3.50.0 — 표본 7개 고정 · 눕히는 기울기 상한(그 위는 머리카락·잡티) */
@@ -6506,7 +6528,7 @@ function boxEdge(img, x0c, ycc, thc, dir, slope, halfHMul) {
     if (joined) {
       /* ⭐ v3.59.0 — **경계 점수**: 이 자리 앞뒤 BOX_SURE_SPAN 칸의 어둡기 퍼센트 차이.
          step 은 피부→몸통 방향이므로 k+step*span = 몸통 쪽, k−step*span = 피부 쪽이다. */
-      const span = Math.max(1, Math.round(BOX_SURE_SPAN * sc));
+      const span = Math.max(1, Math.round(BOX_SURE_SPAN * sc), Math.round(BOX_SURE_FRAC * th));
       const pcAt = (i) => (white - sm[Math.max(0, Math.min(n - 1, i))]) / Math.max(1, white - black);
       BOX_LAST_SCORE = clamp(pcAt(k + step * span) - pcAt(k - step * span), 0, 1);
       return (y0 + k + (dir > 0 ? 0.5 : -0.5)) / sc;   /* 경계 = 첫 검은 줄과 마지막 흰 줄 사이 (캔버스 px 로) */
@@ -6575,7 +6597,9 @@ function rulerBoxRefine(imgHi, seq, x, yTop0, yBot0, winTop, winBot) {
 
 /* ⭐⭐⭐ v3.59.0 — 「확실하다」의 문턱. 경계 점수(0~1)와 그때 박스의 밝기차 둘 다 넘어야 점을 찍는다.
    ⛔ 이 값을 낮춰 「점이 많아 보이게」 하지 마세요 — 그러면 v3.58.0 처럼 파우더 위에 점이 다시 찍힙니다. */
-let BAL_SURE_SCORE = 0.35;      // 앞뒤 2칸 사이 어둡기 퍼센트가 이만큼은 떨어져야 「경계」다
+const BAL_RESCUE_GAP = 3;       // 확실한 이웃을 이 열까지만 찾는다 (긴 공백은 억지로 잇지 않는다)
+const BAL_RESCUE_TOL = 0.12;    // 이웃을 이은 선에서 두께의 이 비율 안이면 구제
+let BAL_SURE_SCORE = 0.65;      // 창 안에서 어둡기 퍼센트가 이만큼은 떨어져야 「경계」다 (아래 표)
 let BAL_SURE_CONTRAST = 22;     // 그 박스에 흰↔검 밝기차가 이만큼은 있어야 판단할 값이 있는 것이다
 function balBoxEdges(img, trace) {
   try {
@@ -6609,6 +6633,31 @@ function balBoxEdges(img, trace) {
       for (let i = 0; i < out.length; i++) {
         const a = raw[Math.max(0, i - 1)], b = raw[i], c = raw[Math.min(out.length - 1, i + 1)];
         out[i][key] = (a ? 1 : 0) + (b ? 1 : 0) + (c ? 1 : 0) >= 2;
+      }
+    }
+    /* ⭐⭐⭐ v3.60.0 — **양옆이 확실하고 그 사이를 잇는 선 위에 있으면, 그 점도 확실하다** (원장님 신고
+       2026-09-07: 「앞두께부터 아치까지는 점을 잘 맞게 측정했었는데 윗부분 포기하는 부분이 너무 많지 않니?
+       특히나 아주 명확한 위에 선들도 포기하는 게 프로페셔널하지 않다」).
+       실기기 화면 실측: 숨은 자리가 눈썹 **몸통 한가운데**였습니다 — 앞뒤로 확실한 점이 줄지어 있고 그 사이만
+       비었습니다. 그건 「판단이 안 된 곳」이 아니라 가장자리 대비만 잠깐 흐려진 곳입니다(모공·결·하이라이트).
+       판단의 근거가 하나 더 있습니다: **이웃과의 일치**. 앞뒤 확실한 점을 이은 선에서 두께의 12% 안에 있으면
+       그 점은 이웃이 보증합니다 — 그래서 살립니다.
+       ⛔ 끝(앞머리·꼬리 바깥)은 한쪽에 확실한 이웃이 없으므로 **구제되지 않습니다** — 원장님 사진에서 맨살로
+       25~45px(두께의 70%) 내려가던 앞머리 아랫선은 그대로 숨습니다(거리도 12%를 훨씬 넘습니다).
+       BAL_RESCUE_GAP 을 크게 하지 마세요 — 긴 공백을 억지로 이으면 숨김의 뜻이 사라집니다. */
+    for (const [sk, yk] of [["sureTop", "top"], ["sureBot", "bot"]]) {
+      const anchor = out.map((q) => q[sk] === true);     /* 구제된 점이 다시 이웃이 되지 않도록 사본으로 */
+      for (let i = 0; i < out.length; i++) {
+        if (anchor[i]) continue;
+        let a = -1, b = -1;
+        for (let j = i - 1; j >= 0 && i - j <= BAL_RESCUE_GAP; j--) if (anchor[j]) { a = j; break; }
+        for (let j = i + 1; j < out.length && j - i <= BAL_RESCUE_GAP; j++) if (anchor[j]) { b = j; break; }
+        if (a < 0 || b < 0) continue;                    /* 한쪽 끝 — 보증할 이웃이 없다 */
+        const ya = out[a][yk], yb = out[b][yk], yi = out[i][yk];
+        if (![ya, yb, yi].every(isFinite)) continue;
+        const t = (out[i].x - out[a].x) / ((out[b].x - out[a].x) || 1);
+        const th = Math.abs((out[i].bot === undefined ? out[i].top : out[i].bot) - out[i].top);
+        if (Math.abs(yi - (ya + (yb - ya) * t)) <= Math.max(2, BAL_RESCUE_TOL * th)) out[i][sk] = true;
       }
     }
     return out;
@@ -7507,7 +7556,21 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
   rulerBoxRefine, RULER_BOX_MOVE, RULER_BOX_HALF_H,   /* v3.51.0 — 자 판독 눕힌 박스 (회귀 217) */
   innerReadX, BAL_READ_LOW,   /* v3.58.0 — 이너 판독 기준 자르기 · 애매하면 숨김 (회귀 221·222) */
-  BOX_SURE_SPAN, get BAL_SURE_SCORE() { return BAL_SURE_SCORE; }, set BAL_SURE_SCORE(v) { BAL_SURE_SCORE = v; },
+  BAL_RESCUE_GAP, BAL_RESCUE_TOL,
+  /* v3.60.0 회귀 224 — 배율을 바꿔 가며 읽음 %를 재는 도우미 (검사 전용) */
+  __rz(lm, z, frac) {
+    if (frac !== null && frac !== undefined) BOX_SURE_FRAC = frac;
+    S.landmarks = lm; S.p = { zoom: z, rot: 0, ox: 0, oy: 0 };
+    S.g = { ...DEFAULT_GUIDE }; S.g.h1 = imgToCanvas(0, 250, S.p).y / S.dim.H; S.refSide = "L";
+    render();
+    if (!runBalanceCurve()) return null;
+    const t = S.balCurve.L.trace;
+    const th = t.map((q) => q.bot - q.top).filter(isFinite).sort((a, b) => a - b);
+    return { read: S.balCurve.read, n: t.length, thick: Math.round(th[Math.floor(th.length / 2)]),
+             sureTop: t.filter((q) => q.sureTop === true).length };
+  },
+  BOX_SURE_SPAN, get BOX_SURE_FRAC() { return BOX_SURE_FRAC; }, set BOX_SURE_FRAC(v) { BOX_SURE_FRAC = v; },
+  get BAL_SURE_SCORE() { return BAL_SURE_SCORE; }, set BAL_SURE_SCORE(v) { BAL_SURE_SCORE = v; },
   get BAL_SURE_CONTRAST() { return BAL_SURE_CONTRAST; }, set BAL_SURE_CONTRAST(v) { BAL_SURE_CONTRAST = v; },   /* v3.59.0 — 경계 점수 문턱 (회귀 223) */
   balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_SAMPLES, BOX_MAX_SLOPE, traceSlope, snapState, applySnap,   /* v3.50.0 — 눕힌 박스·되돌리기 (회귀 215·216) */ BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, aiFixOnLoad, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
