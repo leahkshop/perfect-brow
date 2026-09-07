@@ -171,6 +171,8 @@ const I18N = {
     bal_skip: "곳은 선을 못 읽어 건너뜀",
     bal_off: "미러링 표시 끔",
     bal_checking: "밸런스 체킹중",   /* v3.15.0 — 미러링 켜지는 동안 위 안내(showNote) 자리에 */
+    bal_read: "미러링 %P% 읽음",   /* v3.58.0 — 애니메이션이 끝나면 몇 %를 확실히 읽었는지 */
+    bal_read_low: "미러링 %P% 읽음 — 애매한 곳은 숨겼습니다",
     bal_no_photo: "사진을 먼저 불러오세요",
     /* 라인 이름 (v1.19.0) — 왼쪽 레일 버튼 · 캔버스 라벨 · 조절자 이름이 모두 이걸 쓴다 */
     line_eye: "눈",
@@ -342,6 +344,8 @@ const I18N = {
     bal_skip: " skipped (line not readable)",
     bal_off: "Mirror view off",
     bal_checking: "Checking balance…",
+    bal_read: "Mirroring %P% read",
+    bal_read_low: "Mirroring %P% read — unclear spots hidden",
     bal_no_photo: "Load a photo first",
     line_eye: "Eye",
     line_front: "Front",
@@ -385,7 +389,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.57.0";
+const APP_VERSION = "v3.58.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -6559,6 +6563,11 @@ function balBoxEdges(img, trace) {
       const nb = boxEdge(img, p.x, p.bot, th, 1, traceSlope(trace, i, "bot")), nt = boxEdge(img, p.x, p.top, th, -1, traceSlope(trace, i, "top"));
       const b2 = nb === null ? p.bot : nb, t2 = nt === null ? p.top : nt;
       if (b2 - t2 >= 3) { out[i].bot = b2; out[i].top = t2; }
+      /* ⭐⭐⭐ v3.58.0 — **판단이 안 되면 숨김** (원장님 지시 2026-09-07: 「이 부분이 점수로 판단되지
+         않으면 미러링시 점선을 숨김처리한다 … 이상한데 점선처리하면 에러로 보인다」).
+         boxEdge 가 null = 박스 안에 흰↔검 대비가 없다 = 옅음/짙음 경계를 점수로 매길 수 없다.
+         그 자리는 예전엔 판독값(추측)을 그대로 찍었는데, 이제 그리지 않는다 — renderBalCurve 참고. */
+      out[i].sureTop = nt !== null; out[i].sureBot = nb !== null;
     }
     return out;
   } catch (e) { return trace; }
@@ -6594,7 +6603,7 @@ function balBoxTail(img, trace, tailX) {
       if (Math.abs(t2 - prev.top) > tol || Math.abs(b2 - prev.bot) > tol) { if (++miss >= 2) break; continue; }
       if (b2 - t2 < 2) break;                                               // 위아래가 만났다 = 꼬리 끝
       miss = 0;
-      const np = { x, top: t2, bot: b2, zone: 1 };
+      const np = { x, top: t2, bot: b2, zone: 1, sureTop: nt !== null, sureBot: nb !== null };   /* v3.58.0 — 판단이 안 된 쪽은 숨김 */
       out.push(np); prev2 = prev; prev = np; added++;
     }
     return out;
@@ -6621,7 +6630,15 @@ function runBalanceCurve() {
     const devFront = off(L.top[0].y, R.top[0].y) || off(L.bot[0].y, R.bot[0].y);
     const devArch = off(L.top[1].y, R.top[1].y) || off(L.bot[1].y, R.bot[1].y);
     const devTail = off(L.top[2].y, R.top[2].y) || off(L.bot[2].y, R.bot[2].y);
-    S.balCurve = { L, R, devFront, devArch, devTail, tol };
+    /* ⭐ v3.58.0 — **읽음 %** : 기준쪽 궤적의 위·아래 점 가운데 몇 %를 확실히 읽었나.
+       숨긴 점이 많으면 원장님이 「사진을 다시 찍어야겠다」를 바로 아신다 (startBalAnim 이 안내). */
+    let sOk = 0, sTot = 0;
+    for (const p of (S.refSide === "L" ? L : R).trace) {
+      if (isFinite(p.top)) { sTot++; if (p.sureTop !== false) sOk++; }
+      if (p.bot !== undefined && isFinite(p.bot)) { sTot++; if (p.sureBot !== false) sOk++; }
+    }
+    const read = sTot ? Math.round((100 * sOk) / sTot) : null;
+    S.balCurve = { L, R, devFront, devArch, devTail, tol, read };
     return true;
   } catch (e) { S.balCurve = null; return false; }
 }
@@ -6716,10 +6733,24 @@ const BAL_IGNORE_RULES = [
   { name: "belowFront", whole: false,
     hit: (p, ctx, key) => p[key] > ctx.frontY + 2 },
 ];
+/* ⭐⭐⭐ v3.58.0 — **이너 자르기의 기준을 「가이드」에서 「이너 판독값」으로** (원장님 지시 2026-09-07).
+   v3.24.0 의 규칙 ①(innerFront)은 이너 **가이드**(v2/v3)를 기준으로 미간 쪽 점을 버렸다. 그래서 원장님이
+   이너 선을 손으로 조금만 끌어도 미러링 점선의 앞머리 끝이 같이 따라 움직였다 — 사진은 그대로인데 점선이
+   움직이니 「이 점선은 무엇을 재고 있나」가 흐려진다. 앱은 이미 **이너 판독값**(눈썹 색이 시작하는 곳,
+   `S.innerRead`)을 갖고 있으므로 거기서 자른다. 이제 이너를 아무리 옮겨도 점선은 꿈쩍하지 않는다.
+   판독이 없으면(사진 없음·판독 실패) 예전대로 가이드를 쓴다. frontDecide/showArchDots 와 **같은 식**:
+   캡(45) 전 실제 시작점 fRaw 가 있으면 그것을 쓴다. side 는 v2 쪽이 "L", 거울쪽(v3 = 2·v1 − v2)이 "R". */
+function innerReadX(side) {
+  const g = S.g, W = S.dim.W, cx = g.v1 * W, ir = S.innerRead;
+  const f = ir ? ((ir.fRaw != null && ir.fRaw > INNER_F_SOFT) ? ir.fRaw : ir.f) : null;
+  const half = (ir && ir.anchor && f != null && isFinite(f)) ? ir.anchor * (1 - f) * W : null;
+  if (half === null || !isFinite(half) || !isFinite(cx)) return (side === "L" ? g.v2 : g.v3) * W;
+  return side === "L" ? cx - half : cx + half;
+}
 function balIgnoreZones(trace, side) {
   try {
     const g = S.g, { W, H } = S.dim;
-    const innerX = (side === "L" ? g.v2 : g.v3) * W, cx = g.v1 * W;
+    const innerX = innerReadX(side), cx = g.v1 * W;   /* v3.58.0 — 가이드가 아니라 **이너 판독값** (아래 innerReadX) */
     if (![innerX, cx, g.front].every((v) => isFinite(v))) return trace;
     const ctx = { innerX, toCenter: Math.sign(cx - innerX) || 1, frontY: g.front * H };
     // ① 열 통째로 버리는 규칙
@@ -6889,16 +6920,19 @@ function renderBalCurve(frag) {
      버튼이 말해 준다. 회귀 196. */
   /* v3.37.0 — 투명도는 이제 S.balOpacity(도크 드래그바로 조절, 기본값은 BAL_DOT.op 와 동일) */
   const dot = (x, y, r) => frag.appendChild(mk("circle", { cx: x, cy: y, r, fill: balColor(), "fill-opacity": S.balOpacity }));
+  /* ⭐⭐⭐ v3.58.0 — **판단이 안 된 점은 그리지 않는다** (balBoxEdges 의 sureTop/sureBot).
+     기준쪽과 거울쪽에 똑같이 적용한다 — 한쪽만 숨기면 좌우가 달라 보여 더 큰 오해가 된다. */
+  const sure = (p, k) => (k === "top" ? p.sureTop : p.sureBot) !== false;
   for (let i = 0; i < refCount; i++) {
     const p = trace[i];
-    dot(p.x, p.top, BAL_DOT.rTop);
-    if (p.bot !== undefined) dot(p.x, p.bot, BAL_DOT.rBot);
+    if (sure(p, "top")) dot(p.x, p.top, BAL_DOT.rTop);
+    if (p.bot !== undefined && sure(p, "bot")) dot(p.x, p.bot, BAL_DOT.rBot);
   }
   for (let i = 0; i < mirCount; i++) {
     const p = trace[i];
     const mx = 2 * cx - p.x;              // 기준쪽 x를 거울에 비춰 반대쪽 자리로
-    dot(mx, p.top, BAL_DOT.rTop);
-    if (p.bot !== undefined) dot(mx, p.bot, BAL_DOT.rBot);
+    if (sure(p, "top")) dot(mx, p.top, BAL_DOT.rTop);
+    if (p.bot !== undefined && sure(p, "bot")) dot(mx, p.bot, BAL_DOT.rBot);
   }
 }
 
@@ -6909,6 +6943,7 @@ function renderBalCurve(frag) {
    "위 안내"는 showNote()의 그 자리 — v3.14.0에서 「그린 선에 맞춰 배치했습니다」 안내를
    지운 바로 그 자리를 재활용한다. render() 를 매 프레임 다시 불러 renderBalCurve() 가
    S.balAnim 의 진행률만큼만 점을 그리게 한다 — 판정 로직은 전혀 건드리지 않는다. */
+const BAL_READ_LOW = 60;   /* v3.58.0 — 읽음 %가 이 밑이면 「애매한 곳은 숨겼습니다」로 알린다 */
 function startBalAnim() {
   S.balAnim = { phase: "ref", t0: performance.now() };
   showNote(t("bal_checking"), BAL_ANIM_MS * 2 + 400);
@@ -6917,7 +6952,13 @@ function startBalAnim() {
     const frac = (performance.now() - S.balAnim.t0) / BAL_ANIM_MS;
     if (frac >= 1) {
       if (S.balAnim.phase === "ref") { S.balAnim = { phase: "mirror", t0: performance.now() }; }
-      else { S.balAnim = null; render(); return; }
+      else {
+        S.balAnim = null; render();
+        /* v3.58.0 — 애니메이션이 끝나면 읽음 % 한 줄 (숨긴 점이 많으면 다른 문구) */
+        const pc = S.balCurve ? S.balCurve.read : null;
+        if (pc !== null && pc !== undefined) showNote(t(pc < BAL_READ_LOW ? "bal_read_low" : "bal_read").replace("%P%", pc + "%"), 2600);
+        return;
+      }
     }
     render();
     requestAnimationFrame(step);
@@ -7417,6 +7458,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
   rulerBoxRefine, RULER_BOX_MOVE, RULER_BOX_HALF_H,   /* v3.51.0 — 자 판독 눕힌 박스 (회귀 217) */
+  innerReadX, BAL_READ_LOW,   /* v3.58.0 — 이너 판독 기준 자르기 · 애매하면 숨김 (회귀 221·222) */
   balBoxEdges, BOX_HALF_W, BOX_HALF_H, BOX_MIN_CONTRAST, boxEdge, balBoxTail, BOX_SAMPLES, BOX_MAX_SLOPE, traceSlope, snapState, applySnap,   /* v3.50.0 — 눕힌 박스·되돌리기 (회귀 215·216) */ BOX_TAIL_MAX, BOX_SCALE, BOX_AGG_N, photoPixelsRaw, aiFixAuto, aiFixApply, applyPhotoFilter, toggleAiFix, sharpenKernel, aiFixRemeasure, aiFixOnLoad, setPtrDown, syncAiFixUI,   /* v3.49.0 — 바 위치·보정 유지·자 재측정 (회귀 212·213·214) */   /* v3.47.0 — AI 보정·3배 화소 (회귀 209·210) */   /* v3.44.0 — 작은 박스 경계 (회귀 206) · v3.45.0 꼬리 연장 (207) */
   autoFromDrawing, readDrawing, browBoxes, columnRuns, outlinePair, seqOrient, showArchDots,
   applyLayout, openPicker, endPicking, setLang, stepEdit: step,   /* v3.33.0 — 회귀 195 (편집 기록 경로) */
