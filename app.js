@@ -385,7 +385,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.54.0";
+const APP_VERSION = "v3.55.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -3765,6 +3765,53 @@ function darkBlobsUp(img, x, yB, yT, tMin, tMax) {
   return out;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⭐⭐⭐ v3.55.0 — **아랫선은 「윗선에서 아래로 내려오며 처음 만나는 경계」다** (원장님 설계 2026-09-07)
+   ───────────────────────────────────────────────────────────────────────────
+   원장님 지시 요지:
+     「중앙에 아래쪽, 중앙에서 위쪽으로 훑으며 검정에서 밝은 색으로 변하는 **점수**를 파악하여
+       정확한 점수를 가진 것만 점으로 표기 · 판단이 안 되면 숨김」
+     「아치두께가 불분명하면 **그 고객에게서 잰 앞 두께 값**을 놓는다 — 6칸 고정이 아니다」
+
+   ⛔ 예전 방식(아래에서 위로 올라가며 처음 만난 어두운 것)은 **얇은 눈썹이든 두꺼운 눈썹이든
+      언제나 눈두덩 그늘을 먼저 만납니다.** 2026-09-07 하루의 오독이 전부 그 구조였습니다
+      (원장님 사진 실측: 아치두께 167 · 두께 61.5px = 실제 눈썹의 약 3배).
+   ⭐ 이제 출발점이 **언제나 확실한 눈썹 안**(윗선 바로 아래 = 몸통)이라 그늘을 먼저 만날 수 없습니다.
+      얇은 눈썹은 금방 경계를 만나고, 두꺼운 눈썹은 범위 끝까지 갔다가 못 찾으면 대체값에 안전하게 떨어집니다.
+   ⭐ 보정이 강할수록 유리합니다 — 경계가 뚜렷해질수록 이 급락이 커집니다 (원장님 2026-09-07:
+      「보정 이후 경계가 뚜렷해졌으니 판단이 더 정확해야 한다」).
+
+   돌려주는 값: 경계의 y (캔버스 픽셀) · 못 읽으면 **null**(= 판단 불가 → 부르는 쪽이 대체값·숨김 처리).
+   ⚠️ 「짙음 → 옅음」의 잣대는 그 열 안에서의 **상대값**입니다. 절대 밝기차를 쓰면 AI 보정을 켰을 때
+      규칙이 어긋납니다 (BASELINE 1-73 과 같은 이유). */
+const EDGE_DROP = 0.15;   // 어둡기 퍼센트가 2줄 사이에 이만큼 떨어지면 「경계」 (= FT_P2_MIN 과 같은 잣대)
+const EDGE_KEEP = 6;      // 경계 아래로 이 줄만큼은 계속 옅어야 진짜 경계다
+function edgeBelow(img, x, yTop, yLo, yHi) {
+  const { W, H } = S.dim;
+  if (!img || !isFinite(x) || !isFinite(yTop) || !isFinite(yLo) || !isFinite(yHi)) return null;
+  const y0 = Math.max(0, Math.round(yTop)), y1 = Math.min(H - 1, Math.round(yHi));
+  if (y1 - y0 < 6) return null;
+  const col = [];
+  for (let y = y0; y <= y1; y++) col.push(lumaAt(img, W, Math.round(x), y));
+  const srt = col.slice().sort((a, b) => a - b);
+  const dk = srt[Math.floor((srt.length - 1) * 0.1)], lt = srt[Math.floor((srt.length - 1) * 0.9)];
+  if (lt - dk < FRONT_DARK_MIN) return null;             // 대비가 없다 = 판단 불가
+  const n = col.length;
+  const pc = (i) => (lt - col[Math.max(0, Math.min(n - 1, i))]) / Math.max(1, lt - dk);   // 1 = 가장 짙음
+  const sm = (i) => (pc(i - 1) + pc(i) + pc(i + 1)) / 3;
+  const lo = Math.max(1, Math.round(yLo) - y0);
+  for (let i = lo; i + 2 <= n - 1; i++) {
+    if (sm(i) - sm(i + 2) < EDGE_DROP) continue;
+    /* ⭐ 진짜 경계는 **그 아래가 계속 옅습니다.** 눈썹 몸통 안의 잔변동(결·하이라이트)은 곧 다시 짙어지므로
+       여기서 걸러집니다 — 이 조건이 없으면 자가 몸통 한가운데에 섭니다(2026-09-07 실측). */
+    const keep = Math.min(n - 1, i + 2 + EDGE_KEEP);
+    let ok = true;
+    for (let j = i + 2; j <= keep; j++) if (sm(j) > sm(i) - EDGE_DROP * 0.5) { ok = false; break; }
+    if (ok) return y0 + i + 1;
+  }
+  return null;
+}
+
 /* 앞머리·앞두께 — 이너 자리에서 위로 걸어 「피부 다음의 두꺼운 검은 것」을 찾는다.
    후보 고르기는 **넘버링**이 한다: 눈 위 FRONT_T_LO~FRONT_T_HI 안의 **가장 아래** 후보
    (쌍꺼풀·주름 쉐도우 방어 · v2.1.2). 3열 미만이면 포기 → 기존 밴드 판독 유지. */
@@ -3798,7 +3845,14 @@ function frontDecide(img) {
         if (t >= FRONT_T_LO && t <= FRONT_T_HI) { pick = c; break; }
       }
     } else pick = cands[0];
-    if (pick) { pick.x = x; ys.push(pick); }
+    if (pick) {
+      /* v3.55.0 — 아랫선(앞머리)을 윗선(앞두께)에서 아래로 내려오며 첫 경계로 다시 잰다 (edgeBelow 주석).
+         못 읽으면 예전 값 그대로 — 이 열은 「판단 불가」로 표시해 둔다(미러링 숨김 판단에 쓴다). */
+      const e = edgeBelow(img, x, pick.top, pick.top + Math.max(4, 0.2 * (pick.y - pick.top)), pick.y + 2);
+      pick.sure = e !== null;
+      if (e !== null) pick.y = e;
+      pick.x = x; ys.push(pick);
+    }
   }
   if (ys.length < 3) return null;
   /* 앞머리 = 아랫끝들의 중앙값 · 앞두께 = 윗끝들의 중앙값 */
@@ -3806,7 +3860,7 @@ function frontDecide(img) {
   const tops = ys.map((c) => c.top).sort((a, b) => a - b);
   const xs2 = ys.map((c) => c.x).sort((a, b) => a - b);
   /* v3.51.0 — 읽은 열들의 가운데 x 도 함께 돌려준다 (자 판독 박스 다듬기가 그 자리에서 다시 잰다) */
-  return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)], x: xs2[Math.floor(xs2.length / 2)] };
+  return { y: bots[Math.floor(bots.length / 2)], top: tops[Math.floor(tops.length / 2)], x: xs2[Math.floor(xs2.length / 2)], sure: ys.filter((c) => c.sure).length, cols: ys.length };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -3862,6 +3916,8 @@ const ARCH_FROM_AT = 5;       // 아치엣지 = 아치두께에서 위로 이 �
    ⛔ **해부학 순서 위반(아치두께가 앞머리보다 아래)은 여기에 넣지 마세요.** 그건 덩어리
       자체가 눈썹이 아닐 수 있다는 신호라 윗끝도 못 믿습니다 — 회귀 162ⓒ 가 잡습니다. */
 const AT_FROM_ARCH = 5;       // 아치두께 = 아치엣지에서 아래로 이 눈금 (대체값)
+/* v3.55.0 — 아치두께를 찾는 범위 = 「그 고객의 앞 두께」 ± 이 눈금 (원장님 설계 2026-09-07 「위아래 2칸까지만」) */
+const ARCH_T_TOL = 2;
 /* ⭐⭐⭐ v2.8.0 — **아치엣지의 맥시멈** (원장님 지시 2026-08-29:
      「아치 엣지가 잡히지 않거나, 위에 머리카락으로 혼동이 있을 경우 **맥시멈 위치 추가** —
        앞두께 위로 5칸 이상 넘어가는 곳을 임의로 잡지 않는다」)
@@ -3892,6 +3948,10 @@ function archDecide(img, peakX, info) {
   const u = frontTickPx(), eyePx = ez * H;
   const frontTk = u ? (eyePx - S.g.front * H) / u : null;
   const tops = [], bots = [], edgeOnly = [], thickOnly = [], half = (ARCH_COLS - 1) / 2;
+  /* ⭐⭐⭐ v3.55.0 — **그 고객의 앞 두께** (원장님 설계 2026-09-07). 기준쪽(refSide) 자로 놓인 값이라
+     좌우 어느 쪽 아치에도 같은 값을 씁니다 — 대칭을 맞추는 도구라는 이 앱의 목적에 맞춥니다. */
+  const ftGap = (S.g.front - S.g.frontThickness) * S.dim.H;
+
   for (let k = 0; k < ARCH_COLS; k++) {
     const x = Math.round(peakX + ((k - half) * ARCH_SPAN * W) / half);
     const cands = darkBlobsUp(img, x, yB, yT, AT_T_MIN, AT_T_MAX);
@@ -3935,6 +3995,18 @@ function archDecide(img, peakX, info) {
       }
       continue;
     }
+    /* ⭐⭐⭐ v3.55.0 — **아치두께 = 아치엣지 + 「그 고객의 앞 두께」** (원장님 설계 2026-09-07:
+       「앞머리와 앞두께 사이의 칸수를 계산하여 그 칸수만큼 아치엣지와 아치두께에 적용한다 …
+         판단이 서지 않을 경우 앞머리와 앞두께의 기본 두께에 놓는다 — 6칸 고정이 아니다」)
+       ⛔ 고정 상수(AT_FROM_ARCH 5칸)로 되돌리지 마세요. 사람마다 눈썹 두께가 다르고, 같은 사진에서
+          잰 값이라 눈금 크기·확대율·촬영 각도가 이미 반영돼 있습니다.
+       찾는 범위는 그 값 ±ARCH_T_TOL 칸 — 눈두덩 그늘(실측 3배)은 애초에 후보가 될 수 없습니다. */
+    if (ftGap > 2) {
+      const tolPx = u ? ARCH_T_TOL * u : 0.3 * ftGap;
+      const e = edgeBelow(img, x, pick.top, pick.top + Math.max(4, ftGap - tolPx), pick.top + ftGap + tolPx);
+      pick.sure = e !== null;
+      pick.y = e !== null ? e : pick.top + ftGap;        /* 못 읽으면 그 고객의 앞 두께 */
+    }
     bots.push(pick.y); tops.push(pick.top);
   }
   /* ⭐⭐⭐ v2.8.0 — **아치두께는 아치엣지에서 5칸보다 더 내려가지 않는다** (원장님 지시 2026-08-29:
@@ -3951,7 +4023,9 @@ function archDecide(img, peakX, info) {
      잘라 아치두께를 눈썹 한가운데에 세웠다. 이제 아랫끝을 읽었으면 **읽은 값 그대로**. ①(아랫끝을 아예 못
      읽은 열들 → 아치엣지+5칸 대체값, 회귀 164)은 그대로 둔다. ⛔ 사진 5번(읽은 값 8.5 → 상한 9.3 → 정답 9.5)
      같은 잔털 케이스는 이제 1칸쯤 낮게 잡힐 수 있다 — 원장님이 그것을 알고 C 를 고르셨다. */
-  const cap = u ? AT_FROM_ARCH * u : null;
+  /* ⭐ v3.55.0 — 대체값은 **고정 5칸이 아니라 그 고객의 앞 두께**입니다 (원장님 2026-09-07).
+     앞 두께를 못 구한 사진(앞머리 판독 실패)에서만 예전 5칸으로 물러납니다. */
+  const cap = ftGap > 2 ? ftGap : (u ? AT_FROM_ARCH * u : null);
   /* ⭐ v2.8.0 — 아치엣지 맥시멈 (위 ARCH_MAX_OVER_FT 주석). ⚠️ **밴드 판독에는 걸지 않습니다** —
      밴드가 읽는 것은 원장님이 그려 놓은 드로잉이고, 드로잉은 그 자체가 정답입니다. */
   const eMax = archEdgeMax(S.g.frontThickness * H, u);
@@ -6459,8 +6533,13 @@ function rulerBoxRefine(imgHi, seq, x, yTop0, yBot0, winTop, winBot) {
     const u = frontTickPx(), eyePx = eyeZeroY() * S.dim.H;
     /* 넘버링 창 = 판독(darkBlobsUp)이 후보를 고를 때 쓴 그 창 그대로. 창이 없으면(자 없음) 통과 */
     const inWin = (y, win) => { if (!u || !win) return true; const t = (eyePx - y) / u; return t >= win[0] && t <= win[1]; };
-    const take = (v, v0, win) => (v === null || Math.abs(v - v0) > lim || !inWin(v, win)) ? v0 : v;
-    const t2 = take(nt, yTop0, winTop), b2 = take(nb, yBot0, winBot);
+    const take = (v, v0, win, cap) => (v === null || Math.abs(v - v0) > (cap ?? lim) || !inWin(v, win)) ? v0 : v;
+    const t2 = take(nt, yTop0, winTop);
+    /* ⭐⭐⭐ v3.55.0 — **아랫선을 아래로 미는 것은 박스가 하지 않는다** (원장님 설계 2026-09-07).
+       아랫선은 이제 edgeBelow 가 「그 고객의 앞 두께 ±2칸」 안에서 정합니다 — 그것이 최종입니다.
+       박스가 다시 아래로 밀면 눈두덩 그늘의 바깥 경계를 잡습니다 (실측: 판독 143 → 박스 뒤 168.2).
+       위로 당기는 것(v3.51.0 이 고친 「자가 몸통 속에 선다」)은 그대로 둡니다. */
+    const b2 = take(nb, yBot0, winBot, (nb !== null && nb > yBot0) ? 0 : lim);
     if (!(t2 < b2 - 1)) return null;
     if (t2 === yTop0 && b2 === yBot0) return null;
     return { top: t2, bot: b2 };
