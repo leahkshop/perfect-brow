@@ -389,7 +389,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.62.0";
+const APP_VERSION = "v3.63.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -2278,17 +2278,6 @@ function imgToCanvas(px, py, tr) {
   const rx = vx * Math.cos(r) - vy * Math.sin(r);
   const ry = vx * Math.sin(r) + vy * Math.cos(r);
   return { x: W / 2 + rx * tr.zoom + tr.ox * W, y: H / 2 + ry * tr.zoom + tr.oy * H };
-}
-
-/* ⭐⭐⭐ v3.62.0 — 캔버스 좌표 → **사진 좌표** (imgToCanvas 의 역함수).
-   미러링 점을 사진에 얼려 붙이는 데 씁니다 (freezeBalDots). */
-function canvasToImg(cxp, cyp, tr) {
-  const { W, H } = S.dim;
-  if (!S.s0 || !tr || !tr.zoom) return null;
-  const rx = (cxp - W / 2 - tr.ox * W) / tr.zoom, ry = (cyp - H / 2 - tr.oy * H) / tr.zoom;
-  const r = (tr.rot * Math.PI) / 180, c = Math.cos(r), sn = Math.sin(r);
-  const vx = rx * c + ry * sn, vy = -rx * sn + ry * c;
-  return { x: vx / S.s0 + S.iw / 2, y: vy / S.s0 + S.ih / 2 };
 }
 
 /* 동공 위치(정규화 캔버스 좌표)로부터 가이드 라인 일괄 배치.
@@ -5202,7 +5191,12 @@ function loadPhoto(file) {
     S.g = { ...DEFAULT_GUIDE };
     S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
-    S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; S.balFrozen = null;
+    /* ⭐⭐⭐ v3.63.0 — **사진을 갈아 끼워도 미러링 잠금은 제자리에 남는다** (원장님 확정 2026-09-07:
+       「사진을 바꿔도 잠금 위치는 그대로 있다. 사진만 갈리고 자리는 안 움직인다」).
+       새 고객 사진을 앞 사람의 잠금선에 맞춰 보는 「자」로 쓰기 위한 것입니다. 낡은 것은 **판정값**뿐이라
+       그것만 버리고(balance·balCurve·balAnim), 얼려 둔 자리(balFrozen)와 켜짐(balOn)은 그대로 둡니다.
+       ⛔ 여기에 S.balFrozen = null 을 다시 넣지 마세요 — 사진을 바꾸면 잠금선이 사라집니다 (회귀 226). */
+    S.balance = null; S.balCurve = null; S.balAnim = null;
     /* ⭐ v3.26.0 — 새 사진도 **잠금 상태로 시작** (원장님 지시 2026-09-02: 「사진 잠금은 앱이 시작되면 잠금 상태로
        시작하고 사용자가 끄면 색상 조금 더 꺼진 느낌으로」). 시술 중 사진이 손에 밀리지 않는 것이 기본.
        사진을 옮기려면 잠금을 풀어야 한다. 첫 자동 정렬(runFaceAI→autoAlign)은 잠금과 무관하게 사진을 놓는다.
@@ -7030,21 +7024,24 @@ function balSmoothTrace(trace) {
   return out;
 }
 
-/* ⭐⭐⭐ v3.62.0 — **미러링 점은 한 번 만들어지면 절대 움직이지 않는다** (원장님 지시 2026-09-07:
-   「미러링은 만들어진 후 절대 다른 버튼들이 조작되어도 움직이지 않고 픽스된 채로 있도록 해라 —
-    지금은 미러링 이후 사진을 조작하면 점들이 움직인다」).
+/* ⭐⭐⭐ v3.63.0 — **미러링은 「자리」에 잠긴다 (사진에 붙지 않는다)** (원장님 확정 2026-09-07).
    ───────────────────────────────────────────────────────────────────────────
-   예전에는 점을 **매 프레임 다시 계산**했습니다: renderBalCurve 가 S.balCurve.trace 에 무시 규칙·잇기·
-   앞머리 끝·부드럽게를 그때그때 다시 걸고, 거울축도 그 순간의 이너 가이드(v1)로 잡았습니다. 게다가 사진을
-   움직이거나 AI 보정을 건드리면 편집 기록 자리(pushHist)에서 **다시 재기(runBalanceCurve)** 까지 했습니다.
-   그래서 버튼 하나만 눌러도 점이 조금씩 튀었습니다.
-   이제 미러링을 켜는 **그 순간 한 번만** 계산해서, 화면 좌표가 아니라 **사진 좌표(canvasToImg)** 로 얼려
-   둡니다(S.balFrozen). 그린 뒤에는 지금 사진 변환(S.p)으로 되돌려 찍기만 합니다 —
-   ① 사진을 옮기거나 확대해도 점은 **드로잉의 같은 자리**에 그대로 붙어 있고
-   ② 이너·다른 선을 옮겨도, AI 보정을 만져도, 되돌리기를 눌러도 점은 꿈쩍하지 않습니다
-   ③ 색·투명도만 그때그때 반영합니다(위치가 아니므로).
-   다시 재는 것은 **미러링을 껐다 켤 때뿐**입니다.
-   ⛔ 여기에 다시 balSmoothTrace/balIgnoreZones 같은 계산을 넣지 마세요 — 그것이 점이 움직이던 원인입니다. */
+   원장님 사양 그대로:
+     미러링 켬        → **지금 그 자리**에 잠금 고정
+     사진 교체·이동   → 잠금 자리 **그대로** (사진만 갈리고 자리는 안 움직인다)
+     미러링 다시 클릭 → 잠금 해제 (없어진다)
+     해제 후 다시 켬  → **바뀐 사진의 지금 자리**에서 새로 잠금
+   ───────────────────────────────────────────────────────────────────────────
+   예전(v3.62.0 이전)에는 점을 **매 프레임 다시 계산**했습니다 — renderBalCurve 가 무시 규칙·잇기·앞머리 끝·
+   부드럽게를 그때그때 다시 걸고, 거울축도 그 순간의 이너 가이드로 잡았습니다. 게다가 사진을 움직이거나 AI
+   보정을 건드리면 편집 기록 자리(commitEdit)에서 **다시 재기(runBalanceCurve)** 까지 했습니다. 그래서 버튼
+   하나만 눌러도 점이 튀었습니다.
+   이제 미러링을 켜는 그 순간 한 번만 계산해서 **캔버스(화면) 좌표 그대로** 얼려 둡니다(S.balFrozen).
+   그린 뒤에는 그 좌표를 그냥 찍기만 합니다 — 사진을 옮기든 확대하든 갈아 끼우든 **잠금선은 제자리**입니다.
+   그래야 새 고객 사진을 그 자리에 맞춰 보는 「자」로 쓸 수 있습니다.
+   색·투명도만 그때그때 반영합니다(위치가 아니므로).
+   ⛔ 여기에 balSmoothTrace/balIgnoreZones 같은 계산을 다시 넣지 마세요.
+   ⛔ 사진 좌표로 바꿔 사진에 붙이지 마세요 — 원장님이 「사진에 붙는 것이 아니라 자리에 붙는다」고 확정하셨습니다. */
 function freezeBalDots() {
   S.balFrozen = null;
   const bc = S.balCurve;
@@ -7055,7 +7052,7 @@ function freezeBalDots() {
   const cx = S.g.v1 * S.dim.W;
   const sure = (p, k) => (k === "top" ? p.sureTop : p.sureBot) !== false;   // v3.58.0 판단이 안 된 점은 숨김
   const R = [], M = [];
-  const add = (arr, x, y, r) => { const q = canvasToImg(x, y, S.p); if (q && isFinite(q.x) && isFinite(q.y)) arr.push({ x: q.x, y: q.y, r }); };
+  const add = (arr, x, y, r) => { if (isFinite(x) && isFinite(y)) arr.push({ x, y, r }); };
   for (const p of trace) {
     if (!isFinite(p.x) || !isFinite(p.top)) continue;
     if (sure(p, "top")) { add(R, p.x, p.top, BAL_DOT.rTop); add(M, 2 * cx - p.x, p.top, BAL_DOT.rTop); }
@@ -7080,8 +7077,8 @@ function renderBalCurve(frag) {
   const col = balColor(), op = S.balOpacity;
   const draw = (arr, cnt) => {
     for (let i = 0; i < cnt && i < arr.length; i++) {
-      const p = arr[i], c = imgToCanvas(p.x, p.y, S.p);
-      frag.appendChild(mk("circle", { cx: c.x, cy: c.y, r: p.r, fill: col, "fill-opacity": op }));
+      const p = arr[i];
+      frag.appendChild(mk("circle", { cx: p.x, cy: p.y, r: p.r, fill: col, "fill-opacity": op }));
     }
   };
   draw(fz.ref, refCount);
@@ -7609,7 +7606,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
-  freezeBalDots, canvasToImg, beginEdit, commitEdit,   /* v3.62.0 — 미러링 점 고정 (회귀 226) */
+  freezeBalDots, beginEdit, commitEdit,   /* v3.63.0 — 미러링 자리 잠금 (회귀 226) */
   runBalanceCurve, readSideCurve, balBridgeOutliers, balIgnoreZones, BAL_IGNORE_RULES, balSmoothTrace, SM_WIN, SM_Q, balFrontEnd, FE_FRAC, FE_TOL_FRAC, FE_TOL_MIN,   /* v3.41.0 — 앞머리 끝 규칙 (회귀 203) */
   rulerBoxRefine, RULER_BOX_MOVE, RULER_BOX_HALF_H,   /* v3.51.0 — 자 판독 눕힌 박스 (회귀 217) */
   innerReadX, BAL_READ_LOW,   /* v3.58.0 — 이너 판독 기준 자르기 · 애매하면 숨김 (회귀 221·222) */
