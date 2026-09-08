@@ -393,7 +393,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.67.0";
+const APP_VERSION = "v3.68.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -633,7 +633,26 @@ function workRight() {
      = workLeft(드래그 바 오른쪽 끝+여유) ~ workRight(화면 오른쪽 끝-8px)의 **정중앙 = 0.5**.
    ⛔ 이 정의가 기준입니다 — 다시 바꾸려면 원장님 지시가 먼저입니다. */
 const CENTER_BIAS = 0.5;
-const centerX = () => { const l = workLeft(), r = workRight(); return l + (r - l) * CENTER_BIAS; };
+/* ⭐⭐⭐ v3.68.0 — **첫 배치는 정중앙에서 6 눈금 왼쪽** (원장님 지시 2026-09-07:
+   「처음 사진을 불러올 때 얼굴 자동 정렬을 지금보다 조금 더 왼쪽으로 이동해라. 번호를 보니
+    현재 측정되는 번호 53에서 왼쪽으로 47로 옮기니 괜찮아 보인다」).
+   ─────────────────────────────────────────────────────────────────────────
+   **숫자의 뜻** — 「센터」 줄의 화면 숫자는 눈금자 정의상 **언제나 53**입니다:
+   내안각이 40이고 거기서 얼굴 중심까지가 13.15 눈금(dispV)이라 40+13.15 = 53.15 → 53.
+   실측 확인(원장님 사진 p5): centerX 0.5358 · faceRef {a 0.4214, c 0.5358} · 센터 disp **53**.
+   그러니 「53 → 47」은 **6 눈금만큼 왼쪽**이라는 뜻입니다. 1 눈금 = 화면 폭 1%(INNER_FRAC 주석)
+   이므로 **화면 폭의 6%** 를 왼쪽으로 옮깁니다.
+   ⚠️ 옮긴 뒤에도 센터 줄은 여전히 **53** 으로 보입니다 — 그 숫자는 화면 자리가 아니라 고객
+   **자신의 눈**을 기준으로 재기 때문입니다(얼굴과 자가 함께 움직입니다). 화면에서 얼굴이 6% 만큼
+   왼쪽에 놓이는 것이 이 지시의 내용입니다.
+   ⚠️ v1.97.2 의 「정중앙(workLeft~workRight 의 0.5)」 정의는 그대로 두고, 그 자리에서 눈금만큼
+   **덜어냅니다** — 기기마다 도크 폭이 달라도 이동량은 언제나 화면 폭의 6% 로 같습니다.
+   ⛔ CENTER_BIAS 를 건드려 옮기지 마세요 — 그러면 기기마다 이동량이 달라집니다. */
+const CENTER_LEFT_TICKS = 6;     // 눈금 (1 눈금 = 화면 폭 1%) — 원장님 지시 53 → 47
+const centerX = () => {
+  const l = workLeft(), r = workRight();
+  return clamp(l + (r - l) * CENTER_BIAS - CENTER_LEFT_TICKS * 0.01, l, r);
+};
 /* 인체 계측 평균비 — 동공 간 거리 기준 (동공 오프셋 = 1.0) */
 const R_INNER = 0.52;     // 눈 앞머리(내안각)
 const R_OUTER = 1.50;     // 눈꼬리(외안각)
@@ -7701,7 +7720,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   GUIDE_FLOW, FLOW_ALL, FLOW_DEF, setFlow, saveFlow, TAIL_CROSS, crossOfStep,
   updateGuideTip, updateBalPct, BAL_PCT_SHOW, trimOutside, browBoxes, innerDecide, innerProfile, innerAnchor, innerCaseF, innerFallback,
   INNER_F_LO, INNER_F_MID, INNER_F_SOFT, INNER_F_HARD, INNER_RISE, INNER_MULT, INNER_CORE, INNER_CASES, V_PALETTE, hasEdge, startIntro, INTRO_MS, hitTest, endIntroEarly,
-  workLeft, workRight, centerX,     /* v1.95.0 — 작업 영역 검사용 (v1.96.0 centerX 추가) */
+  workLeft, workRight, centerX, CENTER_BIAS, CENTER_LEFT_TICKS,     /* v1.95.0 — 작업 영역 검사용 · v3.68.0 눈금 이동 */
   findPupilsFallback, fallbackPupilAlign, EYE_FRAC, INNER_FRAC, CENTER_Y, faceRef, dispV,
   findCanthus, detectFaceRef, CANTHUS_BAND, CANTHUS_DARK, CANTHUS_AP, CANTHUS_RUN,
   frontDecide, darkBlobsUp, archDecide, eyeArchRange,
