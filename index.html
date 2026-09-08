@@ -190,12 +190,15 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
 .scrim-b{left:0;right:0;bottom:0;height:calc(var(--bdock,120px) + 30px);
   background:linear-gradient(to top,var(--scrim) 0%,var(--scrim) 45%,var(--scrim-m) 74%,rgba(6,8,13,0) 100%)}
 /* v1.95.0 — 위아래 바가 왼쪽으로 가서 스크림도 **왼쪽**에 깝니다 (원장님 지시 2026-08-29)
-   v3.69.0 — 원장님 지시: 「왼쪽 그라데이션은 너무 중앙으로 들어왔다. 위아래 드래그 조금 넘는
-   부위까지만」. 폰을 세워 보면 이 띠는 **화면 위쪽**에 깔린다. --redge(안전영역) 를 더하면
-   기기마다 길이가 달라져 아이폰에서 화면 y=205 까지 내려왔다 — 고정 108px 로 못박아
-   스테이지 위(62px)에서 재면 y=170, ◀○▶ 슬라이더(y 118) 를 살짝 넘는 자리에서 끝난다.
-   ⛔ --redge 를 다시 더하지 마세요. 기기마다 달라집니다. */
-.scrim-l{top:0;bottom:0;left:0;width:120px;
+   v3.71.0 — 원장님 지시 2026-09-08: 「왼쪽 그라데이션 **시작점**을 **왼쪽 위아래 드래그바**로
+   맞춰라」. 그 드래그바는 #rightDock(= #posCtlV, 세로 조절자)이고 **캔버스 왼쪽 위**에 선다:
+   폰 x 16~56 · 아이패드 x 16~62. 그래서 이 띠는 그 바의 바깥끝에서 **8~10px 만 더 나가고**
+   끝난다 — 폰(compact) 64px · 아이패드 72px.
+   ⚠️ v3.69.0 은 108px 이었고 바보다 **52px 이나 더** 중앙으로 들어와 있었습니다(원장님 재지시의 원인).
+   ⛔ --redge 를 다시 더하지 마세요 — env(safe-area-inset-bottom) 이 섞여 기기마다 길이가
+      달라집니다(v3.69.0 이전 아이폰에서 y=205 까지 내려온 원인). 고정 px 로 둡니다.
+   ⛔ 이 폭은 위아래 드래그바를 **덮어야** 합니다 (회귀 47 「세로바덮음」). 더 줄이지 마세요. */
+.scrim-l{top:0;bottom:0;left:0;width:72px;
   background:linear-gradient(to right,var(--scrim) 0%,var(--scrim-m) 55%,rgba(6,8,13,0) 100%)}
 /* v3.69.0 — 원장님 지시: 「화면 오른쪽 검은 그라데이션, 오른쪽 버튼이 살짝 닿는 부분까지만.
    그러면 얼굴에 더 집중이 된다」. 캔버스 오른쪽 = 폰 **아래쪽** 띠 (초기화·되돌리기·다시실행·
@@ -992,9 +995,10 @@ body:not(.land) #railLang{display:none}
   body.land.compact .modal-row button{height:42px}
   body.land.compact #editor .scrim-b{height:calc(var(--bdock,110px) + 22px)}
   /* v3.69.0 — 폰을 세워 쓰는 rot90 은 짧은 화면(높이<560)이라 **언제나 compact** 다.
-     원장님 폰(390×844)에서 이 두 값이 실제로 화면에 나오는 값이다:
-     scrim-l 108px → 화면 위에서 y=170 (원장님이 그어 주신 가로선) · scrim-r 64px → y=780~844 (그려 주신 네모). */
-  body.land.compact #editor .scrim-l{width:108px}
+     원장님 폰(390×844)에서 이 두 값이 실제로 화면에 나오는 값이다.
+     v3.71.0 — scrim-l 108 → **64px**: 위아래 드래그바 바깥끝(캔버스 x 56)에서 8px 만 더 나간다.
+     (세로폰 화면으로 보면 위에서 y = 62 + 64 = **126**.) scrim-r 64px 는 그대로 y 780~844. */
+  body.land.compact #editor .scrim-l{width:64px}
   body.land.compact #editor .scrim-r{width:64px}
   body.land.compact #editor .menurow button i, body.land.compact #editor .menurow button i svg{width:17px;height:17px}
   body.land.compact #editor .dockbtn i, body.land.compact #editor .dockbtn i svg{width:16px;height:16px}
