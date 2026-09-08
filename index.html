@@ -189,9 +189,19 @@ body.rot90 .stage{--redge:calc(2% + 8px + env(safe-area-inset-bottom,0px))}
 .scrim{position:absolute;pointer-events:none;z-index:1}
 .scrim-b{left:0;right:0;bottom:0;height:calc(var(--bdock,120px) + 30px);
   background:linear-gradient(to top,var(--scrim) 0%,var(--scrim) 45%,var(--scrim-m) 74%,rgba(6,8,13,0) 100%)}
-/* v1.95.0 — 위아래 바가 왼쪽으로 가서 스크림도 **왼쪽**에 깝니다 (원장님 지시 2026-08-29) */
-.scrim-l{top:0;bottom:0;left:0;width:calc(var(--redge) + 62px);
+/* v1.95.0 — 위아래 바가 왼쪽으로 가서 스크림도 **왼쪽**에 깝니다 (원장님 지시 2026-08-29)
+   v3.69.0 — 원장님 지시: 「왼쪽 그라데이션은 너무 중앙으로 들어왔다. 위아래 드래그 조금 넘는
+   부위까지만」. 폰을 세워 보면 이 띠는 **화면 위쪽**에 깔린다. --redge(안전영역) 를 더하면
+   기기마다 길이가 달라져 아이폰에서 화면 y=205 까지 내려왔다 — 고정 108px 로 못박아
+   스테이지 위(62px)에서 재면 y=170, ◀○▶ 슬라이더(y 118) 를 살짝 넘는 자리에서 끝난다.
+   ⛔ --redge 를 다시 더하지 마세요. 기기마다 달라집니다. */
+.scrim-l{top:0;bottom:0;left:0;width:120px;
   background:linear-gradient(to right,var(--scrim) 0%,var(--scrim-m) 55%,rgba(6,8,13,0) 100%)}
+/* v3.69.0 — 원장님 지시: 「화면 오른쪽 검은 그라데이션, 오른쪽 버튼이 살짝 닿는 부분까지만.
+   그러면 얼굴에 더 집중이 된다」. 캔버스 오른쪽 = 폰 **아래쪽** 띠 (초기화·되돌리기·다시실행·
+   AI보정 이 놓인 자리). 64px = 화면 y 780~844. */
+.scrim-r{top:0;bottom:0;right:0;width:72px;
+  background:linear-gradient(to left,var(--scrim) 0%,var(--scrim-m) 55%,rgba(6,8,13,0) 100%)}
 #guides{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 /* ⚠️ v1.55.0 지시등 (원장님 지시 2026-08-22) — 「느린 블링킹 한 번, 4초에 한 번씩
    다음 움직임 전까지 계속 반복. 고유색으로 밝았다 조금 투명해진다」
@@ -981,7 +991,11 @@ body:not(.land) #railLang{display:none}
   body.land.compact .modal input[type=text]{height:42px;margin-bottom:10px}
   body.land.compact .modal-row button{height:42px}
   body.land.compact #editor .scrim-b{height:calc(var(--bdock,110px) + 22px)}
-  body.land.compact #editor .scrim-l{width:calc(var(--redge) + 50px)}
+  /* v3.69.0 — 폰을 세워 쓰는 rot90 은 짧은 화면(높이<560)이라 **언제나 compact** 다.
+     원장님 폰(390×844)에서 이 두 값이 실제로 화면에 나오는 값이다:
+     scrim-l 108px → 화면 위에서 y=170 (원장님이 그어 주신 가로선) · scrim-r 64px → y=780~844 (그려 주신 네모). */
+  body.land.compact #editor .scrim-l{width:108px}
+  body.land.compact #editor .scrim-r{width:64px}
   body.land.compact #editor .menurow button i, body.land.compact #editor .menurow button i svg{width:17px;height:17px}
   body.land.compact #editor .dockbtn i, body.land.compact #editor .dockbtn i svg{width:16px;height:16px}
   body.land.compact #editor .dockbtn.big i, body.land.compact #editor .dockbtn.big i svg{width:19px;height:19px}
@@ -1019,6 +1033,7 @@ body:not(.land) #railLang{display:none}
     <!-- 컨트롤 영역 어둡게 (v1.16.0) — 가이드 SVG 보다 아래에 두어 선은 그대로 밝게 보인다 -->
     <div class="scrim scrim-b"></div>
     <div class="scrim scrim-l"></div>
+    <div class="scrim scrim-r"></div>
     <svg id="guides" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="touch"></div>
 
