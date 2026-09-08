@@ -146,6 +146,8 @@ const I18N = {
     hint_photo_bal: "◀ 반시계　　시계 ▶",
     hint_drag: "화면의 선을 손가락으로 직접 끌어서 옮길 수 있습니다",
     locked_msg: "사진 잠금 — 사진이 움직이지 않습니다 (선은 계속 조절 가능)",
+    eyelock_on: "눈 선 잠금 — 위아래로 움직이지 않습니다",
+    eyelock_off: "눈 선 잠금 해제 — 위아래로 움직일 수 있습니다",
     lock_short: "사진잠금",
     unlock_short: "잠금해제",
     sel_line: "선택",
@@ -321,6 +323,8 @@ const I18N = {
     hint_photo_bal: "◀ ccw　　cw ▶",
     hint_drag: "Drag any line directly on the photo to move it",
     locked_msg: "Photo locked — it will not move (lines still adjustable)",
+    eyelock_on: "Eye line locked — it will not move up or down",
+    eyelock_off: "Eye line unlocked — you can move it up and down",
     lock_short: "Lock photo",
     unlock_short: "Unlock",
     sel_line: "selected",
@@ -393,7 +397,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.72.0";
+const APP_VERSION = "v3.73.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -801,6 +805,14 @@ function drawLive(frag, x1, y1, x2, y2, hex, w, cls, boost) {
 const S = {
   g: { ...DEFAULT_GUIDE },
   p: { ...DEFAULT_PHOTO },
+  /* ⭐⭐⭐ v3.73.0 — **눈 가로바는 앱이 시작되면 잠겨 있다** (원장님 지시 2026-09-08:
+     「눈 가로바는 앱이 시작되면 잠금처리하여 고정되어 있도록, 바 오른쪽에 잠금 배지 추가,
+      잠금이 되어 있고 잠금 풀고 위아래 움직이도록 하자」).
+     눈 선(h1)은 **넘버링의 0** 이자 모든 자의 기준선입니다 — 시술 중 손이 스쳐 한 칸이라도
+     밀리면 앞머리·아치·꼬리 숫자가 통째로 틀어집니다. 그래서 기본이 잠금입니다.
+     잠금은 **저장하지 않습니다** — 「앱이 시작되면」이 지시이므로 앱을 열 때마다, 사진을
+     바꿀 때마다, 초기화할 때마다 다시 잠깁니다. */
+  eyeLock: true,
   sel: "h1",
   /* 조절자가 2개이므로 축별로 대상을 따로 기억한다 (v1.9.0)
      selUD = 세로 조절자가 움직일 가로선 / selLR = 가로 조절자가 움직일 세로선 */
@@ -1162,6 +1174,10 @@ function renderGuides() {
           }));
         }
       }
+      /* ⭐ v3.73.0 — **눈 선 오른쪽 끝의 잠금 배지** (원장님 지시 2026-09-08).
+         자리는 eyeLockPos() 한 곳에서만 정합니다 — 그려지는 자리와 눌리는 자리가 어긋나면
+         원장님 손끝이 헛돕니다 (BASELINE 1-11 「그리는 범위와 잡는 범위는 같아야 한다」). */
+      if (sp.key === "h1") drawEyeLockBadge(frag);
       /* 밸런스 표시 중이면 **기준 반대쪽 토막만** 빨갛게 (기준 쪽은 정답이므로 건드리지 않음) */
       const offBy = S.balOn && S.balance && S.balance.off[sp.key];
       const badIdx = S.refSide === "L" ? 1 : 0;
@@ -1422,6 +1438,11 @@ function setLine(key, val) {
    각 바는 자기 축으로만 움직이고(BASELINE 1-7), 대칭은 setLine() 이 처리한다(1-2). */
 function dragLineBy(key, base, dxN, dyN, mirrored) {
   const g = S.g;
+  /* v3.73.0 — 눈 선이 잠겨 있으면 **손으로는** 움직이지 않는다. 직접 끌기·빈 곳 드래그·
+     여러라인/전체라인(dragManyBy → 여기)이 모두 이 한 줄을 지난다.
+     ⚠️ 자동 배치(placeLines·aiPlaceLine·autoFromDrawing)는 막지 않습니다 — 잠금은 「손이
+     스쳐서 밀리는 것」을 막는 것이지, AI 가 눈 위치를 다시 읽는 것을 막는 것이 아닙니다. */
+  if (key === "h1" && S.eyeLock) return;
   if (key === "innerAngle") {
     g.innerAngle = clamp(base + dyN, 0.02, 0.98);          // 위아래
   } else if (key === "outerAngle") {
@@ -1449,6 +1470,45 @@ function linePixels() {
   return out;
 }
 
+/* ═══ ⭐⭐⭐ v3.73.0 — 눈 선 잠금 배지 (원장님 지시 2026-09-08) ═══════════════════
+   「바 **오른쪽**에 잠금 배지 추가」 — 눈 선(h1) 토막의 오른쪽 끝 바로 바깥에 놓습니다.
+   ⛔ 자리 계산은 여기 한 곳뿐입니다. 그리기(drawEyeLockBadge)와 누르기(hitTest)가
+      **같은 함수**를 부르므로 둘이 어긋날 수 없습니다. */
+const EYELOCK_R = 12;        // 배지 반지름 (그리기)
+const EYELOCK_HIT = 24;      // 누르는 범위 반지름 — 시술 장갑 낀 손끝도 닿게 넉넉히
+function eyeLockPos() {
+  const { W, H } = S.dim, g = S.g;
+  if (!W || !H || !g.h1Visible) return null;
+  const segs = segPx(H_SPECS.find((sp) => sp.key === "h1"));
+  if (!segs || !segs.length) return null;
+  const right = segs[segs.length - 1][1];
+  /* 토막 오른쪽 끝에서 조금 바깥. 작업 영역(workRight) 밖으로는 나가지 않는다 —
+     그 너머는 어두운 스크림과 아이폰 가장자리 제스처 구역입니다. */
+  const x = Math.min(right + EYELOCK_R + 4, workRight() * W - EYELOCK_R - 2);
+  return { x, y: g.h1 * H };
+}
+function drawEyeLockBadge(frag) {
+  const p = eyeLockPos(); if (!p) return;
+  const on = !!S.eyeLock;
+  const { x, y } = p, r = EYELOCK_R;
+  /* 사진 위 어디에서나 보이도록 어두운 원판 + 밝은 자물쇠 */
+  /* ⛔ 원판을 <circle> 로 그리지 마세요 — 회귀 여러 곳이 `#guides circle` 개수로 미러링 점을
+     세고 있어서, 배지가 circle 이면 그 숫자가 전부 하나씩 틀어집니다 (실제로 188·195·198 이
+     깨졌습니다). 모서리를 반지름만큼 둥글린 <rect> 는 눈에는 똑같은 원입니다. */
+  frag.appendChild(mk("rect", { x: x - r, y: y - r, width: 2 * r, height: 2 * r, rx: r, ry: r,
+    fill: "#0B0D12", "fill-opacity": on ? 0.82 : 0.55,
+    stroke: on ? "#EAEFF7" : "#8A93A3", "stroke-width": on ? 1.6 : 1.2, "stroke-opacity": on ? 0.95 : 0.7 }));
+  const col = on ? "#EAEFF7" : "#9AA3B2", op = on ? 0.98 : 0.75;
+  /* 몸통 */
+  frag.appendChild(mk("rect", { x: x - 4.6, y: y - 0.6, width: 9.2, height: 7.4, rx: 1.6,
+    fill: col, "fill-opacity": op }));
+  /* 고리 — 잠기면 닫히고(가운데), 풀리면 오른쪽으로 열린다 */
+  frag.appendChild(mk("path", {
+    d: on ? `M ${x - 3} ${y - 0.6} v -2.2 a 3 3 0 0 1 6 0 v 2.2`
+          : `M ${x - 3} ${y - 0.6} v -2.2 a 3 3 0 0 1 6 0`,
+    fill: "none", stroke: col, "stroke-width": 1.7, "stroke-opacity": op, "stroke-linecap": "round" }));
+}
+
 function distToSeg(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1, dy = y2 - y1;
   const L = dx * dx + dy * dy;
@@ -1460,6 +1520,13 @@ function distToSeg(px, py, x1, y1, x2, y2) {
 function hitTest(x, y) {
   const { W, H } = S.dim, g = S.g;
   let best = null, bd = HIT_PX;
+
+  /* v3.73.0 — 눈 선 잠금 배지가 **가장 먼저**. 배지는 눈 선 바로 옆이라 뒤로 밀면
+     선이 먼저 잡혀 배지를 누를 수가 없습니다. */
+  {
+    const lp = eyeLockPos();
+    if (lp && Math.hypot(x - lp.x, y - lp.y) <= EYELOCK_HIT) return { type: "eyelock" };
+  }
 
   /* Base Structure 가 켜져 있으면 pivot / arm 우선 */
   if (g.baseStructureVisible) {
@@ -1561,6 +1628,12 @@ touch.addEventListener("pointerdown", (e) => {
          · 빈 곳 + 사진 잠금     → 이미 선택된 선을 끈다 (미세조정 모드)
        두 손가락은 항상 줌·회전·이동. */
     const hit = hitTest(sp.x, sp.y);
+    /* v3.73.0 — 잠금 배지를 눌렀다: 잠금만 뒤집고 끝. 선은 잡지 않는다(끌리면 안 되므로). */
+    if (hit && hit.type === "eyelock") {
+      toggleEyeLock();
+      gMode = null; gDrag = null;
+      return;
+    }
     let key, mirrored = false, tapKey = null, wasSel = false;
     if (hit) {
       if (hit.type === "pivot") key = "innerAngle";
@@ -2058,6 +2131,8 @@ function posConfig(key) {
 
 function applyPos(v, key) {
   const k = key || S.sel, c = posConfig(k);
+  /* v3.73.0 — 잠긴 눈 선은 ▲▼ 화살표·세로 조절 바로도 움직이지 않는다 */
+  if (k === "h1" && S.eyeLock) return;
   v = clamp(v, 0, 1);
   if (k === "outerAngle") S.g.outerAngle = v;
   else if (k === "innerAngle") S.g.innerAngle = clamp(1 - v, 0.02, 0.98);
@@ -5320,6 +5395,7 @@ function loadPhoto(file) {
     S.locked = true;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
+    S.eyeLock = true;                 /* v3.73.0 — 새 사진 = 눈 선 다시 잠금 */
     S.pickMode = false;
     S.pick = [];
     S.brightnessOn = false;
@@ -6005,6 +6081,7 @@ $("btnReset").onclick = () => {
     S.balOn = false; S.balance = null; S.balCurve = null; S.balAnim = null; S.balFrozen = null;
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
+    S.eyeLock = true;                 /* v3.73.0 — 초기화 = 눈 선 다시 잠금 (「앱이 시작되면」과 같은 자리) */
     S.pickMode = false;
     S.pick = [];
     S.doneSet = [];             /* v1.81.0 — 「체크한 선」 표시도 함께 처음으로 */
@@ -6039,6 +6116,14 @@ function toggleLock() {
   toast(S.locked ? t("locked_msg") : t("unlocked_msg"));
 }
 $("btnLock").onclick = toggleLock;
+
+/* ⭐ v3.73.0 — 눈 선 잠금 뒤집기 (배지 탭). 되돌리기 한 칸으로 취급하지 않습니다 —
+   잠금은 선의 **자리**를 바꾸지 않으므로 되돌릴 것이 없습니다. */
+function toggleEyeLock() {
+  S.eyeLock = !S.eyeLock;
+  render();
+  toast(S.eyeLock ? t("eyelock_on") : t("eyelock_off"));
+}
 
 /* ═══ 밝기 조절 (v3.7.0) ═════════════════════════════════════════
    고객이 사진을 더 잘 보기 위해 라이브 조절 — 태양 버튼으로 활성화 */
@@ -7795,6 +7880,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   zoomMem, setZoomMem, applyZoomMem, rememberZoom, ZOOM_MEM_KEY,
   AIFIX_MID, AIFIX_SPREAD,
+  setLine, toggleEyeLock, eyeLockPos, EYELOCK_R, EYELOCK_HIT, drawEyeLockBadge, dragLineBy, dragManyBy, applyPos, aiPlaceLine,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
