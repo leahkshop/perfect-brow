@@ -393,7 +393,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.69.0";
+const APP_VERSION = "v3.70.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1680,6 +1680,8 @@ touch.addEventListener("pointermove", (e) => {
 function endPointer(e) {
   pts.delete(e.pointerId);
   if (pts.size === 0) { S.dragOn = false; setPtrDown(false); }   /* 손을 떼면 다시 선명 (v1.54.0 · v3.47.0 선명 필터 복귀) */
+  /* v3.70.0 — 두 손가락 확대를 끝낸 그 시점의 배율을 기억한다 (원장님 지시 2026-09-07) */
+  if (pts.size === 0 && gMode === "xform") rememberZoom();
   /* "탭만" 했을 때(3px 데드존을 넘지 않음)의 판정 — 여러라인 / 한 줄 모드가 다르다 (BASELINE 1-7)
        · 여러라인 : 선택에 추가 / 이미 있으면 선택 해제 (숨기지 않음)
        · 한 줄    : 새 선이면 선택만, 이미 선택돼 있던 선을 다시 탭하면 숨김/표시 */
@@ -1751,6 +1753,7 @@ touch.addEventListener("wheel", (e) => {
   S.p.zoom = clamp(S.p.zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08), ZOOM_MIN, ZOOM_MAX);
   showHud(`${t("editor_zoom")} ${S.p.zoom.toFixed(2)}×`);
   render();
+  rememberZoom();                 /* v3.70.0 — 손으로 바꾼 배율을 기억 */
 }, { passive: false });
 
 /* ═══════════ 6. 되돌리기 (undo) ═══════════ v1.12.0
@@ -2092,6 +2095,7 @@ function applyPhoto(v) {
   v = clamp(v, 0, 1);
   const p = S.p, lim = panLimit();
   if (S.photoMode === "zoom") p.zoom = ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, v);
+  if (S.photoMode === "zoom") rememberZoom();   /* v3.70.0 — 줌 바로 바꾼 배율도 기억 */
   else if (S.photoMode === "vertical") p.oy = -(v - 0.5) * 2 * lim;   /* ▶ = 위로 (v1.65.0) */
   else if (S.photoMode === "horizontal") p.ox = (v - 0.5) * 2 * lim;
   else if (S.photoMode === "balance") p.rot = (v - 0.5) * 2 * ROT_MAX;
@@ -2563,6 +2567,56 @@ function aiPlaceLine(key) {
   return true;
 }
 
+/* ═══ ⭐⭐⭐ v3.70.0 — **사용자 줌 레벨 기억** (원장님 지시 2026-09-07) ═════════════
+   「기존 자동 줌·자동 정렬 로직은 **그대로 유지**한다. 그 위에 사용자가 손으로 조절한
+    줌 레벨을 기억하는 **층을 얹는다**. … 자동 정렬이 끝난 **뒤 마지막에** 적용된다
+    (사진 열기 → 기존 자동 정렬 실행 → 저장된 줌 레벨 적용 → 화면 표시)」
+
+   ⭐ **절대 배율이 아니라 「자동 배율의 몇 배」를 저장합니다.**
+   v3.29.0 이 배율의 자를 눈썹으로 바꿔 놓은 덕에(양쪽 꼬리 간격 = 작업 영역의 80%)
+   고객이 누구든 자동 정렬 직후의 눈썹 크기는 같습니다. 여기에 곱셈으로 얹으면
+   「자동보다 1.3배 크게 본다」가 고객이 바뀌어도 **같은 눈썹 크기**로 재현됩니다.
+   절대값(예: 2.4×)으로 저장하면 사진 해상도·얼굴 크기가 다른 다음 고객에서 눈썹이
+   제멋대로 커지거나 작아져, v3.29.0 이 없애 놓은 문제가 그대로 돌아옵니다.
+   ⛔ 절대 배율 저장으로 되돌리지 마세요.
+
+   ⚠️ 손으로 줌을 바꿀 수 있는 곳은 **사진잠금이 풀린 동안**뿐입니다(핀치·휠·줌 바 모두
+   S.locked 를 봅니다). 그래서 저장은 그 세 곳에서만 일어납니다. */
+const ZOOM_MEM_KEY = "pb_zoommem";
+const ZOOM_MEM_LO = 0.25, ZOOM_MEM_HI = 4;      /* 저장 가능한 배수 범위 (망가진 값 방어) */
+let ZOOM_MEM = (() => {
+  const v = parseFloat(localStorage.getItem(ZOOM_MEM_KEY));
+  return isFinite(v) && v >= ZOOM_MEM_LO && v <= ZOOM_MEM_HI ? v : null;
+})();
+let AUTO_ZOOM = null;                           /* 자동 정렬이 방금 잡아 놓은 배율 (기억의 기준) */
+const zoomMem = () => ZOOM_MEM;
+function setZoomMem(r) {
+  ZOOM_MEM = r === null || !isFinite(r) ? null : clamp(r, ZOOM_MEM_LO, ZOOM_MEM_HI);
+  try {
+    if (ZOOM_MEM === null) localStorage.removeItem(ZOOM_MEM_KEY);
+    else localStorage.setItem(ZOOM_MEM_KEY, String(ZOOM_MEM));
+  } catch (e) {}
+}
+/* 손으로 줌을 바꾼 직후 — 지금 배율이 자동 배율의 몇 배인지를 저장한다.
+   자동 정렬이 아직 한 번도 안 돌았으면(AUTO_ZOOM null) 기준이 없으므로 저장하지 않는다. */
+function rememberZoom() {
+  if (!AUTO_ZOOM || !isFinite(AUTO_ZOOM) || AUTO_ZOOM <= 0) return;
+  const r = S.p.zoom / AUTO_ZOOM;
+  if (!isFinite(r) || r <= 0) return;
+  setZoomMem(r);
+}
+/* 자동 정렬이 **다 끝난 뒤** 마지막에 부른다. 기준(AUTO_ZOOM)을 새로 잡고,
+   기억해 둔 배수가 있으면 그만큼만 다시 확대·축소한다. 위치·각도는 그 배율에
+   맞춰 autoAlignRelayout 이 다시 계산하므로 얼굴은 제자리에 남는다. */
+function applyZoomMem(lm) {
+  AUTO_ZOOM = S.p.zoom;
+  if (ZOOM_MEM === null) return;
+  const z = clamp(AUTO_ZOOM * ZOOM_MEM, ZOOM_MIN, ZOOM_MAX);
+  if (Math.abs(z - S.p.zoom) < 1e-4) return;
+  S.p.zoom = z;
+  if (lm) autoAlignRelayout(lm);
+}
+
 function autoAlign(lm) {
   const { W, H } = S.dim;
   const iw = S.iw, ih = S.ih;
@@ -2611,6 +2665,11 @@ function autoAlign(lm) {
      ⚠️ 내안각의 **화면 위치**는 이제 고객마다 다르다 (1눈금 = 화면 1% 는 더 이상 보장하지 않는다). */
   fitBrowsToFrame(lm);
   fitBrowsInFrame(lm);   // 안전판 — 그래도 잘리면 배율을 낮춘다 (80% < 88% 라 보통은 작동하지 않는다)
+
+  /* v3.70.0 — **맨 마지막**에 사용자가 기억시킨 배수를 얹는다 (원장님 지시의 순서 그대로:
+     사진 열기 → 기존 자동 정렬 실행 → 저장된 줌 레벨 적용 → 화면 표시).
+     ⛔ 이 줄을 위로 올리지 마세요 — fitBrows* 가 뒤에 오면 기억한 배율을 도로 지웁니다. */
+  applyZoomMem(lm);
 }
 
 const BROW_FRAC = 0.80;          // 양쪽 눈썹 꼬리 끝 간격 / 작업 영역 폭 (v3.29.0)
@@ -5912,6 +5971,16 @@ $("btnReset").onclick = () => {
     /* 원장님 지시(2026-08-21): 사진잠금 중이면 **사진(위치·배율·회전·잠금)은 그대로** 두고
        나머지만 초기화한다. 잠금이 없으면 사진까지 함께 초기화한다. */
     const keepPhoto = S.locked;
+    /* ⭐ v3.70.0 — **초기화는 기억한 줌 배수를 버린다** (원장님 지시 2026-09-07:
+       「사용자가 초기화를 누르면 저장된 줌 레벨을 버리고 처음에 제공하는 기본 줌 값으로
+        돌아간다. 이때 저장값도 함께 지워지므로, 이후 다시 손으로 조절하면 그 값이 새로
+        저장된다」). 아래 autoAlign 보다 **먼저** 지워야 그 자리에서 기본 배율이 나온다.
+       ⚠️ **사진잠금 중이면 화면 배율은 그대로 남습니다** — v1.91.0/v3.9.1 의 「잠금 중 초기화는
+       사진(위치·배율·회전)을 건드리지 않는다」가 먼저이기 때문입니다. 저장값은 지워졌으므로
+       다음 사진·다음 실행부터 기본 배율로 열립니다. 잠금을 풀고 초기화하면 그 자리에서
+       바로 기본 배율로 돌아갑니다. (원장님께 보고 · 지금 화면에서도 곧바로 되돌리길
+       원하시면 이 조건 한 줄만 바꾸면 됩니다.) */
+    setZoomMem(null);
     S.g = { ...DEFAULT_GUIDE };
     if (!keepPhoto) S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
@@ -7689,6 +7758,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   /* v1.94.0 — 고유색이 LOOK_DEF 를 따라가도록 참조로 연결 (기본값이 바뀌어도 안 어긋나게) */
   LINE_COLORS: { eye: "#3A3F4A", arch: LOOK_DEF.arch, tail: LOOK_DEF.tail, inner: LOOK_DEF.inner, innerDim: "#C9D1D6", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
+  zoomMem, setZoomMem, applyZoomMem, rememberZoom, ZOOM_MEM_KEY,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
