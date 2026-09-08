@@ -148,6 +148,7 @@ const I18N = {
     locked_msg: "사진 잠금 — 사진이 움직이지 않습니다 (선은 계속 조절 가능)",
     eyelock_on: "눈 선 잠금 — 위아래로 움직이지 않습니다",
     eyelock_off: "눈 선 잠금 해제 — 위아래로 움직일 수 있습니다",
+    eyelock_hint: "눈 선은 잠겨 있습니다 — 선 오른쪽 끝 자물쇠를 눌러 푸세요",
     lock_short: "사진잠금",
     unlock_short: "잠금해제",
     sel_line: "선택",
@@ -325,6 +326,7 @@ const I18N = {
     locked_msg: "Photo locked — it will not move (lines still adjustable)",
     eyelock_on: "Eye line locked — it will not move up or down",
     eyelock_off: "Eye line unlocked — you can move it up and down",
+    eyelock_hint: "The eye line is locked — tap the padlock at its right end to unlock",
     lock_short: "Lock photo",
     unlock_short: "Unlock",
     sel_line: "selected",
@@ -397,7 +399,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.73.0";
+const APP_VERSION = "v3.74.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -1436,13 +1438,37 @@ function setLine(key, val) {
 
 /* 선택된 바를 손가락 이동량(정규화 델타)만큼 움직인다.
    각 바는 자기 축으로만 움직이고(BASELINE 1-7), 대칭은 setLine() 이 처리한다(1-2). */
+/* ⭐⭐⭐ v3.74.0 — **잠긴 눈 선은 포커스를 가져가지 않는다** (원장님 지시 2026-09-08:
+   「불필요한 포커스를 눈이 가져갈 필요가 없다」).
+   v3.73.0 이 눈 선을 잠그면서 **시작하자마자 ▲▼ 가 죽는** 구멍을 만들었습니다 —
+   기본 선택이 눈(h1)인데 그 선이 잠겨 있어서 화살표·세로 바가 아무것도 안 했습니다.
+   이제 잠겨 있으면 위아래 대상이 **앞머리**로 넘어갑니다 — 가이드 순서에서 이너 다음에
+   오는 첫 가로선이라, 원장님이 실제로 제일 먼저 만지는 자입니다. */
+const EYE_LOCK_FALLBACK = "front";
+function focusOffLockedEye() {
+  if (!S.eyeLock) return false;
+  let moved = false;
+  if (S.sel === "h1") { S.sel = EYE_LOCK_FALLBACK; moved = true; }
+  if (S.selUD === "h1") { S.selUD = EYE_LOCK_FALLBACK; moved = true; }
+  return moved;
+}
+/* 잠겨서 못 움직였을 때 한 번만 알려 준다 — 죽은 버튼보다 「왜 안 되는지」가 낫습니다.
+   드래그·슬라이더는 매 프레임 들어오므로 2초에 한 번으로 묶습니다. */
+let eyeLockNoteAt = 0;
+function eyeLockedNote() {
+  const now = Date.now();
+  if (now - eyeLockNoteAt < 2000) return;
+  eyeLockNoteAt = now;
+  toast(t("eyelock_hint"));
+}
+
 function dragLineBy(key, base, dxN, dyN, mirrored) {
   const g = S.g;
   /* v3.73.0 — 눈 선이 잠겨 있으면 **손으로는** 움직이지 않는다. 직접 끌기·빈 곳 드래그·
      여러라인/전체라인(dragManyBy → 여기)이 모두 이 한 줄을 지난다.
      ⚠️ 자동 배치(placeLines·aiPlaceLine·autoFromDrawing)는 막지 않습니다 — 잠금은 「손이
      스쳐서 밀리는 것」을 막는 것이지, AI 가 눈 위치를 다시 읽는 것을 막는 것이 아닙니다. */
-  if (key === "h1" && S.eyeLock) return;
+  if (key === "h1" && S.eyeLock) { eyeLockedNote(); return; }
   if (key === "innerAngle") {
     g.innerAngle = clamp(base + dyN, 0.02, 0.98);          // 위아래
   } else if (key === "outerAngle") {
@@ -1544,6 +1570,16 @@ function hitTest(x, y) {
   for (const L of linePixels()) {
     let d;
     if (L.type === "h") {
+      /* ⭐⭐⭐ v3.74.0 — **잠긴 눈 선은 잡히지도 않는다** (원장님 지시 2026-09-08:
+         「잠금되어 있는 상태에서는 눈 라인이 클릭되어도 클릭이 되지 않도록 · 잠금 상태에서는
+          클릭도 움직임도 안 된다 · 잠금이 해제된 상태에서만 클릭되도록 한다」).
+         이유(원장님 말씀 그대로): 「보통 아치엣지나 아치두께 움직임 시 눈 부분을 많이 만지게
+         되는데, 실수로 눈을 만져서 눈선을 건드리면 **불필요한 포커스를 눈이 가져갈** 필요가
+         없기 때문이다」. v3.73.0 은 움직임만 막고 선택은 그대로 뺏겼습니다.
+         이제 hitTest 가 아예 지나치므로, 눈 선 위를 눌러도 **빈 곳을 누른 것과 같습니다** —
+         사진잠금 중이면 지금 고른 선(아치엣지 등)이 그대로 이어서 미세조정됩니다.
+         ⚠️ 잠금 배지는 위에서 **먼저** 검사하므로 여기서 걸러져도 여전히 눌립니다. */
+      if (L.key === "h1" && S.eyeLock) continue;
       /* 그리는 범위와 잡는 범위는 반드시 같아야 한다 (BASELINE 1-11) — 둘 다 segPx */
       const inSeg = L.segs.some(([xa, xb]) => x >= xa - 12 && x <= xb + 12);
       if (!inSeg) continue;
@@ -2132,7 +2168,7 @@ function posConfig(key) {
 function applyPos(v, key) {
   const k = key || S.sel, c = posConfig(k);
   /* v3.73.0 — 잠긴 눈 선은 ▲▼ 화살표·세로 조절 바로도 움직이지 않는다 */
-  if (k === "h1" && S.eyeLock) return;
+  if (k === "h1" && S.eyeLock) { eyeLockedNote(); return; }
   v = clamp(v, 0, 1);
   if (k === "outerAngle") S.g.outerAngle = v;
   else if (k === "innerAngle") S.g.innerAngle = clamp(1 - v, 0.02, 0.98);
@@ -5396,6 +5432,7 @@ function loadPhoto(file) {
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.eyeLock = true;                 /* v3.73.0 — 새 사진 = 눈 선 다시 잠금 */
+    focusOffLockedEye();              /* v3.74.0 — 잠긴 눈이 포커스를 쥔 채 시작하지 않게 */
     S.pickMode = false;
     S.pick = [];
     S.brightnessOn = false;
@@ -6082,6 +6119,7 @@ $("btnReset").onclick = () => {
     S.hiddenSnapshot = null;
     S.sel = "h1"; S.selUD = "h1"; S.selLR = "v1"; S.hMode = "line"; S.multi = false; S.selSet = [];
     S.eyeLock = true;                 /* v3.73.0 — 초기화 = 눈 선 다시 잠금 (「앱이 시작되면」과 같은 자리) */
+    focusOffLockedEye();              /* v3.74.0 — 잠긴 눈이 포커스를 쥔 채 시작하지 않게 */
     S.pickMode = false;
     S.pick = [];
     S.doneSet = [];             /* v1.81.0 — 「체크한 선」 표시도 함께 처음으로 */
@@ -6121,6 +6159,10 @@ $("btnLock").onclick = toggleLock;
    잠금은 선의 **자리**를 바꾸지 않으므로 되돌릴 것이 없습니다. */
 function toggleEyeLock() {
   S.eyeLock = !S.eyeLock;
+  /* 잠그는 순간 눈이 선택돼 있었다면 포커스를 비켜 준다 — 안 그러면 그 자리에서
+     ▲▼ 가 죽습니다. 푸는 쪽은 건드리지 않습니다(원장님이 곧 눈 선을 잡으실 테니). */
+  focusOffLockedEye();
+  updateButtons();
   render();
   toast(S.eyeLock ? t("eyelock_on") : t("eyelock_off"));
 }
@@ -7880,7 +7922,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   zoomMem, setZoomMem, applyZoomMem, rememberZoom, ZOOM_MEM_KEY,
   AIFIX_MID, AIFIX_SPREAD,
-  setLine, toggleEyeLock, eyeLockPos, EYELOCK_R, EYELOCK_HIT, drawEyeLockBadge, dragLineBy, dragManyBy, applyPos, aiPlaceLine,
+  setLine, toggleEyeLock, focusOffLockedEye, EYE_LOCK_FALLBACK, eyeLockPos, EYELOCK_R, EYELOCK_HIT, drawEyeLockBadge, dragLineBy, dragManyBy, applyPos, aiPlaceLine,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
