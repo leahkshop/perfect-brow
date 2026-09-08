@@ -393,7 +393,7 @@ const t = (k) => (I18N[LANG] && I18N[LANG][k]) || I18N.ko[k] || k;
 
 /* 화면에 보여 주는 앱 버전 — ⚠️ 릴리스 때 sw.js 의 VERSION 과 **함께** 올리세요.
    폰(iOS PWA)은 캐시가 끈질겨서, 이 표시가 옛 버전이면 아직 업데이트 전입니다. */
-const APP_VERSION = "v3.71.0";
+const APP_VERSION = "v3.72.0";
 
 /* ═══ 가이드 플로우 (v1.42.0 · 원장님 지시 2026-08-21) ═══════════════════
    선의 **기본색은 전부 짙은 회색** — 고유색은 그 선이 "지금 차례"(가이드)이거나
@@ -859,6 +859,7 @@ const S = {
   /* v3.47.0 — AI 보정 (원장님 지시 2026-09-04). on=적용 중 · b 밝기(-40~80, CSS brightness 100+b %) · c 대비(80~180 %) ·
      s 선명(0~100) · bars=바 패널 표시 · touched=사용자가 한 번이라도 켰음(미러링 자동 적용 여부) */
   aiFix: { on: false, b: 0, c: 100, s: 0, bars: false, touched: false },
+  aiFixLoad: null,                      // v3.72.0 — 사진을 불러왔을 때의 AI 보정 값 (초기화가 돌아갈 자리)
   ptrDown: false,                       // v3.47.0 — 손가락이 내려가 있는 동안 선명 필터를 잠시 뗀다
   exposureBrightnessValue: 0,           // -100 ~ 100
 };
@@ -5324,6 +5325,7 @@ function loadPhoto(file) {
     S.brightnessOn = false;
     S.exposureBrightnessValue = 0;
     S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false };   /* v3.47.0 — 새 사진 = AI 보정 초기화 */
+    S.aiFixLoad = null;                                                         /* v3.72.0 — 새 사진이면 돌아갈 자리도 새로 찍는다 */
     if ($("aiFixPanel")) { $("aiFixPanel").hidden = true; syncAiFixUI(); }
     /* v1.47.0 원장님 지시 — 「가이드는 앱이 켜지면 항상 시작 상태로 유지, 사용자가 클릭할 때만 꺼짐」
        사진이 올라와 편집이 시작될 때마다 가이드 ON + 이너부터. 끄는 건 가이드 버튼 클릭뿐. */
@@ -5981,6 +5983,22 @@ $("btnReset").onclick = () => {
        바로 기본 배율로 돌아갑니다. (원장님께 보고 · 지금 화면에서도 곧바로 되돌리길
        원하시면 이 조건 한 줄만 바꾸면 됩니다.) */
     setZoomMem(null);
+    /* ⭐⭐⭐ v3.72.0 — **초기화는 AI 보정도 처음 상태로 되돌린다** (원장님 지시 2026-09-08:
+       「초기화 누르면 AI 보정 값도 모두 처음 사진을 불러왔을 때와 같은 상태로 돌려라」).
+       사진을 불러올 때 aiFixOnLoad 가 찍어 둔 값(S.aiFixLoad)을 그대로 되돌립니다 — 다시
+       계산하지 않는 이유는 aiFixOnLoad 의 주석 참고(지금 화면 화소로 재면 값이 달라집니다).
+       태양 버튼의 밝기(exposureBrightnessValue)도 함께 0 으로 — 사진을 불러왔을 때가 0 이고,
+       v3.8.4 주석도 「새 사진/**초기화**로 리셋」이라고 이미 적어 두었습니다.
+       ⚠️ **사진잠금과 무관하게** 되돌립니다. v1.91.0/v3.9.1 의 「잠금 중 초기화는 사진을 건드리지
+       않는다」는 사진의 **위치·배율·회전**에 대한 규칙이고, 보정은 그 셋 중 어느 것도 아닙니다.
+       ⚠️ step() 안이라 되돌리기 한 칸으로 보정까지 되살아납니다 (v3.50.0 스냅샷에 af 포함). */
+    if (S.aiFixLoad) S.aiFix = { ...S.aiFixLoad };
+    else S.aiFix = { on: false, b: 0, c: 100, s: 0, bars: false, touched: false };
+    S.aiFix.bars = false;
+    S.exposureBrightnessValue = 0;
+    if ($("exposureBrightnessSlider")) $("exposureBrightnessSlider").value = 0;
+    if ($("aiFixPanel")) $("aiFixPanel").hidden = true;
+    syncAiFixUI(); applyPhotoFilter();
     S.g = { ...DEFAULT_GUIDE };
     if (!keepPhoto) S.p = { ...DEFAULT_PHOTO };
     S.activePreset = null;
@@ -6037,6 +6055,15 @@ function applyExposureBrightness() { applyPhotoFilter(); }
    ③ 판정(photoPixels): AI 보정이 켜져 있으면 판정용 화소에도 **같은 밝기·대비·선명**을 숫자로 적용한다 — 화면에서 보는 것과
       판정이 보는 것이 같다. 미러링을 누를 때 AI 보정을 한 번도 안 켰으면 자동값을 적용하고 나서 판정한다(원장님 문장 그대로).
    ⚠️ 기존 태양 버튼(밝기 슬라이더)은 그대로 — 두 밝기는 곱해진다. */
+/* ⭐ v3.72.0 — **화면 기본 밝기를 조금 더 밝게** (원장님 지시 2026-09-08).
+   원장님 고객 사진 5장 실측: 다섯 장 모두 이미 밝아 자동 보정이 오히려 **어둡게**(밝기 -16~-28)
+   내리고 있었습니다. 목표 중앙값을 140 → 155 로 올리면 화면 중앙값이 140.7 → 155.5 가 되고,
+   흰색으로 뭉개지는 화소는 다섯 장 모두 **0.00%** 그대로입니다(하이라이트가 날아가지 않습니다).
+   ⚠️ 이 값은 **화면에만** 걸립니다 — 판독은 v3.54.0 이후 원본 화소로만 하므로(photoPixels =
+   photoPixelsRaw) 자·미러링 숫자는 한 글자도 바뀌지 않습니다(회귀 220 이 잠급니다).
+   ⛔ 더 올리지 마세요 — 165 부터는 밝은 피부의 하이라이트가 뭉개지기 시작합니다. */
+const AIFIX_MID = 155;        // 화면 밝기의 목표 중앙값 (0~255)
+const AIFIX_SPREAD = 150;     // 5%~95% 밝기 폭의 목표 (대비가 이 값을 맞춘다)
 function aiFixAuto() {
   const raw = photoPixelsRaw(1);
   if (!raw) return false;
@@ -6046,8 +6073,8 @@ function aiFixAuto() {
   lum.sort((a, b) => a - b);
   const q = (p) => lum[Math.max(0, Math.min(lum.length - 1, Math.round(p * (lum.length - 1))))];
   const p5 = q(0.05), p50 = q(0.5), p95 = q(0.95);
-  const b = clamp(Math.round(((140 / Math.max(20, p50)) - 1) * 100 / 2) * 2, -40, 80);
-  const c = clamp(Math.round((150 / Math.max(30, p95 - p5)) * 100 / 2) * 2, 100, 170);
+  const b = clamp(Math.round(((AIFIX_MID / Math.max(20, p50)) - 1) * 100 / 2) * 2, -40, 80);
+  const c = clamp(Math.round((AIFIX_SPREAD / Math.max(30, p95 - p5)) * 100 / 2) * 2, 100, 170);
   S.aiFix.on = true; S.aiFix.touched = true; S.aiFix.b = b; S.aiFix.c = c; S.aiFix.s = 40;
   syncAiFixUI(); applyPhotoFilter();
   return true;
@@ -6130,7 +6157,15 @@ function syncAiFixUI() {
 function aiFixOnLoad() {
   if (!S.imgEl || S.aiFix.touched) return false;
   const ok = aiFixAuto();
-  if (ok) { S.aiFix.bars = false; syncAiFixUI(); }
+  if (ok) {
+    S.aiFix.bars = false; syncAiFixUI();
+    /* ⭐ v3.72.0 — **초기화가 돌아갈 자리**를 여기서 찍어 둔다 (원장님 지시 2026-09-08:
+       「초기화 누르면 AI 보정 값도 모두 처음 사진을 불러왔을 때와 같은 상태로 돌려라」).
+       ⚠️ 다시 계산(aiFixAuto)하지 않고 **그때의 값을 그대로 보관**합니다 — aiFixAuto 는 지금
+       화면에 보이는 화소로 히스토그램을 잽니다(photoPixelsRaw 가 S.p 를 그대로 그립니다).
+       사진을 옮기거나 확대한 뒤 다시 계산하면 로드 때와 **다른 값**이 나옵니다. */
+    S.aiFixLoad = { ...S.aiFix };
+  }
   return ok;
 }
 /* ⭐ v3.49.0 — 보정한 화질로 **자를 다시 잰다** (원장님 지시 2026-09-06: 「각 바 눈썹 위에 얹어진 포인트 확인해봐라
@@ -7759,6 +7794,7 @@ window.PB = { S, DEFAULT_GUIDE, V_ANGLE_MAX, H_SPECS, V_SPECS,
   LINE_COLORS: { eye: "#3A3F4A", arch: LOOK_DEF.arch, tail: LOOK_DEF.tail, inner: LOOK_DEF.inner, innerDim: "#C9D1D6", neutral: "#14161B" },
   render, runFaceAI, loadPhoto, alignFromPupils, autoAlign, aiValueFor, imgToCanvas, posConfig,
   zoomMem, setZoomMem, applyZoomMem, rememberZoom, ZOOM_MEM_KEY,
+  AIFIX_MID, AIFIX_SPREAD,
   showNote, showHud, startBalAnim,   /* v3.15.0 — 미러링 애니메이션 검사용 */
   placeLinesFromEyes,
   faceFrame, applyPreset, segPx, fitPresetToFace, runBalance, photoPixels, buildFavBar, favIds, balTolPx, balBandPx,
